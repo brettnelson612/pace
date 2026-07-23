@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PACE Knowledge Map</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+        :root {
+            --bg: #0A1018;
+            --surface: #121B28;
+            --surface-2: #182535;
+            --border: #26374C;
+            --text: #E7EDF4;
+            --text-muted: #8393AA;
+            --teal: #45D6C4;
+            --teal-dim: #1E4A46;
+            --amber: #F0A860;
+            --amber-dim: #4A3A22;
+            --slate: #5B6B84;
+            --slate-dim: #202B3B;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'IBM Plex Sans', sans-serif;
+            min-height: 100vh;
+        }
+
+        .wrap {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+        }
+
+        .eyebrow {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--teal);
+            margin: 0 0 10px;
+        }
+
+        h1 {
+            font-size: 34px;
+            font-weight: 700;
+            margin: 0 0 8px;
+            letter-spacing: -.01em;
+        }
+
+        .sub {
+            color: var(--text-muted);
+            font-size: 15px;
+            max-width: 640px;
+            line-height: 1.5;
+            margin: 0 0 16px;
+        }
+
+        .sync-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .sync-btn {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .sync-btn:hover {
+            border-color: var(--teal);
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 28px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .dot.explored {
+            background: var(--teal);
+            box-shadow: 0 0 8px rgba(69, 214, 196, .6);
+        }
+
+        .dot.progress {
+            background: var(--amber);
+            box-shadow: 0 0 8px rgba(240, 168, 96, .5);
+        }
+
+        .dot.none {
+            background: var(--slate);
+        }
+
+        .hub-diagram {
+            position: relative;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        .hub-svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .hub-line {
+            stroke: var(--border);
+            stroke-width: 1.5;
+            fill: none;
+        }
+
+        .hub-circle {
+            fill: var(--surface-2);
+            stroke: var(--teal);
+            stroke-width: 1.5;
+        }
+
+        .hub-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 600;
+            font-size: 15px;
+            fill: var(--text);
+            text-anchor: middle;
+        }
+
+        .cat-node-bg {
+            fill: var(--surface);
+            stroke: var(--border);
+            stroke-width: 1.2;
+        }
+
+        .cat-node-label {
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-weight: 600;
+            font-size: 12.5px;
+            fill: var(--text);
+            text-anchor: middle;
+        }
+
+        .cat-node-count {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px;
+            fill: var(--text-muted);
+            text-anchor: middle;
+        }
+
+        .categories {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+            margin-top: 28px;
+        }
+
+        @media (max-width:900px) {
+            .categories {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width:620px) {
+            .categories {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .cat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px 18px 14px;
+            border-top: 3px solid var(--cat-color, var(--teal));
+        }
+
+        .cat-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 0 3px;
+        }
+
+        .cat-meta {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin: 0 0 14px;
+        }
+
+        .topic-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            text-align: left;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 13px;
+            padding: 9px 11px;
+            border-radius: 7px;
+            margin-bottom: 7px;
+            cursor: pointer;
+            transition: border-color .15s, background .15s;
+        }
+
+        .topic-chip:hover {
+            border-color: var(--teal);
+            background: #1B2C33;
+        }
+
+        .topic-chip .dot {
+            flex-shrink: 0;
+        }
+
+        .topic-chip span.tname {
+            flex: 1;
+            line-height: 1.3;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 8, 12, .6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 20px;
+        }
+
+        .overlay.open {
+            display: flex;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            max-width: 680px;
+            width: 100%;
+            max-height: 84vh;
+            overflow-y: auto;
+            padding: 28px 30px 30px;
+            position: relative;
+        }
+
+        .panel-close {
+            position: absolute;
+            top: 18px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 20px;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .panel-close:hover {
+            color: var(--text);
+        }
+
+        .panel-cat {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--teal);
+            margin: 0 0 8px;
+        }
+
+        .panel-title {
+            font-size: 21px;
+            font-weight: 700;
+            margin: 0 0 14px;
+            padding-right: 30px;
+            line-height: 1.25;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-bottom: 22px;
+        }
+
+        .status-badge.explored {
+            background: var(--teal-dim);
+            color: var(--teal);
+        }
+
+        .status-badge.progress {
+            background: var(--amber-dim);
+            color: var(--amber);
+        }
+
+        .status-badge.none {
+            background: var(--slate-dim);
+            color: var(--slate);
+        }
+
+        .section-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--text-muted);
+            margin: 0 0 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .panel-section {
+            margin-bottom: 24px;
+        }
+
+        .panel-body p {
+            font-size: 14.5px;
+            line-height: 1.65;
+            color: #C7D1DE;
+            margin: 0 0 12px;
+        }
+
+        .log-entry {
+            border-left: 2px solid var(--border);
+            padding-left: 14px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .log-date {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11.5px;
+            color: var(--teal);
+            margin: 0 0 4px;
+        }
+
+        .log-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #C7D1DE;
+            margin: 0;
+        }
+
+        .resources ul {
+            padding-left: 18px;
+            margin: 0;
+        }
+
+        .resources li {
+            font-size: 13.5px;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+        }
+
+        footer {
+            margin-top: 40px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11.5px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+            line-height: 1.6;
+        }
+
+        footer code {
+            background: var(--surface-2);
+            padding: 1px 5px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <header>
+            <p class="eyebrow">PACE — Digital Twin Program</p>
+            <h1>Knowledge Map</h1>
+            <p class="sub">The topic landscape for PACE. Click any topic for what it is, how it connects to PACE, and
+                the running log of how we've built understanding of it over time.</p>
+            <div class="sync-row">
+                <span id="syncStatus">Loading from embedded snapshot…</span>
+                <button class="sync-btn" id="refreshBtn">Refresh from Sheet</button>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><span class="dot explored"></span> Actively studied / established</div>
+                <div class="legend-item"><span class="dot progress"></span> Partially framed</div>
+                <div class="legend-item"><span class="dot none"></span> Not yet started</div>
+            </div>
+        </header>
+
+        <div class="hub-diagram">
+            <svg class="hub-svg" viewBox="0 0 1000 300" preserveAspectRatio="xMidYMid meet">
+                <path class="hub-line" d="M500,80 L110,200" />
+                <path class="hub-line" d="M500,80 L280,200" />
+                <path class="hub-line" d="M500,80 L450,200" />
+                <path class="hub-line" d="M500,80 L610,200" />
+                <path class="hub-line" d="M500,80 L770,200" />
+                <path class="hub-line" d="M500,80 L910,200" />
+                <circle class="hub-circle" cx="500" cy="50" r="42" />
+                <text class="hub-label" x="500" y="55">PACE</text>
+                <g>
+                    <rect class="cat-node-bg" x="45" y="185" width="130" height="46" rx="8" /><text
+                        class="cat-node-label" x="110" y="205">Framing &amp;</text><text class="cat-node-label" x="110"
+                        y="219">Landscape</text><text class="cat-node-count" x="110" y="230">4 topics</text>
+                </g>
+                <g>
+                    <rect class="cat-node-bg" x="210" y="185" width="140" height="46" rx="8" /><text
+                        class="cat-node-label" x="280" y="205">Core Physics</text><text class="cat-node-count" x="280"
+                        y="219">8 topics</text>
+                </g>
+                <g>
+                    <rect class="cat-node-bg" x="380" y="185" width="140" height="46" rx="8" /><text
+                        class="cat-node-label" x="450" y="205">Uncertainty &amp;</text><text class="cat-node-label"
+                        x="450" y="219">Learning</text><text class="cat-node-count" x="450" y="230">6 topics</text>
+                </g>
+                <g>
+                    <rect class="cat-node-bg" x="545" y="185" width="130" height="46" rx="8" /><text
+                        class="cat-node-label" x="610" y="209">Trust &amp; V&amp;V</text><text class="cat-node-count"
+                        x="610" y="222">1 topic</text>
+                </g>
+                <g>
+                    <rect class="cat-node-bg" x="700" y="185" width="140" height="46" rx="8" /><text
+                        class="cat-node-label" x="770" y="205">Systems &amp;</text><text class="cat-node-label" x="770"
+                        y="219">Engineering</text><text class="cat-node-count" x="770" y="230">5 topics</text>
+                </g>
+                <g>
+                    <rect class="cat-node-bg" x="845" y="185" width="130" height="46" rx="8" /><text
+                        class="cat-node-label" x="910" y="209">Economics &amp;</text><text class="cat-node-label"
+                        x="910" y="223">Impact</text>
+                </g>
+            </svg>
+        </div>
+
+        <div class="categories" id="categories"></div>
+
+        <footer>
+            Live data source: a shared Google Sheet (tabs <code>Topics</code> and <code>Logs</code>) — see setup notes
+            from Claude for the exact column layout and sharing settings. Set <code>SHEET_ID</code> near the top of the
+            script below once your Sheet is ready. Until then, this shows the embedded snapshot from when the file was
+            built.
+        </footer>
+    </div>
+
+    <div class="overlay" id="overlay">
+        <div class="panel">
+            <button class="panel-close" id="closeBtn">✕</button>
+            <p class="panel-cat" id="panelCat"></p>
+            <h2 class="panel-title" id="panelTitle"></h2>
+            <span class="status-badge" id="panelStatus"></span>
+
+            <div class="panel-section">
+                <p class="section-label">What this is</p>
+                <div class="panel-body" id="panelDesc"></div>
+            </div>
+            <div class="panel-section">
+                <p class="section-label">Where it fits in PACE</p>
+                <div class="panel-body" id="panelRelevance"></div>
+            </div>
+            <div class="panel-section">
+                <p class="section-label">Log</p>
+                <textarea id="newLogText" placeholder="Write the log entry here…"
+                    style="width:100%;min-height:70px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;padding:9px 11px;margin-bottom:8px;resize:vertical;"></textarea>
+                <button class="sync-btn" id="addLogBtn" style="margin-bottom:14px;">Open form to submit →</button>
+                <div id="panelLog"></div>
+            </div>
+            <div class="panel-section resources" id="panelResources" style="display:none">
+                <p class="section-label">Resources</p>
+                <ul id="resourcesList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ====== CONFIG — set this once your Google Sheet is ready ====== */
+        const SHEET_ID = "1rr0va5ERXby3-P2Y-ohQnsttxp8RHZmdw0O6rhErA6Y"; // paste the Sheet ID from its URL between /d/ and /edit
+        /* Sheet must be shared as "Anyone with the link — Viewer".
+           Tab "Topics": id | title | category | status | description | relevance | resources
+             - category must match one of: framing, physics, uncertainty, trust, systems, impact
+             - status must be one of: explored, progress, none
+             - resources: separate multiple with a semicolon
+           Tab "Logs": id | date | entry
+             - one row per log entry; same id can repeat across many rows (that's how a topic's log grows)
+             - date as YYYY-MM-DD sorts and displays cleanly
+        */
+
+        /* ====== ADD-LOG FORM CONFIG (optional but recommended) ======
+           The "+ Add log entry" button opens a Google Form pre-filled with the
+           correct topic id, so whoever's logging never has to type/select it.
+           The date is handled automatically — no need to enter it.
+        
+           One-time setup:
+           1. Create a Google Form with two fields, in this order:
+                - "Topic ID" (Short answer)
+                - "Entry" (Paragraph)
+           2. Under Responses, click the Sheets icon and link it to send responses
+              into your existing Sheet as a NEW tab (e.g. "Form Responses 1").
+              Google automatically adds a "Timestamp" column to that tab on every
+              submission — that's what the app uses as the log entry's date.
+              Rename the other two columns to "id" and "entry" (or just point
+              LOGS_TAB_NAME below at whatever that tab is called and the app
+              will read "date"/"timestamp" and "entry" either way).
+           3. In the Form editor, click the ⋮ menu → "Pre-fill form". Fill in a
+              test value for BOTH "Topic ID" and "Entry", click "Get link", and
+              copy the resulting URL. It will look like:
+                https://docs.google.com/forms/d/e/FORM_ID/viewform?usp=pp_url&entry.111111111=test&entry.222222222=test2
+              Paste FORM_ID and both entry.NNNNNNNNN numbers below.
+        */
+        const FORM_ID = "1FAIpQLSfe_AAh0Atf1zHPCF9vnWov-Bqu_dGyVXwPxsYQTitRCADMEw";           // the long id in the pre-filled link, between /d/e/ and /viewform
+        const FORM_ENTRY_ID = "232548039";     // entry.NNNNNNNNN number for the "Topic ID" field
+        const FORM_ENTRY_TEXT = "1643492085";   // entry.NNNNNNNNN number for the "Entry" field
+        const LOGS_TAB_NAME = "Logs"; // change if your linked responses tab has a different name
+
+        const CATEGORIES = [
+            { id: 'framing', name: 'Framing & Landscape', color: '#45D6C4' },
+            { id: 'physics', name: 'Core Physics', color: '#F0A860' },
+            { id: 'uncertainty', name: 'Uncertainty & Learning', color: '#9D8CF0' },
+            { id: 'trust', name: 'Trust & Verification', color: '#E85D75' },
+            { id: 'systems', name: 'Systems & Engineering', color: '#5FB8E0' },
+            { id: 'impact', name: 'Economics & Impact', color: '#8393AA' },
+        ];
+
+        // Embedded fallback snapshot — used until SHEET_ID is set / while a fetch is in flight
+        const FALLBACK_TOPICS = [
+            {
+                id: 'dt-current', cat: 'framing', status: 'progress', title: 'Current / previous DT modeling efforts',
+                description: 'A survey of existing digital-twin efforts in nuclear and adjacent industries — what\'s been tried, what a "digital twin" concretely means in this context.',
+                relevance: 'PACE is positioned as a specific, scoped instance of this broader idea — worth knowing the landscape PACE is entering.',
+                resources: ['Kochunas & Huan (2021), Energies — close framing of PACE\'s thesis', 'Kobayashi et al., BISON UQ paper (arXiv:2210.07541)', 'Kobayashi & Alam, DeepONet neutron flux surrogate']
+            },
+            {
+                id: 'dt-apps', cat: 'framing', status: 'none', title: 'Nuclear DT applications — where/how used in the field today',
+                description: 'Mapping who is actually deploying digital-twin-style tools in nuclear industry and academia today, and for what purpose.',
+                relevance: 'Context for whether PACE\'s approach is novel, or how it compares to existing deployed efforts.'
+            },
+            {
+                id: 'field-problems', cat: 'framing', status: 'progress', title: 'Current problems the field is solving, and DT fit',
+                description: 'What real, current problems in the nuclear industry a digital twin approach could plausibly help solve.',
+                relevance: 'Frames why PACE matters beyond being a technical exercise — the "so what" question.'
+            },
+            {
+                id: 'regulatory', cat: 'framing', status: 'none', title: 'Regulatory / licensing framework (NRC)',
+                description: 'What the NRC licensing process requires, and what would make a digital twin\'s output usable in that context.',
+                relevance: 'Long-term value case for PACE — the Kobayashi BISON UQ paper is explicitly NRC-motivated.'
+            },
+            {
+                id: 'fluid-dynamics', cat: 'physics', status: 'explored', title: 'Fluid dynamics',
+                description: 'Continuity, momentum, and energy conservation for moving fluids — the foundation beneath reactor coolant behavior.',
+                relevance: 'Direct prerequisite for understanding what NekRS is solving in the Ground Truth coupling, and for being able to sanity-check its output physically.'
+            },
+            {
+                id: 'thermohydraulics', cat: 'physics', status: 'progress', title: 'Thermohydraulics',
+                description: 'Coolant and fuel heat transfer specifically in a reactor core geometry — Todreas & Kazimi is the standard graduate text.',
+                relevance: 'This is the physics NekRS is computing in the pin-cell coupling — needed to defend GT model output as physically correct, not just numerically converged.'
+            },
+            {
+                id: 'neutronics', cat: 'physics', status: 'progress', title: 'Neutronics',
+                description: 'How neutrons interact, sustain a chain reaction, and generate the heat that thermal-hydraulics then carries away.',
+                relevance: 'The physics OpenMC is solving — the other half of the coupled pin-cell model.'
+            },
+            {
+                id: 'point-kinetics', cat: 'physics', status: 'none', title: 'Point kinetics / reactor transient behavior',
+                description: 'How reactor power responds over time to reactivity changes.',
+                relevance: 'Relevant once PACE moves past steady-state pin cell analysis into transient behavior.'
+            },
+            {
+                id: 'fuel-depletion', cat: 'physics', status: 'none', title: 'Fuel depletion / composition',
+                description: 'How fuel isotopic composition changes over a reactor\'s operating life.',
+                relevance: 'Not yet connected to a specific PACE need.'
+            },
+            {
+                id: 'materials-bison', cat: 'physics', status: 'none', title: 'Materials behavior — fuel & cladding (BISON)',
+                description: 'Fuel and cladding structural/thermal behavior — swelling, creep, corrosion.',
+                relevance: 'Explicitly deferred out of PACE v1 — BISON and fuel-performance modeling were cut from the v1 architecture.'
+            },
+            {
+                id: 'safety-margins', cat: 'physics', status: 'none', title: 'Reactor safety margins / thermal limits',
+                description: 'Margin to critical heat flux, DNBR, fuel centerline melt limits.',
+                relevance: 'T&K Volume II territory — deferred until PACE\'s output needs to defend design margins, not just converge.'
+            },
+            {
+                id: 'coolant-chemistry', cat: 'physics', status: 'none', title: 'Advanced reactor coolant chemistry',
+                description: 'Corrosion and chemistry behavior specific to liquid metal or molten salt coolants.',
+                relevance: 'Long-term relevance given interest in SFR/MSR concepts beyond LWR.'
+            },
+            {
+                id: 'uq', cat: 'uncertainty', status: 'progress', title: 'Uncertainty quantification (forward / inverse)',
+                description: 'Quantifying how uncertainty in inputs propagates to outputs (forward), or inferring uncertain inputs from observed outputs (inverse).',
+                relevance: 'Central to the surrogate\'s value proposition and to the calibration/reliability diagram required in v1.'
+            },
+            {
+                id: 'ai-ml', cat: 'uncertainty', status: 'progress', title: 'AI/ML techniques for nuclear system modeling',
+                description: 'The landscape of surrogate architectures — PINNs, Bayesian neural nets, DeepONets, Gaussian processes, and others.',
+                relevance: 'The v1 surrogate architecture decision was deliberately reopened rather than settled — current placeholder is "AI-Powered Surrogate."'
+            },
+            {
+                id: 'opt-under-uncertainty', cat: 'uncertainty', status: 'none', title: 'Optimization under uncertainty',
+                description: 'Formal methods (optimal experimental design, design optimization) for maximizing information gain or performance under uncertainty.',
+                relevance: 'Framed by Kochunas & Huan as core to DT-enabled decision support.'
+            },
+            {
+                id: 'sensitivity-analysis', cat: 'uncertainty', status: 'none', title: 'Sensitivity analysis',
+                description: 'Identifying which inputs actually drive variation in the outputs.',
+                relevance: 'Distinct from UQ; relevant once tuning which pin-cell parameters matter most to model.'
+            },
+            {
+                id: 'multi-fidelity', cat: 'uncertainty', status: 'none', title: 'Multi-fidelity modeling',
+                description: 'Using a high-fidelity model to build a faster lower-fidelity model without losing critical accuracy.',
+                relevance: 'Conceptually the bridge between an expensive Ground Truth run and a cheap surrogate — the actual PACE thesis.'
+            },
+            {
+                id: 'active-learning', cat: 'uncertainty', status: 'progress', title: 'Active learning',
+                description: 'Deciding when a model\'s uncertainty is high enough to warrant generating a new expensive data point.',
+                relevance: 'v1 uses manual triggering by a person, not automation — automate only once that manual signal is trusted.'
+            },
+            {
+                id: 'vnv', cat: 'trust', status: 'progress', title: 'Verification & Validation (V&V)',
+                description: 'Verification: is the code solving the equations correctly? Validation: does it match reality?',
+                relevance: 'The core trust question for PACE — a converged Picard loop is a numerical fact, not proof of physical correctness. Motivates the whole physics prerequisite study track.'
+            },
+            {
+                id: 'code-coupling', cat: 'systems', status: 'explored', title: 'Code coupling methods & convergence (Cardinal / Picard)',
+                description: 'Picard iteration and fixed-point coupling methods for exchanging data between separate physics solvers.',
+                relevance: 'This is what Cardinal literally does — couples OpenMC and NekRS in v1, with BISON removed to simplify the loop.'
+            },
+            {
+                id: 'software-design', cat: 'systems', status: 'explored', title: 'Software design considerations',
+                description: 'Architecture of the PACE system as a whole — services, orchestration, data flow.',
+                relevance: 'v1 architecture finalized: PACE Service → Orchestrator → Ground Truth Factory → Training Data → Surrogate, with manual GT triggering.'
+            },
+            {
+                id: 'hpc', cat: 'systems', status: 'none', title: 'HPC / parallelization',
+                description: 'Computational scaling considerations for Monte Carlo (OpenMC) vs. spectral-element CFD (NekRS).',
+                relevance: 'Relevant once PACE scales past a single pin cell.'
+            },
+            {
+                id: 'mlops', cat: 'systems', status: 'none', title: 'MLOps / experiment tracking / reproducibility',
+                description: 'Tracking which runs produced which data, versioning models, reproducing results later.',
+                relevance: 'Operational layer distinct from architecture — not yet built.'
+            },
+            {
+                id: 'data-sources', cat: 'systems', status: 'none', title: 'Data sources for training',
+                description: 'What training data already exists publicly, and how to incorporate or design around it.',
+                relevance: 'Currently sidestepped for v1 by generating Ground Truth directly rather than relying on external data.'
+            },
+            {
+                id: 'economics', cat: 'impact', status: 'none', title: 'Economic modeling',
+                description: 'Cost/benefit case for advanced reactor concepts (SMRs, SFRs, MSRs).',
+                relevance: 'The broader "why this matters" case PACE ultimately serves.'
+            },
+        ];
+
+        const FALLBACK_LOGS = {
+            'fluid-dynamics': [
+                { date: '2026-07-20', entry: 'Completed Ch. 1 of Munson (fluid properties: density, viscosity, bulk modulus). Set up new dedicated office space to support consistent study time.' },
+                { date: '2026-07-21', entry: 'Completed Ch. 3 (Bernoulli, streamline kinematics). Worked through streamwise acceleration (a_s = V·dV/ds) and normal acceleration (a_n = V²/R) from first principles, including why converging/diverging streamlines mean accelerating/decelerating flow via continuity. Also solid now on shear stress vs. strain, viscosity mechanisms, and the partial-vs-ordinary derivative distinction behind the material derivative. Next: Ch. 5 (control volume analysis) and Ch. 8 (viscous pipe flow).' }
+            ],
+            'thermohydraulics': [
+                { date: '2026-07-20', entry: 'Identified Todreas & Kazimi Nuclear Systems I as the standard text. Mapped exact prerequisite chapters needed first: Munson Ch. 1/3/5/8 (fluids), Incropera Ch. 1-3/6/8 (heat transfer), Cengel & Boles Ch. 1/2/5 (thermo).' }
+            ],
+            'neutronics': [
+                { date: '2026-07-20', entry: 'Self-assessed as comfortable at Lamarsh & Baratta level. Duderstadt & Hamilton (graduate transport/diffusion/point kinetics) deliberately deferred until needed for the OpenMC side of the build.' },
+                { date: '2026-07-21', entry: 'Doing a refresher pass on Lamarsh alongside the fluids track.' }
+            ],
+            'vnv': [
+                { date: '2026-07-21', entry: 'Worked through the core reasoning: a converged Picard loop between OpenMC and NekRS is a numerical fact, not proof of physical correctness. This is the stated motivation for the whole physics prerequisite study — need to be able to explain results in physics terms, not just trust that the solver converged.' }
+            ],
+            'code-coupling': [
+                { date: '2026-07-20', entry: 'Reviewed the full-vision PACE design (Ground Truth Factory, active learning loop, Omniverse target) and flagged it as overscoped for a solo build.' },
+                { date: '2026-07-20', entry: 'Scoped v1: single pin cell, single coupling (OpenMC + Cardinal/MOOSE), BISON deferred, active learning manually triggered.' },
+                { date: '2026-07-21', entry: 'Finalized v1 system diagram — removed BISON entirely, replaced automated GT-triggering with a manual "Ground Truth Validator" step, cut Omniverse tooling from the diagram.' }
+            ],
+            'software-design': [
+                { date: '2026-07-21', entry: 'v1 architecture finalized: PACE Service → Orchestrator → Ground Truth Factory (Cardinal/Picard coupling OpenMC + NekRS, built on MOOSE) → Training Data → AI-Powered Surrogate (architecture undecided).' }
+            ],
+            'ai-ml': [
+                { date: '2026-07-21', entry: 'Reopened the surrogate architecture decision — previously called as Variational BNN "final," now deferred in favor of researching the option space (PINN, VBNN, DeepONet, etc.) before deciding. Priority is generating Ground Truth data first.' }
+            ],
+            'active-learning': [
+                { date: '2026-07-20', entry: 'Decided v1 uses manual GT-run triggering, not automated active learning — a person decides when to spend the expensive compute, based on surrogate uncertainty. Automate later once that signal is trusted.' }
+            ],
+            'dt-current': [
+                { date: '2026-07-14', entry: 'Built initial reading list identifying Kochunas & Huan and the Kobayashi et al. papers as core framing/benchmark references for PACE.' }
+            ],
+        };
+
+        let TOPICS = FALLBACK_TOPICS;
+        let LOGS = FALLBACK_LOGS;
+
+        function gvizUrl(tab) {
+            return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}&headers=1`;
+        }
+
+        function parseGviz(text) {
+            const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?\s*$/);
+            if (!match) throw new Error('Unexpected response format');
+            const json = JSON.parse(match[1]);
+            const cols = json.table.cols.map(c => (c.label || c.id || '').toLowerCase());
+            return json.table.rows.map(r => {
+                const obj = {};
+                r.c.forEach((cell, i) => { obj[cols[i]] = cell ? cell.v : ''; });
+                return obj;
+            });
+        }
+
+        async function loadFromSheet() {
+            if (!SHEET_ID) {
+                document.getElementById('syncStatus').textContent = 'Showing embedded snapshot (no SHEET_ID configured yet)';
+                return;
+            }
+            document.getElementById('syncStatus').textContent = 'Syncing with Google Sheet…';
+            try {
+                const [topicsRes, logsRes] = await Promise.all([
+                    fetch(gvizUrl('Topics')).then(r => r.text()),
+                    fetch(gvizUrl(LOGS_TAB_NAME)).then(r => r.text()),
+                ]);
+                const topicRows = parseGviz(topicsRes);
+                const logRows = parseGviz(logsRes);
+
+                TOPICS = topicRows.map(r => ({
+                    id: r.id, title: r.title, cat: r.category, status: r.status,
+                    description: r.description, relevance: r.relevance,
+                    resources: r.resources ? String(r.resources).split(';').map(s => s.trim()).filter(Boolean) : []
+                }));
+
+                LOGS = {};
+                logRows.forEach(r => {
+                    if (!LOGS[r.id]) LOGS[r.id] = [];
+                    let rawDate = r.date || r.timestamp || '';
+                    let displayDate = rawDate;
+                    const parsed = new Date(rawDate);
+                    if (!isNaN(parsed)) {
+                        displayDate = parsed.toISOString().slice(0, 10);
+                    }
+                    LOGS[r.id].push({ date: displayDate, entry: r.entry });
+                });
+                Object.values(LOGS).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
+
+                document.getElementById('syncStatus').textContent = 'Synced from Google Sheet just now';
+            } catch (err) {
+                console.error(err);
+                document.getElementById('syncStatus').textContent = 'Could not reach Sheet — showing embedded snapshot (check sharing settings / SHEET_ID)';
+            }
+            renderCategories();
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('categories');
+            container.innerHTML = '';
+            CATEGORIES.forEach(cat => {
+                const topics = TOPICS.filter(d => d.cat === cat.id);
+                if (!topics.length) return;
+                const card = document.createElement('div');
+                card.className = 'cat-card';
+                card.style.setProperty('--cat-color', cat.color);
+                const title = document.createElement('p');
+                title.className = 'cat-title';
+                title.textContent = cat.name;
+                const meta = document.createElement('p');
+                meta.className = 'cat-meta';
+                meta.textContent = topics.length + (topics.length === 1 ? ' topic' : ' topics');
+                card.appendChild(title);
+                card.appendChild(meta);
+                topics.forEach(t => {
+                    const chip = document.createElement('button');
+                    chip.className = 'topic-chip';
+                    chip.innerHTML = `<span class="dot ${t.status}"></span><span class="tname">${t.title}</span>`;
+                    chip.addEventListener('click', () => openPanel(t));
+                    card.appendChild(chip);
+                });
+                container.appendChild(card);
+            });
+        }
+
+        const statusLabel = { explored: 'Actively studied', progress: 'Partially framed', none: 'Not started' };
+
+        let currentTopicId = null;
+
+        function openPanel(topic) {
+            currentTopicId = topic.id;
+            document.getElementById('newLogText').value = '';
+            const cat = CATEGORIES.find(c => c.id === topic.cat);
+            document.getElementById('panelCat').textContent = cat ? cat.name : topic.cat;
+            document.getElementById('panelTitle').textContent = topic.title;
+            const badge = document.getElementById('panelStatus');
+            badge.className = 'status-badge ' + topic.status;
+            badge.innerHTML = `<span class="dot ${topic.status}"></span> ${statusLabel[topic.status] || topic.status}`;
+
+            document.getElementById('panelDesc').innerHTML = `<p>${topic.description || '—'}</p>`;
+            document.getElementById('panelRelevance').innerHTML = `<p>${topic.relevance || '—'}</p>`;
+
+            const logDiv = document.getElementById('panelLog');
+            logDiv.innerHTML = '';
+            const entries = (LOGS[topic.id] || []).slice().reverse(); // newest first
+            if (!entries.length) {
+                logDiv.innerHTML = '<p style="color:var(--text-muted);font-size:14px;">No log entries yet.</p>';
+            } else {
+                entries.forEach(e => {
+                    const div = document.createElement('div');
+                    div.className = 'log-entry';
+                    div.innerHTML = `<p class="log-date">${e.date}</p><p class="log-text">${e.entry}</p>`;
+                    logDiv.appendChild(div);
+                });
+            }
+
+            const resSection = document.getElementById('panelResources');
+            const resList = document.getElementById('resourcesList');
+            resList.innerHTML = '';
+            if (topic.resources && topic.resources.length) {
+                resSection.style.display = 'block';
+                topic.resources.forEach(r => {
+                    const li = document.createElement('li');
+                    li.textContent = r;
+                    resList.appendChild(li);
+                });
+            } else {
+                resSection.style.display = 'none';
+            }
+            document.getElementById('overlay').classList.add('open');
+        }
+
+        document.getElementById('closeBtn').addEventListener('click', () => document.getElementById('overlay').classList.remove('open'));
+        document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') document.getElementById('overlay').classList.remove('open'); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('overlay').classList.remove('open'); });
+        document.getElementById('refreshBtn').addEventListener('click', loadFromSheet);
+
+        document.getElementById('addLogBtn').addEventListener('click', () => {
+            if (!currentTopicId) return;
+            if (!FORM_ID || !FORM_ENTRY_ID) {
+                alert('Add-log form isn\'t configured yet. See the FORM_ID / FORM_ENTRY_ID setup notes near the top of the script, or just add a row to the Logs sheet manually with id: "' + currentTopicId + '".');
+                return;
+            }
+            const text = document.getElementById('newLogText').value.trim();
+            if (!text) {
+                alert('Write the log entry in the box first.');
+                return;
+            }
+            let url = `https://docs.google.com/forms/d/e/${FORM_ID}/viewform?usp=pp_url&entry.${FORM_ENTRY_ID}=${encodeURIComponent(currentTopicId)}`;
+            if (FORM_ENTRY_TEXT) {
+                url += `&entry.${FORM_ENTRY_TEXT}=${encodeURIComponent(text)}`;
+            }
+            window.open(url, '_blank');
+        });
+
+        renderCategories();
+        loadFromSheet();
+    </script>
+</body>
+
+</html>
