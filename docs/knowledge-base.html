@@ -16,6 +16,7 @@
             --text: #E7EDF4;
             --text-muted: #8393AA;
             --teal: #45D6C4;
+            --forest-green: #1B4D3E;
             --teal-dim: #1E4A46;
             --amber: #F0A860;
             --amber-dim: #4A3A22;
@@ -35,6 +36,9 @@
             min-height: 100vh;
         }
 
+        /* ===================================================================
+   BASE / LAYOUT
+   =================================================================== */
         .wrap {
             max-width: 1400px;
             margin: 0 auto;
@@ -65,6 +69,7 @@
             margin: 0 0 16px;
         }
 
+        /* Google Sheet sync status row (top of page) */
         .sync-row {
             display: flex;
             align-items: center;
@@ -91,6 +96,7 @@
             border-color: var(--teal);
         }
 
+        /* Status-dot legend (explored / partially framed / not started) */
         .legend {
             display: flex;
             gap: 20px;
@@ -129,59 +135,216 @@
             background: var(--slate);
         }
 
-        .hub-diagram {
+        /* ===================================================================
+   HUB DIAGRAM
+   PACE -> category -> topic web. SVG draws the connecting lines;
+   the HTML node boxes sit on top in a positioned overlay div so text
+   stays crisp (SVG text render is limited to plain text without
+   flexbox/wrap).
+   =================================================================== */
+        .diagram-wrap {
             position: relative;
             width: 100%;
+            aspect-ratio: 1000/420;
             margin-bottom: 8px;
+            container-type: inline-size;
+            /* lets node boxes size off THIS element's
+                                  width (cqw units below), not the viewport —
+                                  so they scale correctly even when the page
+                                  itself is centered in a wide window */
         }
 
-        .hub-svg {
+        .diagram-wrap svg {
+            position: absolute;
+            inset: 0;
             width: 100%;
-            height: auto;
-            display: block;
+            height: 100%;
         }
 
+        .diagram-nodes {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* Line from root -> category, and category -> topic (expanded view) */
         .hub-line {
             stroke: var(--border);
             stroke-width: 1.5;
             fill: none;
         }
 
-        .hub-circle {
-            fill: var(--surface-2);
-            stroke: var(--teal);
-            stroke-width: 1.5;
-        }
-
-        .hub-label {
-            font-family: 'IBM Plex Mono', monospace;
-            font-weight: 600;
-            font-size: 15px;
-            fill: var(--text);
-            text-anchor: middle;
-        }
-
-        .cat-node-bg {
-            fill: var(--surface);
+        /* "Sneak peek" stub lines at root view — one per topic, hinting at
+   what's inside a category without drawing every topic box */
+        .hub-peek-line {
             stroke: var(--border);
-            stroke-width: 1.2;
+            stroke-width: 1;
+            fill: none;
         }
 
-        .cat-node-label {
+        /* Invisible wide hit-area twin stacked over each thin line so it's
+   actually hoverable/clickable — see diagLine() in the script */
+        .hub-line-hit {
+            stroke: transparent;
+            stroke-width: 14;
+            fill: none;
+            pointer-events: stroke;
+        }
+
+        /* Applied to a line (or its hit-twin's sibling) while hovered */
+        .hub-line-hot {
+            stroke: var(--teal);
+            opacity: 1;
+        }
+
+        /* Node boxes (category + topic). Higher specificity than
+   .hub-node-box below so line-hover can override the base border. */
+        .hub-node-box.hub-node-hot {
+            border-color: var(--teal);
+        }
+
+        .hub-node-box {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            /* padding + max-width scale with the diagram's own rendered width
+     (cqw = 1% of the container's inline size) so boxes shrink together
+     with the space between them instead of overlapping when the
+     window narrows. Clamp keeps them from getting silly-huge on a
+     very wide screen or unreadably tiny on a very narrow one. The
+     coefficients here are tuned to hit their floor at roughly the
+     same container width as .hub-node-title's font-size below — if
+     one bottoms out well before the other, you get a "box keeps
+     shrinking but the text doesn't" mismatch that forces extra line
+     wraps and makes the box look stretched tall. */
+            padding: clamp(3px, 2.2cqw, 12px) clamp(4px, 3cqw, 18px);
+            max-width: clamp(32px, 13cqw, 150px);
+            text-align: center;
+            cursor: pointer;
+            white-space: normal;
+            transition: opacity .3s ease, border-color .2s ease, box-shadow .2s ease;
             font-family: 'IBM Plex Sans', sans-serif;
+        }
+
+        .hub-node-box:hover {
+            border-color: var(--teal);
+        }
+
+        .hub-node-title {
+            font-size: clamp(8px, 3.2cqw, 14px);
             font-weight: 600;
-            font-size: 12.5px;
-            fill: var(--text);
-            text-anchor: middle;
+            color: var(--text);
+            text-align: center;
+            line-height: 1.25;
+            /* Hard cap at 2 lines so a long title (e.g. "Uncertainty & Learning")
+     never keeps growing the box taller as it narrows — it truncates
+     with an ellipsis instead. Full title is always visible elsewhere
+     (the grid card / topic panel), so nothing is actually lost. */
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            overflow: hidden;
         }
 
-        .cat-node-count {
+        .hub-node-title .dot {
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        .hub-node-count {
             font-family: 'IBM Plex Mono', monospace;
-            font-size: 10px;
-            fill: var(--text-muted);
-            text-anchor: middle;
+            font-size: clamp(7.5px, 2.8cqw, 11px);
+            color: var(--text-muted);
+            margin-top: 3px;
         }
 
+        .hub-node-dimmed {
+            opacity: .35;
+        }
+
+        .hub-node-selected {
+            border-color: var(--teal);
+            box-shadow: 0 0 0 2px rgba(69, 214, 196, .25);
+        }
+
+        /* The central "PACE" node — circular, always present. aspect-ratio
+   (rather than a separate height clamp) guarantees it stays a true
+   circle at every size, and max-width:none stops the .hub-node-box
+   max-width above — meant for the text chips — from squashing it. */
+        .hub-root-box {
+            cursor: pointer;
+            background: var(--surface-2);
+            border: 1.5px solid var(--forest-green);
+            width: clamp(32px, 13cqw, 100px);
+            aspect-ratio: 1 / 1;
+            max-width: none;
+            border-radius: 50%;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hub-root-box .hub-node-title {
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 600;
+            font-size: clamp(11px, 2.4cqw, 17px);
+        }
+
+        .hub-root-box.hub-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Topic node text can wrap since titles are longer than category names —
+   a taller max-width budget than the default .hub-node-box above */
+        .hub-topic-box {
+            max-width: clamp(36px, 13cqw, 175px);
+        }
+
+        /* "<- Back" link shown only in expanded (single-category) view */
+        .diagram-back {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--teal);
+            cursor: pointer;
+            z-index: 3;
+            pointer-events: auto;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .diagram-back:hover {
+            text-decoration: underline;
+        }
+
+        /* Cross-highlighting: hovering a diagram node brightens its card/chip
+   below, and vice versa. Deliberately a subtle brighten, not teal —
+   teal is reserved for direct hover/selection in the diagram itself. */
+        .card-highlight {
+            background: var(--surface-2) !important;
+            border-color: #354A64 !important;
+            border-top-color: var(--cat-color, var(--teal)) !important;
+        }
+
+        .chip-highlight {
+            border-color: var(--teal) !important;
+            background: #1B2C33 !important;
+        }
+
+        /* ===================================================================
+   CATEGORY CARDS + TOPIC CHIPS GRID
+   =================================================================== */
         .categories {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -207,6 +370,14 @@
             border-radius: 10px;
             padding: 18px 18px 14px;
             border-top: 3px solid var(--cat-color, var(--teal));
+            cursor: pointer;
+            transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+        }
+
+        .cat-card:hover {
+            background: var(--surface-2);
+            border-color: #354A64;
+            border-top-color: var(--cat-color, var(--teal));
         }
 
         .cat-title {
@@ -254,6 +425,9 @@
             line-height: 1.3;
         }
 
+        /* ===================================================================
+   TOPIC DETAIL MODAL
+   =================================================================== */
         .overlay {
             position: fixed;
             inset: 0;
@@ -273,12 +447,16 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 12px;
-            max-width: 680px;
+            max-width: 920px;
             width: 100%;
             max-height: 84vh;
             overflow-y: auto;
             padding: 28px 30px 30px;
             position: relative;
+            container-type: inline-size;
+            /* lets .panel-grid below switch to two
+                                  columns based on the panel's own
+                                  rendered width, not the viewport */
         }
 
         .panel-close {
@@ -363,6 +541,106 @@
             margin-bottom: 24px;
         }
 
+        /* Two-column layout: main content + resources rail. Collapses to a
+   single column (resources rail falls below the main content, in
+   source order) when the panel itself is narrower than 560px — e.g.
+   on a phone, where .panel has no room to spare for a side column. */
+        .panel-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 28px;
+        }
+
+        @container (min-width:560px) {
+            .panel-grid {
+                grid-template-columns: 1fr 240px;
+            }
+        }
+
+        .panel-main {
+            min-width: 0;
+        }
+
+        /* lets long unbroken text (e.g. a URL) shrink
+                                 instead of forcing the grid track wider */
+        .panel-resources {
+            min-width: 0;
+            padding-left: 24px;
+            border-left: 1px solid var(--border);
+        }
+
+        /* In the single-column mobile layout the rail drops below the main
+   content instead of beside it, so the vertical divider stops making
+   sense there — swap it for a horizontal one above the rail instead. */
+        @container (max-width:559.98px) {
+            .panel-resources {
+                padding-left: 0;
+                border-left: none;
+                padding-top: 20px;
+                border-top: 1px solid var(--border);
+            }
+        }
+
+        .resource-group {
+            margin-bottom: 18px;
+        }
+
+        .resource-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .resource-type-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--teal);
+            margin: 0 0 8px;
+        }
+
+        .resource-item {
+            margin-bottom: 12px;
+        }
+
+        .resource-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .resource-title {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.35;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+        }
+
+        a.resource-title:hover {
+            color: var(--teal);
+            border-color: var(--teal);
+        }
+
+        .resource-meta {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10.5px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .resource-why {
+            font-size: 12px;
+            line-height: 1.5;
+            color: #A9B4C4;
+            margin-top: 5px;
+        }
+
+        .resource-empty {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
         .panel-body p {
             font-size: 14.5px;
             line-height: 1.65;
@@ -391,17 +669,9 @@
             margin: 0;
         }
 
-        .resources ul {
-            padding-left: 18px;
-            margin: 0;
-        }
-
-        .resources li {
-            font-size: 13.5px;
-            color: var(--text-muted);
-            margin-bottom: 5px;
-        }
-
+        /* ===================================================================
+   FOOTER
+   =================================================================== */
         footer {
             margin-top: 40px;
             font-family: 'IBM Plex Mono', monospace;
@@ -422,15 +692,19 @@
 
 <body>
     <div class="wrap">
+
+        <!-- Title, sync status, and status-dot legend -->
         <header>
-            <p class="eyebrow">PACE — Digital Twin Program</p>
-            <h1>Knowledge Map</h1>
-            <p class="sub">The topic landscape for PACE. Click any topic for what it is, how it connects to PACE, and
-                the running log of how we've built understanding of it over time.</p>
+            <p class="eyebrow">PACE</p>
+            <h1>Knowledge Base</h1>
+            <p class="sub">A growing record of what we know, what we've learned, and where the gaps are, across
+                everything PACE touches. Click any topic to dig in.</p>
+
             <div class="sync-row">
                 <span id="syncStatus">Loading from embedded snapshot…</span>
                 <button class="sync-btn" id="refreshBtn">Refresh from Sheet</button>
             </div>
+
             <div class="legend">
                 <div class="legend-item"><span class="dot explored"></span> Actively studied / established</div>
                 <div class="legend-item"><span class="dot progress"></span> Partially framed</div>
@@ -438,85 +712,74 @@
             </div>
         </header>
 
-        <div class="hub-diagram">
-            <svg class="hub-svg" viewBox="0 0 1000 300" preserveAspectRatio="xMidYMid meet">
-                <path class="hub-line" d="M500,80 L110,200" />
-                <path class="hub-line" d="M500,80 L280,200" />
-                <path class="hub-line" d="M500,80 L450,200" />
-                <path class="hub-line" d="M500,80 L610,200" />
-                <path class="hub-line" d="M500,80 L770,200" />
-                <path class="hub-line" d="M500,80 L910,200" />
-                <circle class="hub-circle" cx="500" cy="50" r="42" />
-                <text class="hub-label" x="500" y="55">PACE</text>
-                <g>
-                    <rect class="cat-node-bg" x="45" y="185" width="130" height="46" rx="8" /><text
-                        class="cat-node-label" x="110" y="205">Framing &amp;</text><text class="cat-node-label" x="110"
-                        y="219">Landscape</text><text class="cat-node-count" x="110" y="230">4 topics</text>
-                </g>
-                <g>
-                    <rect class="cat-node-bg" x="210" y="185" width="140" height="46" rx="8" /><text
-                        class="cat-node-label" x="280" y="205">Core Physics</text><text class="cat-node-count" x="280"
-                        y="219">8 topics</text>
-                </g>
-                <g>
-                    <rect class="cat-node-bg" x="380" y="185" width="140" height="46" rx="8" /><text
-                        class="cat-node-label" x="450" y="205">Uncertainty &amp;</text><text class="cat-node-label"
-                        x="450" y="219">Learning</text><text class="cat-node-count" x="450" y="230">6 topics</text>
-                </g>
-                <g>
-                    <rect class="cat-node-bg" x="545" y="185" width="130" height="46" rx="8" /><text
-                        class="cat-node-label" x="610" y="209">Trust &amp; V&amp;V</text><text class="cat-node-count"
-                        x="610" y="222">1 topic</text>
-                </g>
-                <g>
-                    <rect class="cat-node-bg" x="700" y="185" width="140" height="46" rx="8" /><text
-                        class="cat-node-label" x="770" y="205">Systems &amp;</text><text class="cat-node-label" x="770"
-                        y="219">Engineering</text><text class="cat-node-count" x="770" y="230">5 topics</text>
-                </g>
-                <g>
-                    <rect class="cat-node-bg" x="845" y="185" width="130" height="46" rx="8" /><text
-                        class="cat-node-label" x="910" y="209">Economics &amp;</text><text class="cat-node-label"
-                        x="910" y="223">Impact</text>
-                </g>
-            </svg>
+        <!-- Interactive hub diagram — populated by renderDiagram() in the script -->
+        <div class="diagram-wrap">
+            <button class="diagram-back" id="diagramBack" style="display:none;">← Back</button>
+            <svg id="hubSvg" viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid meet"></svg>
+            <div class="diagram-nodes" id="diagramNodes"></div>
         </div>
 
+        <!-- Category cards + topic chips grid — populated by renderCategories() -->
         <div class="categories" id="categories"></div>
 
         <footer>
-            Live data source: a shared Google Sheet (tabs <code>Topics</code> and <code>Logs</code>) — see setup notes
-            from Claude for the exact column layout and sharing settings. Set <code>SHEET_ID</code> near the top of the
-            script below once your Sheet is ready. Until then, this shows the embedded snapshot from when the file was
-            built.
+            Part of the <a href="https://github.com/brettnelson612/pace" target="_blank" rel="noopener noreferrer"
+                style="color:var(--teal);">PACE</a> project on GitHub. Contributors: Brett Nelson, Paul Varkey.
         </footer>
     </div>
 
+    <!-- Topic detail modal — filled in by openPanel() in the script -->
     <div class="overlay" id="overlay">
         <div class="panel">
             <button class="panel-close" id="closeBtn">✕</button>
-            <p class="panel-cat" id="panelCat"></p>
-            <h2 class="panel-title" id="panelTitle"></h2>
-            <span class="status-badge" id="panelStatus"></span>
 
-            <div class="panel-section">
-                <p class="section-label">What this is</p>
-                <div class="panel-body" id="panelDesc"></div>
+            <div class="panel-head">
+                <p class="panel-cat" id="panelCat"></p>
+                <h2 class="panel-title" id="panelTitle"></h2>
+                <span class="status-badge" id="panelStatus"></span>
             </div>
-            <div class="panel-section">
-                <p class="section-label">Where it fits in PACE</p>
-                <div class="panel-body" id="panelRelevance"></div>
+
+            <!-- Two-column at wide panel widths (main content + resources rail),
+         collapses to one column on a narrow screen — see @container rule
+         on .panel-grid below. -->
+            <div class="panel-grid">
+                <div class="panel-main">
+                    <div class="panel-section">
+                        <p class="section-label">What this is</p>
+                        <div class="panel-body" id="panelDesc"></div>
+                    </div>
+                    <div class="panel-section">
+                        <p class="section-label">Where it fits in PACE</p>
+                        <div class="panel-body" id="panelRelevance"></div>
+                    </div>
+                    <div class="panel-section">
+                        <p class="section-label">Log</p>
+                        <textarea id="newLogText" placeholder="Write the log entry here…"
+                            style="width:100%;min-height:70px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;padding:9px 11px;margin-bottom:8px;resize:vertical;"></textarea>
+                        <button class="sync-btn" id="addLogBtn" style="margin-bottom:14px;">Submit →</button>
+                        <div id="panelLog"></div>
+                    </div>
+                </div>
+
+                <!-- Vetted reading list for this topic — grouped by type (paper /
+           textbook / article / course), rendered by renderResources() -->
+                <aside class="panel-resources">
+                    <p class="section-label">Resources</p>
+                    <div id="resourcesList"></div>
+                </aside>
             </div>
-            <div class="panel-section">
-                <p class="section-label">Log</p>
-                <textarea id="newLogText" placeholder="Write the log entry here…"
-                    style="width:100%;min-height:70px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;padding:9px 11px;margin-bottom:8px;resize:vertical;"></textarea>
-                <button class="sync-btn" id="addLogBtn" style="margin-bottom:14px;">Open form to submit →</button>
-                <div id="panelLog"></div>
-            </div>
-            <div class="panel-section resources" id="panelResources" style="display:none">
-                <p class="section-label">Resources</p>
-                <ul id="resourcesList"></ul>
-            </div>
+        </div>
+    </div>
+
+    <!-- Hidden iframe modal used to submit a new log entry via the Google Form
+     (see the "ADD LOG ENTRY" section in the script) -->
+    <div class="overlay" id="formOverlay">
+        <div class="panel" style="max-width:520px;">
+            <button class="panel-close" id="formCloseBtn">✕</button>
+            <p class="panel-cat" style="margin-bottom:16px;">Submitting log entry…</p>
+            <iframe id="formFrame"
+                style="width:100%;height:480px;border:1px solid var(--border);border-radius:8px;background:#fff;"
+                frameborder="0"></iframe>
         </div>
     </div>
 
@@ -524,20 +787,24 @@
         /* ====== CONFIG — set this once your Google Sheet is ready ====== */
         const SHEET_ID = "1rr0va5ERXby3-P2Y-ohQnsttxp8RHZmdw0O6rhErA6Y"; // paste the Sheet ID from its URL between /d/ and /edit
         /* Sheet must be shared as "Anyone with the link — Viewer".
-           Tab "Topics": id | title | category | status | description | relevance | resources
+           Tab "Topics": id | title | category | status | description | relevance
              - category must match one of: framing, physics, uncertainty, trust, systems, impact
              - status must be one of: explored, progress, none
-             - resources: separate multiple with a semicolon
            Tab "Logs": id | date | entry
              - one row per log entry; same id can repeat across many rows (that's how a topic's log grows)
              - date as YYYY-MM-DD sorts and displays cleanly
+           Tab "Resources": id | type | title | authors | year | link | why
+             - one row per resource; same id can repeat (a topic can have several)
+             - type must be one of: paper, textbook, article, course (anything else
+               falls into a catch-all "Other" group so a typo doesn't drop the row)
+             - why is the one-line vetting note shown under the resource
         */
 
         /* ====== ADD-LOG FORM CONFIG (optional but recommended) ======
            The "+ Add log entry" button opens a Google Form pre-filled with the
            correct topic id, so whoever's logging never has to type/select it.
            The date is handled automatically — no need to enter it.
-        
+
            One-time setup:
            1. Create a Google Form with two fields, in this order:
                 - "Topic ID" (Short answer)
@@ -559,7 +826,24 @@
         const FORM_ENTRY_ID = "232548039";     // entry.NNNNNNNNN number for the "Topic ID" field
         const FORM_ENTRY_TEXT = "1643492085";   // entry.NNNNNNNNN number for the "Entry" field
         const LOGS_TAB_NAME = "Logs"; // change if your linked responses tab has a different name
+        const RESOURCES_TAB_NAME = "Resources"; // change if you name that tab something else
 
+        /* ====== NAME MAPPING ======
+           If your Form has "Collect email addresses" turned on (Settings > Responses),
+           Google automatically records who submitted each entry — no typing required.
+           Map those emails to display names here, so logs show "Brett — <entry>" etc.
+        */
+        const NAME_MAP = {
+            "brettleenelson@gmail.com": "Brett",
+            "paul.varkey@gmail.com": "Paul",
+        };
+
+        /* ===================================================================
+           DATA
+           CATEGORIES is static. TOPICS/LOGS start as the embedded fallback
+           snapshot below, then get replaced by loadFromSheet() once the
+           Google Sheet responds (see maybeRerender()).
+           =================================================================== */
         const CATEGORIES = [
             { id: 'framing', name: 'Framing & Landscape', color: '#45D6C4' },
             { id: 'physics', name: 'Core Physics', color: '#F0A860' },
@@ -574,8 +858,7 @@
             {
                 id: 'dt-current', cat: 'framing', status: 'progress', title: 'Current / previous DT modeling efforts',
                 description: 'A survey of existing digital-twin efforts in nuclear and adjacent industries — what\'s been tried, what a "digital twin" concretely means in this context.',
-                relevance: 'PACE is positioned as a specific, scoped instance of this broader idea — worth knowing the landscape PACE is entering.',
-                resources: ['Kochunas & Huan (2021), Energies — close framing of PACE\'s thesis', 'Kobayashi et al., BISON UQ paper (arXiv:2210.07541)', 'Kobayashi & Alam, DeepONet neutron flux surrogate']
+                relevance: 'PACE is positioned as a specific, scoped instance of this broader idea — worth knowing the landscape PACE is entering.'
             },
             {
                 id: 'dt-apps', cat: 'framing', status: 'none', title: 'Nuclear DT applications — where/how used in the field today',
@@ -733,9 +1016,308 @@
             ],
         };
 
+        // Vetted reading list per topic, grouped by type (paper / textbook /
+        // article / course). Each entry has been checked against citation
+        // counts, publisher/venue, and author credentials before inclusion —
+        // see the "why" field for the one-line justification. Only two topics
+        // are populated so far (dt-current, uq) as a proof of concept; the
+        // rest fill in the same way once the format's confirmed.
+        const RESOURCE_TYPE_ORDER = ['paper', 'textbook', 'article', 'course', 'other'];
+        const RESOURCE_TYPE_LABELS = { paper: 'Papers', textbook: 'Textbooks', article: 'Articles', course: 'Courses / Tutorials', other: 'Other' };
+
+        const FALLBACK_RESOURCES = {
+            'dt-current': [
+                {
+                    type: 'paper', title: 'Digital Twin Concepts with Uncertainty for Nuclear Power Applications',
+                    authors: 'Kochunas & Huan', year: '2021', link: 'https://www.mdpi.com/1996-1073/14/14/4235',
+                    why: 'The closest existing paper to PACE\'s own thesis — maps the digital model / digital shadow / digital twin taxonomy onto a nuclear plant. Cited across most later nuclear-DT papers as the framing reference.'
+                },
+                {
+                    type: 'paper', title: 'Uncertainty Quantification and Sensitivity Analysis for Digital Twin Enabling Technology: Application for BISON Fuel Performance Code',
+                    authors: 'Kobayashi, Kumar, Bonney, Chakraborty, Paaren & Alam', year: '2022', link: 'https://arxiv.org/abs/2210.07541',
+                    why: 'NRC-motivated UQ study run directly on BISON, the fuel-performance code PACE deliberately deferred out of v1 — the reference to come back to if/when that scope reopens.'
+                },
+                {
+                    type: 'paper', title: 'Deep Neural Operator-Driven Real-Time Inference to Enable Digital Twin Solutions for Nuclear Energy Systems',
+                    authors: 'Kobayashi & Alam', year: '2024', link: 'https://www.nature.com/articles/s41598-024-51984-x',
+                    why: 'Peer-reviewed (Scientific Reports). DeepONet surrogate for neutron flux, ~1500x faster than Monte Carlo — the closest existing benchmark for the surrogate-architecture question PACE has reopened.'
+                },
+            ],
+            'uq': [
+                {
+                    type: 'textbook', title: 'Uncertainty Quantification: Theory, Implementation, and Applications',
+                    authors: 'Ralph C. Smith', year: '2024, 2nd ed.', link: 'https://epubs.siam.org/doi/10.1137/1.9781611977844',
+                    why: 'The standard graduate UQ textbook (SIAM) — Bayesian calibration, surrogate construction, and sensitivity analysis in one place. Explicitly uses nuclear power as a motivating application domain.'
+                },
+                {
+                    type: 'paper', title: 'Variational Inference: A Review for Statisticians',
+                    authors: 'Blei, Kucukelbir & McAuliffe', year: '2017', link: 'https://arxiv.org/abs/1601.00670',
+                    why: 'The canonical, most-cited review of variational inference — the optimization-based alternative to MCMC that underlies the Variational BNN surrogate PACE originally considered.'
+                },
+            ],
+            'dt-apps': [
+                {
+                    type: 'article', title: 'Current status of digital twin architecture and application in nuclear energy field',
+                    authors: 'Hu, Zhang, Peng, Zhang & Yang', year: '2024', link: 'https://www.sciencedirect.com/science/article/abs/pii/S0306454924001543',
+                    why: 'Recent nuclear-specific survey (Annals of Nuclear Energy) proposing an MBSE-based architecture for nuclear DT systems -- the closest existing survey to what a mature version of PACE could look like.'
+                },
+                {
+                    type: 'article', title: 'Digital engineering implementation in nuclear demonstration and nonproliferation projects at Idaho National Laboratory',
+                    authors: 'Finan, Ritter, Suyderhoud & Marshall', year: '2024', link: 'https://www.frontiersin.org/journals/energy-research/articles/10.3389/fenrg.2024.1443896',
+                    why: 'A real-world case study from INL, not just a proposal -- shows what digital-twin-style tooling looks like once deployed on an actual reactor program.'
+                },
+            ],
+            'field-problems': [
+                {
+                    type: 'other', title: 'AI-Enabled Predictive Maintenance Digital Twins for Advanced Nuclear Reactors',
+                    authors: 'ARPA-E / GE Research', year: '2023', link: 'https://arpa-e.energy.gov/programs-and-initiatives/search-all-projects/ai-enabled-predictive-maintenance-digital-twins-advanced-nuclear-reactors',
+                    why: 'A federally funded program (not just a paper) targeting a concrete O&M cost problem with a DT, using GE Hitachi\'s BWRX-300 -- grounds "is this a real problem" in an actual funded effort.'
+                },
+                {
+                    type: 'article', title: 'Evaluation of Digital Twin Cybersecurity for Nuclear Power (SAND2023-09884)',
+                    authors: 'Sandia National Laboratories', year: '2023', link: 'https://www.sandia.gov/app/uploads/sites/273/2024/11/SAND_Digital_Twins_Final.pdf',
+                    why: 'National-lab technical report enumerating the concrete problems (predictive maintenance, cybersecurity, anomaly detection) DT is actually being pursued to solve in nuclear, with extensive citations.'
+                },
+            ],
+            'regulatory': [
+                {
+                    type: 'other', title: 'The U.S. Nuclear Regulatory Commission Approach to Modeling and Simulation',
+                    authors: 'U.S. Nuclear Regulatory Commission', year: '2019', link: 'https://www.nrc.gov/docs/ML1916/ML19161A260.pdf',
+                    why: 'Primary source -- the NRC\'s own account of how it plans to review M&S-heavy licensing submissions for advanced reactors, the credibility bar a PACE-style tool would eventually need to clear.'
+                },
+                {
+                    type: 'article', title: 'NUCLEAR POWER: NRC Needs to Take Additional Actions to Prepare to License Advanced Reactors (GAO-23-105997)',
+                    authors: 'U.S. Government Accountability Office', year: '2023', link: 'https://www.gao.gov/assets/gao-23-105997.pdf',
+                    why: 'Independent government audit (not industry-authored) of the same licensing-readiness question -- a useful reality check on the NRC\'s own framing.'
+                },
+            ],
+            'fluid-dynamics': [
+                {
+                    type: 'textbook', title: 'Fundamentals of Fluid Mechanics',
+                    authors: 'Munson, Young, Okiishi, Huebsch & Rothmayer', year: '7th/8th ed., Wiley', link: 'https://www.wiley.com/en-us/Fundamentals+of+Fluid+Mechanics',
+                    why: 'The standard undergraduate fluid mechanics textbook -- already the one being worked through per the study log.'
+                },
+            ],
+            'thermohydraulics': [
+                {
+                    type: 'textbook', title: 'Nuclear Systems Volume I: Thermal Hydraulic Fundamentals',
+                    authors: 'Todreas & Kazimi', year: '3rd ed., 2021, CRC Press', link: 'https://www.routledge.com/Nuclear-Systems-Volume-I-Thermal-Hydraulic-Fundamentals-Third-Edition/Todreas-Kazimi/p/book/9781138492448',
+                    why: 'MIT authors; the standard graduate nuclear thermal-hydraulics text, explicitly covering GEN III+/IV and SMR reactor types.'
+                },
+            ],
+            'neutronics': [
+                {
+                    type: 'textbook', title: 'Introduction to Nuclear Engineering',
+                    authors: 'Lamarsh & Baratta', year: '3rd ed., Prentice Hall, 2001', link: '',
+                    why: 'The standard undergraduate neutronics / reactor-physics text.'
+                },
+                {
+                    type: 'textbook', title: 'Nuclear Reactor Analysis',
+                    authors: 'Duderstadt & Hamilton', year: 'Wiley, 1976', link: '',
+                    why: 'The standard graduate-level neutronics text -- deliberately deferred until needed for the OpenMC side of the build, but the reference to reach for then.'
+                },
+            ],
+            'point-kinetics': [
+                {
+                    type: 'textbook', title: 'Introductory Nuclear Reactor Dynamics',
+                    authors: 'Ott & Neuhold', year: 'American Nuclear Society, 1985', link: '',
+                    why: 'The dedicated point-kinetics / reactor-transient textbook -- develops the classical point kinetics formulation in three steps, still a standard course reference.'
+                },
+                {
+                    type: 'paper', title: 'Efficient numerical solution of the point kinetics equations in nuclear reactor dynamics',
+                    authors: 'Kinard & Allen', year: '2004, Annals of Nuclear Energy', link: '',
+                    why: 'Widely cited across later point-kinetics numerical-methods papers -- a good bridge from Ott & Neuhold\'s classical treatment to modern solvers.'
+                },
+            ],
+            'fuel-depletion': [
+                {
+                    type: 'other', title: 'ORIGEN: Neutron activation, transmutation, fission product generation & radiation source term calculation',
+                    authors: 'Oak Ridge National Laboratory (SCALE documentation)', year: '', link: 'https://scale-manual.ornl.gov/origen/index.html',
+                    why: 'ORIGEN is the field-standard depletion/burnup code; this is its primary technical documentation.'
+                },
+                {
+                    type: 'paper', title: 'Rational Approximations to the Matrix Exponential in Burnup Calculations',
+                    authors: 'Maria Pusa', year: '2011, Nuclear Science and Engineering 169(2)', link: 'https://doi.org/10.13182/NSE10-81',
+                    why: 'Foundational numerical method (the CRAM approach) now standard in modern depletion solvers, including ORIGEN itself.'
+                },
+            ],
+            'materials-bison': [
+                {
+                    type: 'paper', title: 'BISON: A Flexible Code for Advanced Simulation of the Performance of Multiple Nuclear Fuel Forms',
+                    authors: 'Hales, Williamson, Novascone et al.', year: '2021, Nuclear Technology 207(7)', link: 'https://www.tandfonline.com/doi/full/10.1080/00295450.2020.1836940',
+                    why: 'The primary BISON code-description paper from INL/LANL -- the fuel-performance code explicitly deferred out of PACE v1.'
+                },
+                {
+                    type: 'paper', title: 'MOOSE: Enabling massively parallel multiphysics simulation',
+                    authors: 'Permann, Gaston, Andrš et al.', year: '2020, SoftwareX 11', link: 'https://doi.org/10.1016/j.softx.2020.100430',
+                    why: 'The underlying MOOSE framework paper -- the same framework PACE\'s own Cardinal coupling is built on.'
+                },
+            ],
+            'safety-margins': [
+                {
+                    type: 'textbook', title: 'Nuclear Systems II: Elements of Thermal Hydraulic Design',
+                    authors: 'Todreas & Kazimi', year: 'Taylor & Francis', link: '',
+                    why: 'Companion volume to Vol. I -- covers margin/design analysis (DNBR, critical heat flux) in depth.'
+                },
+                {
+                    type: 'other', title: 'Safety margins of operating reactors (IAEA-TECDOC-1332)',
+                    authors: 'International Atomic Energy Agency', year: '', link: 'https://www-pub.iaea.org/MTCD/Publications/PDF/te_1332_web.pdf',
+                    why: 'Authoritative international definition and framing of what "safety margin" means in regulatory practice.'
+                },
+            ],
+            'coolant-chemistry': [
+                {
+                    type: 'other', title: 'Technical Assessment of Materials Compatibility in Molten Salt Reactors (ML21084A039)',
+                    authors: 'U.S. Nuclear Regulatory Commission', year: '', link: 'https://www.nrc.gov/docs/ML2108/ML21084A039.pdf',
+                    why: 'The NRC\'s own technical review of MSR corrosion -- a regulatory-grounded primary source.'
+                },
+                {
+                    type: 'article', title: 'Corrosion issues in molten salt reactor (MSR) systems',
+                    authors: 'Woodhead Publishing (Nuclear Corrosion Science and Engineering)', year: '', link: 'https://www.sciencedirect.com/science/article/abs/pii/B9781845697655500238',
+                    why: 'Foundational review of the underlying physics/chemistry of molten-salt corrosion.'
+                },
+            ],
+            'ai-ml': [
+                {
+                    type: 'paper', title: 'Physics-Informed Neural Networks: A Deep Learning Framework for Solving Forward and Inverse Problems Involving Nonlinear Partial Differential Equations',
+                    authors: 'Raissi, Perdikaris & Karniadakis', year: '2019, Journal of Computational Physics 378', link: 'https://doi.org/10.1016/j.jcp.2018.10.045',
+                    why: 'The foundational PINN paper (22,000+ citations) -- one of the surrogate architecture families PACE\'s own reading list is evaluating.'
+                },
+                {
+                    type: 'paper', title: 'Learning nonlinear operators via DeepONet based on the universal approximation theorem of operators',
+                    authors: 'Lu, Jin, Pang, Zhang & Karniadakis', year: '2021, Nature Machine Intelligence 3', link: 'https://doi.org/10.1038/s42256-021-00302-5',
+                    why: 'The foundational DeepONet paper -- the same architecture Kobayashi & Alam benchmarked at ~1500x speedup for neutron flux (see dt-current).'
+                },
+            ],
+            'opt-under-uncertainty': [
+                {
+                    type: 'paper', title: 'Theory and Applications of Robust Optimization',
+                    authors: 'Bertsimas, Brown & Caramanis', year: '2011, SIAM Review 53(3)', link: 'https://doi.org/10.1137/080734510',
+                    why: 'The standard, highly cited survey of robust optimization theory.'
+                },
+                {
+                    type: 'paper', title: 'Reliability-Based Robust Design Optimization Method for Engineering Systems with Uncertainty Quantification',
+                    authors: 'Verma, Kumar, Kobayashi & Alam', year: 'arXiv:2210.07521', link: 'https://arxiv.org/abs/2210.07521',
+                    why: 'Same nuclear-focused author group as PACE\'s other reading-list papers -- applies robust optimization directly to a nuclear engineering system.'
+                },
+            ],
+            'sensitivity-analysis': [
+                {
+                    type: 'textbook', title: 'Global Sensitivity Analysis: The Primer',
+                    authors: 'Saltelli, Ratto, Andres, Campolongo, Cariboni, Gatelli, Saisana & Tarantola', year: 'Wiley, 2008', link: 'https://www.andreasaltelli.eu/file/repository/A_Saltelli_Marco_Ratto_Terry_Andres_Francesca_Campolongo_Jessica_Cariboni_Debora_Gatelli_Michaela_Saisana_Stefano_Tarantola_Global_Sensitivity_Analysis_The_Primer_Wiley_Interscience_2008_.pdf',
+                    why: 'The standard reference text for global (variance-based) sensitivity analysis -- freely available as a PDF from the lead author.'
+                },
+            ],
+            'multi-fidelity': [
+                {
+                    type: 'paper', title: 'Survey of Multifidelity Methods in Uncertainty Propagation, Inference, and Optimization',
+                    authors: 'Peherstorfer, Willcox & Gunzburger', year: '2018, SIAM Review 60(3)', link: 'https://doi.org/10.1137/16M1082469',
+                    why: 'The canonical, extremely widely cited survey of the field (500+ direct citation statements).'
+                },
+            ],
+            'active-learning': [
+                {
+                    type: 'paper', title: 'Active Learning Literature Survey',
+                    authors: 'Burr Settles', year: '2009, Univ. of Wisconsin-Madison Tech Report 1648', link: 'https://burrsettles.com/pub/settles.activelearning.pdf',
+                    why: 'The canonical active-learning survey (6,600+ citations), freely available.'
+                },
+                {
+                    type: 'paper', title: 'Taking the Human Out of the Loop: A Review of Bayesian Optimization',
+                    authors: 'Shahriari, Swersky, Wang, Adams & de Freitas', year: '2016, Proceedings of the IEEE 104(1)', link: 'https://doi.org/10.1109/JPROC.2015.2494218',
+                    why: 'Standard review of Bayesian optimization -- the closest formal framework to PACE\'s "when do we spend expensive Ground Truth compute" decision.'
+                },
+            ],
+            'vnv': [
+                {
+                    type: 'textbook', title: 'Verification and Validation in Scientific Computing',
+                    authors: 'Oberkampf & Roy', year: 'Cambridge University Press, 2010', link: 'https://doi.org/10.1017/CBO9780511760396',
+                    why: 'THE standard V&V text, from Sandia and Virginia Tech authors.'
+                },
+                {
+                    type: 'paper', title: 'A comprehensive framework for verification, validation, and uncertainty quantification in scientific computing',
+                    authors: 'Roy & Oberkampf', year: '2011, Computer Methods in Applied Mechanics and Engineering 200', link: 'https://doi.org/10.1016/j.cma.2011.03.016',
+                    why: 'Companion paper unifying V&V and UQ into one framework -- directly relevant since PACE treats them as separate categories that need to connect.'
+                },
+            ],
+            'code-coupling': [
+                {
+                    type: 'paper', title: 'Coupled Monte Carlo and thermal-fluid modeling of high temperature gas reactors using Cardinal',
+                    authors: 'Novak et al.', year: '2022, Annals of Nuclear Energy', link: 'https://www.sciencedirect.com/science/article/abs/pii/S0306454922003450',
+                    why: 'The primary paper for Cardinal -- literally the coupling framework (OpenMC + NekRS + MOOSE) PACE itself is built on.'
+                },
+                {
+                    type: 'article', title: 'Data transfers for nuclear reactor multiphysics studies using the MOOSE framework',
+                    authors: 'Frontiers in Nuclear Engineering', year: '2025', link: 'https://www.frontiersin.org/journals/nuclear-engineering/articles/10.3389/fnuen.2025.1611173/full',
+                    why: 'Covers the MultiApp/Transfer system already flagged as a tier-1 priority doc in PACE\'s own reading list.'
+                },
+            ],
+            'software-design': [
+                {
+                    type: 'paper', title: 'MOOSE: Enabling massively parallel multiphysics simulation',
+                    authors: 'Permann, Gaston, Andrš et al.', year: '2020, SoftwareX 11', link: 'https://doi.org/10.1016/j.softx.2020.100430',
+                    why: 'The MOOSE framework paper -- foundational to how PACE\'s whole software stack is architected.'
+                },
+                {
+                    type: 'paper', title: 'Best Practices for Scientific Computing',
+                    authors: 'Wilson, Aruliah, Brown et al.', year: '2014, PLOS Biology 12(1)', link: 'https://doi.org/10.1371/journal.pbio.1001745',
+                    why: 'Widely cited, practical guide to good software engineering habits specifically for research code; free/open access.'
+                },
+            ],
+            'hpc': [
+                {
+                    type: 'textbook', title: 'Using MPI: Portable Parallel Programming with the Message-Passing Interface',
+                    authors: 'Gropp, Lusk & Skjellum', year: '3rd ed., MIT Press', link: 'https://mitpress.mit.edu/9780262527392/using-mpi/',
+                    why: 'The standard reference for MPI, the parallel-programming model underlying most HPC nuclear codes, including MOOSE/Cardinal.'
+                },
+            ],
+            'mlops': [
+                {
+                    type: 'paper', title: 'Hidden Technical Debt in Machine Learning Systems',
+                    authors: 'Sculley, Holt, Golovin et al.', year: '2015, NeurIPS', link: 'https://papers.neurips.cc/paper/5656-hidden-technical-debt-in-machine-learning-systems.pdf',
+                    why: 'The foundational, highly influential paper framing ML system engineering challenges as technical debt -- the origin point for the MLOps discipline.'
+                },
+                {
+                    type: 'course', title: 'Rules of Machine Learning: Best Practices for ML Engineering',
+                    authors: 'Martin Zinkevich / Google', year: '', link: 'https://developers.google.com/machine-learning/guides/rules-of-ml',
+                    why: 'Practical, freely available guide used internally at Google -- a good applied complement to the more theoretical Sculley paper.'
+                },
+            ],
+            'data-sources': [
+                {
+                    type: 'other', title: 'Task Force on Artificial Intelligence and Machine Learning for Scientific Computing in Nuclear Engineering',
+                    authors: 'OECD Nuclear Energy Agency', year: '', link: 'https://www.oecd-nea.org/jcms/pl_77779/task-force-on-artificial-intelligence-and-machine-learning-for-scientific-computing-in-nuclear-engineering',
+                    why: 'The central international body curating certified benchmark and experimental data specifically for training nuclear AI/ML models -- the first place to look for legitimate training data.'
+                },
+                {
+                    type: 'paper', title: 'Introducing the OECD/NEA WPRS Benchmark on Artificial Intelligence and Machine Learning for Scientific Computing in Nuclear Engineering',
+                    authors: 'Wu, Delipei, Avramova, Ivanov & Buss', year: '2023, NURETH-20 Proceedings', link: '',
+                    why: 'Describes the specific benchmark datasets (critical heat flux, reactor kinetics) available through this OECD/NEA effort.'
+                },
+            ],
+            'economics': [
+                {
+                    type: 'other', title: 'The Future of Nuclear Energy in a Carbon-Constrained World',
+                    authors: 'MIT Energy Initiative', year: '2018', link: 'https://energy.mit.edu/wp-content/uploads/2018/09/The-Future-of-Nuclear-Energy-in-a-Carbon-Constrained-World.pdf',
+                    why: 'The standard modern reference for nuclear economics -- has a dedicated chapter on nuclear power plant costs, co-authored across MIT/UW-Madison/Oak Ridge.'
+                },
+                {
+                    type: 'paper', title: 'Nuclear energy in a carbon-constrained world: Big challenges and big opportunities',
+                    authors: 'Buongiorno et al.', year: '2019, IEEE Power and Energy Magazine 17(2)', link: 'https://doi.org/10.1109/MPE.2018.2884879',
+                    why: 'Peer-reviewed summary of the same MIT study findings, in a shorter and more citable form.'
+                },
+            ],
+        };
+
         let TOPICS = FALLBACK_TOPICS;
         let LOGS = FALLBACK_LOGS;
+        let RESOURCES = FALLBACK_RESOURCES;
 
+        /* ===================================================================
+           GOOGLE SHEET SYNC
+           Reads the public Sheet via the gviz JSON endpoint (no API key
+           needed since the Sheet is link-shared as Viewer). Falls back to
+           the embedded snapshot above on any failure.
+           =================================================================== */
         function gvizUrl(tab) {
             return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}&headers=1`;
         }
@@ -747,52 +1329,92 @@
             const cols = json.table.cols.map(c => (c.label || c.id || '').toLowerCase());
             return json.table.rows.map(r => {
                 const obj = {};
-                r.c.forEach((cell, i) => { obj[cols[i]] = cell ? cell.v : ''; });
+                r.c.forEach((cell, i) => {
+                    if (!cell) { obj[cols[i]] = ''; return; }
+                    obj[cols[i]] = (cell.f !== undefined && cell.f !== null && cell.f !== '') ? cell.f : cell.v;
+                });
                 return obj;
             });
         }
 
+        let isSyncing = false;
         async function loadFromSheet() {
-            if (!SHEET_ID) {
-                document.getElementById('syncStatus').textContent = 'Showing embedded snapshot (no SHEET_ID configured yet)';
-                return;
-            }
-            document.getElementById('syncStatus').textContent = 'Syncing with Google Sheet…';
+            if (isSyncing) return;
+            isSyncing = true;
             try {
-                const [topicsRes, logsRes] = await Promise.all([
-                    fetch(gvizUrl('Topics')).then(r => r.text()),
-                    fetch(gvizUrl(LOGS_TAB_NAME)).then(r => r.text()),
-                ]);
-                const topicRows = parseGviz(topicsRes);
-                const logRows = parseGviz(logsRes);
+                if (!SHEET_ID) {
+                    document.getElementById('syncStatus').textContent = 'Showing embedded snapshot (no SHEET_ID configured yet)';
+                    return;
+                }
+                document.getElementById('syncStatus').textContent = 'Syncing with Google Sheet…';
+                try {
+                    const [topicsRes, logsRes, resourcesRes] = await Promise.all([
+                        fetch(gvizUrl('Topics')).then(r => r.text()),
+                        fetch(gvizUrl(LOGS_TAB_NAME)).then(r => r.text()),
+                        fetch(gvizUrl(RESOURCES_TAB_NAME)).then(r => r.text()),
+                    ]);
+                    const topicRows = parseGviz(topicsRes);
+                    const logRows = parseGviz(logsRes);
+                    const resourceRows = parseGviz(resourcesRes);
 
-                TOPICS = topicRows.map(r => ({
-                    id: r.id, title: r.title, cat: r.category, status: r.status,
-                    description: r.description, relevance: r.relevance,
-                    resources: r.resources ? String(r.resources).split(';').map(s => s.trim()).filter(Boolean) : []
-                }));
+                    const parsedTopics = topicRows.map(r => ({
+                        id: r.id, title: r.title, cat: r.category, status: r.status,
+                        description: r.description, relevance: r.relevance,
+                    }));
 
-                LOGS = {};
-                logRows.forEach(r => {
-                    if (!LOGS[r.id]) LOGS[r.id] = [];
-                    let rawDate = r.date || r.timestamp || '';
-                    let displayDate = rawDate;
-                    const parsed = new Date(rawDate);
-                    if (!isNaN(parsed)) {
-                        displayDate = parsed.toISOString().slice(0, 10);
+                    if (parsedTopics.length === 0) {
+                        document.getElementById('syncStatus').textContent = 'Connected to Sheet, but the Topics tab has no data rows yet — showing embedded snapshot';
+                    } else {
+                        TOPICS = parsedTopics;
+
+                        LOGS = {};
+                        logRows.forEach(r => {
+                            if (!LOGS[r.id]) LOGS[r.id] = [];
+                            let rawDate = r.date || r.timestamp || '';
+                            let displayDate = rawDate;
+                            const parsed = new Date(rawDate);
+                            const ts = isNaN(parsed) ? 0 : parsed.getTime();
+                            if (!isNaN(parsed)) {
+                                displayDate = parsed.toISOString().slice(0, 10);
+                            }
+                            const email = (r['email address'] || r.email || '').trim().toLowerCase();
+                            const name = NAME_MAP[email] || null;
+                            LOGS[r.id].push({ date: displayDate, entry: r.entry, name, email, ts });
+                        });
+
+                        RESOURCES = {};
+                        resourceRows.forEach(r => {
+                            if (!r.id || !r.title) return;
+                            if (!RESOURCES[r.id]) RESOURCES[r.id] = [];
+                            const type = RESOURCE_TYPE_ORDER.includes((r.type || '').trim().toLowerCase()) ? r.type.trim().toLowerCase() : 'other';
+                            RESOURCES[r.id].push({ type, title: r.title, authors: r.authors, year: r.year, link: r.link, why: r.why });
+                        });
+
+                        document.getElementById('syncStatus').textContent = 'Synced from Google Sheet just now';
                     }
-                    LOGS[r.id].push({ date: displayDate, entry: r.entry });
-                });
-                Object.values(LOGS).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
-
-                document.getElementById('syncStatus').textContent = 'Synced from Google Sheet just now';
-            } catch (err) {
-                console.error(err);
-                document.getElementById('syncStatus').textContent = 'Could not reach Sheet — showing embedded snapshot (check sharing settings / SHEET_ID)';
+                } catch (err) {
+                    console.error(err);
+                    document.getElementById('syncStatus').textContent = 'Could not reach Sheet — showing embedded snapshot (check sharing settings / SHEET_ID)';
+                }
+                maybeRerender();
+            } finally {
+                isSyncing = false;
             }
-            renderCategories();
         }
 
+        let lastSnapshot = '';
+        function maybeRerender() {
+            const snapshot = JSON.stringify({ TOPICS, LOGS, RESOURCES });
+            if (snapshot !== lastSnapshot) {
+                lastSnapshot = snapshot;
+                renderCategories();
+                renderDiagram();
+            }
+        }
+
+        /* ===================================================================
+           RENDER: category cards + topic chips grid (below the diagram)
+           =================================================================== */
         function renderCategories() {
             const container = document.getElementById('categories');
             container.innerHTML = '';
@@ -801,6 +1423,7 @@
                 if (!topics.length) return;
                 const card = document.createElement('div');
                 card.className = 'cat-card';
+                card.dataset.cat = cat.id;
                 card.style.setProperty('--cat-color', cat.color);
                 const title = document.createElement('p');
                 title.className = 'cat-title';
@@ -810,9 +1433,16 @@
                 meta.textContent = topics.length + (topics.length === 1 ? ' topic' : ' topics');
                 card.appendChild(title);
                 card.appendChild(meta);
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('.topic-chip')) return; // chip clicks still open the topic panel
+                    diagramSelected = cat.id;
+                    renderDiagram();
+                    document.querySelector('.diagram-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
                 topics.forEach(t => {
                     const chip = document.createElement('button');
                     chip.className = 'topic-chip';
+                    chip.dataset.topicId = t.id;
                     chip.innerHTML = `<span class="dot ${t.status}"></span><span class="tname">${t.title}</span>`;
                     chip.addEventListener('click', () => openPanel(t));
                     card.appendChild(chip);
@@ -821,7 +1451,255 @@
             });
         }
 
+        /* ===================================================================
+           RENDER: interactive hub diagram (PACE -> category -> topic web)
+
+           Two views, toggled by diagramSelected:
+             - root view (diagramSelected === null): PACE circle, 6 category
+               boxes, and per-category "sneak peek" stub lines hinting at the
+               topics inside without drawing every topic box.
+             - expanded view (diagramSelected === <cat id>): that category's
+               topic boxes fan out below it; other categories dim.
+
+           Lines are SVG paths; node boxes are absolutely-positioned HTML divs
+           layered on top (see .diagram-nodes), so labels can wrap and use
+           normal CSS. diagLine() draws a thin visible line plus a wide
+           invisible "hit" twin so thin lines are actually hoverable/clickable.
+           =================================================================== */
+        let diagramSelected = null; // null = root view, otherwise a category id
+        const SVGNS = 'http://www.w3.org/2000/svg';
+
+        // Draws one line segment in the hub diagram. Optionally wires it up to be
+        // interactive: `hover(isOn)` fires on mouse enter/leave, `click()` fires on
+        // click — both act through an invisible wide "hit" path since the visible
+        // line is only ~1.5px and would be nearly impossible to hover precisely.
+        function diagLine(svg, x1, y1, x2, y2, cls, hover, click) {
+            const p = document.createElementNS(SVGNS, 'path');
+            p.setAttribute('d', `M${x1},${y1} L${x2},${y2}`);
+            p.setAttribute('class', cls);
+            svg.appendChild(p);
+            if (hover || click) {
+                // wide invisible twin so thin lines are actually hoverable
+                const hit = document.createElementNS(SVGNS, 'path');
+                hit.setAttribute('d', `M${x1},${y1} L${x2},${y2}`);
+                hit.setAttribute('class', 'hub-line-hit');
+                svg.appendChild(hit);
+                if (hover) {
+                    hit.addEventListener('mouseenter', () => { p.classList.add('hub-line-hot'); hover(true); });
+                    hit.addEventListener('mouseleave', () => { p.classList.remove('hub-line-hot'); hover(false); });
+                }
+                if (click) {
+                    hit.style.cursor = 'pointer';
+                    hit.addEventListener('click', click);
+                }
+            }
+            return p;
+        }
+
+        // Toggles the teal "hot" border on a node box by its data-node id —
+        // used so hovering a line also lights up the node it points to.
+        function setNodeHover(id, on) {
+            const el = document.querySelector(`.hub-node-box[data-node="${id}"]`);
+            if (el) el.classList.toggle('hub-node-hot', on);
+        }
+
+        function diagCatX(i, n) {
+            // spread n categories evenly across the 1000-wide viewBox with side margins
+            const margin = 100;
+            if (n === 1) return 500;
+            return margin + i * ((1000 - 2 * margin) / (n - 1));
+        }
+
+        // Toggles the (subtle-brighten) highlight on a category card and/or a
+        // topic chip down in the grid — the other half of the diagram <-> grid
+        // cross-highlighting that setNodeHover() and .hub-line-hot handle above.
+        function highlightGrid(catId, topicId, on) {
+            if (catId) {
+                const card = document.querySelector(`.cat-card[data-cat="${catId}"]`);
+                if (card) card.classList.toggle('card-highlight', on);
+            }
+            if (topicId) {
+                const chip = document.querySelector(`.topic-chip[data-topic-id="${topicId}"]`);
+                if (chip) chip.classList.toggle('chip-highlight', on);
+            }
+        }
+
+        // Creates one node box, positioned as a % of the 1000x420 viewBox so it
+        // stays aligned with the SVG lines underneath regardless of screen size.
+        function makeNode(x, y, cls, html) {
+            const el = document.createElement(cls.includes('hub-root-box') ? 'a' : 'button');
+            el.className = 'hub-node-box ' + cls;
+            el.style.left = (x / 1000 * 100) + '%';
+            el.style.top = (y / 420 * 100) + '%';
+            el.innerHTML = html;
+            return el;
+        }
+
+        function renderDiagram() {
+            const svg = document.getElementById('hubSvg');
+            const nodes = document.getElementById('diagramNodes');
+            const backBtn = document.getElementById('diagramBack');
+            svg.innerHTML = '';
+            nodes.innerHTML = '';
+
+            const activeCats = CATEGORIES.filter(c => TOPICS.some(t => t.cat === c.id));
+            const n = activeCats.length;
+            if (!n) return;
+
+            if (!diagramSelected) {
+                backBtn.style.display = 'none';
+                const rootX = 500, rootY = 55, catY = 230;
+                const catLines = {}; // cat.id -> [root line, ...peek stubs]
+
+                activeCats.forEach((cat, i) => {
+                    const cx = diagCatX(i, n);
+                    const topics = TOPICS.filter(t => t.cat === cat.id);
+                    const selectCat = () => { diagramSelected = cat.id; renderDiagram(); };
+                    const catLine = diagLine(svg, rootX, rootY + 30, cx, catY - 24, 'hub-line', on => {
+                        setNodeHover(cat.id, on);
+                        highlightGrid(cat.id, null, on);
+                    }, selectCat);
+                    // sneak-peek stubs below each category — one per topic, boxes not shown
+                    const stubs = topics.length;
+                    const stubPaths = [];
+                    topics.forEach((t, j) => {
+                        const spread = (j - (stubs - 1) / 2) * 22;
+                        const p = diagLine(svg, cx, catY + 24, cx + spread, catY + 72, 'hub-peek-line', on => {
+                            setNodeHover(cat.id, on);
+                            highlightGrid(cat.id, null, on);
+                            stubPaths.forEach(sp => sp.classList.toggle('hub-line-hot', on));
+                            catLine.classList.toggle('hub-line-hot', on);
+                        }, selectCat);
+                        stubPaths.push(p);
+                    });
+                    catLines[cat.id] = [catLine, ...stubPaths];
+                });
+
+                const root = makeNode(rootX, rootY, 'hub-root-box', `<div class="hub-node-title">PACE</div>`);
+
+                // Set root button attributes
+                root.href = 'https://github.com/brettnelson612/pace';
+                root.target = '_blank'; // Opens in new tab by default
+                root.rel = 'noopener noreferrer'; // Security best practice for external links
+                root.style.textDecoration = 'none';
+                root.style.color = 'inherit';
+
+                nodes.appendChild(root);
+
+                activeCats.forEach((cat, i) => {
+                    const cx = diagCatX(i, n);
+                    const topics = TOPICS.filter(t => t.cat === cat.id);
+                    const box = makeNode(cx, catY, 'hub-cat-box', `
+        <div class="hub-node-title">${cat.name}</div>
+        <div class="hub-node-count">${topics.length} ${topics.length === 1 ? 'topic' : 'topics'}</div>
+      `);
+                    box.dataset.node = cat.id;
+                    box.addEventListener('click', () => { diagramSelected = cat.id; renderDiagram(); });
+                    box.addEventListener('mouseenter', () => {
+                        highlightGrid(cat.id, null, true);
+                        (catLines[cat.id] || []).forEach(p => p.classList.add('hub-line-hot'));
+                    });
+                    box.addEventListener('mouseleave', () => {
+                        highlightGrid(cat.id, null, false);
+                        (catLines[cat.id] || []).forEach(p => p.classList.remove('hub-line-hot'));
+                    });
+                    nodes.appendChild(box);
+                });
+            } else {
+                backBtn.style.display = 'inline-block';
+                const catY = 55;
+                const selIdx = activeCats.findIndex(c => c.id === diagramSelected);
+                const selX = diagCatX(selIdx, n);
+                const topics = TOPICS.filter(t => t.cat === diagramSelected);
+
+                // topic layout: one row up to 6 topics, two rows beyond that
+                const twoRows = topics.length > 6;
+                const rowY1 = 225, rowY2 = 385;
+                const row1Count = twoRows ? Math.ceil(topics.length / 2) : topics.length;
+
+                function topicPos(j) {
+                    const inRow1 = j < row1Count;
+                    const rowN = inRow1 ? row1Count : topics.length - row1Count;
+                    const idxInRow = inRow1 ? j : j - row1Count;
+                    const margin = 120;
+                    const x = rowN === 1 ? 500 : margin + idxInRow * ((1000 - 2 * margin) / (rowN - 1));
+                    return { x, y: inRow1 ? rowY1 : rowY2 };
+                }
+
+                const topicLines = {}; // t.id -> line back to category
+                topics.forEach((t, j) => {
+                    const { x, y } = topicPos(j);
+                    const line = diagLine(svg, selX, catY + 26, x, y - 26, 'hub-line', on => {
+                        setNodeHover(t.id, on);
+                        highlightGrid(t.cat, t.id, on);
+                    });
+                    topicLines[t.id] = line;
+                });
+
+                activeCats.forEach((cat, i) => {
+                    const cx = diagCatX(i, n);
+                    const catTopics = TOPICS.filter(t => t.cat === cat.id);
+                    const isSel = cat.id === diagramSelected;
+                    const box = makeNode(cx, catY, isSel ? 'hub-cat-box hub-node-selected' : 'hub-cat-box hub-node-dimmed', `
+        <div class="hub-node-title">${cat.name}</div>
+        <div class="hub-node-count">${catTopics.length} ${catTopics.length === 1 ? 'topic' : 'topics'}</div>
+      `);
+                    box.dataset.node = cat.id;
+                    box.addEventListener('click', () => { diagramSelected = cat.id; renderDiagram(); });
+                    box.addEventListener('mouseenter', () => highlightGrid(cat.id, null, true));
+                    box.addEventListener('mouseleave', () => highlightGrid(cat.id, null, false));
+                    nodes.appendChild(box);
+                });
+
+                topics.forEach((t, j) => {
+                    const { x, y } = topicPos(j);
+                    const box = makeNode(x, y, 'hub-topic-box', `
+        <div class="hub-node-title"><span class="dot ${t.status}"></span>${t.title}</div>
+      `);
+                    box.dataset.node = t.id;
+                    box.addEventListener('click', () => openPanel(t));
+                    box.addEventListener('mouseenter', () => {
+                        highlightGrid(t.cat, t.id, true);
+                        const line = topicLines[t.id];
+                        if (line) line.classList.add('hub-line-hot');
+                    });
+                    box.addEventListener('mouseleave', () => {
+                        highlightGrid(t.cat, t.id, false);
+                        const line = topicLines[t.id];
+                        if (line) line.classList.remove('hub-line-hot');
+                    });
+                    nodes.appendChild(box);
+                });
+            }
+        }
+
+        document.getElementById('diagramBack').addEventListener('click', () => {
+            diagramSelected = null;
+            renderDiagram();
+        });
+
+        /* ===================================================================
+           TOPIC DETAIL PANEL (modal)
+           =================================================================== */
         const statusLabel = { explored: 'Actively studied', progress: 'Partially framed', none: 'Not started' };
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function linkify(text) {
+            const escaped = escapeHtml(text || '');
+            const urlPattern = /(\bhttps?:\/\/[^\s<]+)/g;
+            return escaped.replace(urlPattern, (url) => {
+                // trim trailing punctuation that's likely not part of the URL
+                const trailingMatch = url.match(/[),.;:!?]+$/);
+                const trailing = trailingMatch ? trailingMatch[0] : '';
+                const clean = trailing ? url.slice(0, -trailing.length) : url;
+                return `<a href="${clean}" target="_blank" rel="noopener noreferrer" style="color:var(--teal);text-decoration:underline;">${clean}</a>${trailing}`;
+            });
+        }
 
         let currentTopicId = null;
 
@@ -840,39 +1718,77 @@
 
             const logDiv = document.getElementById('panelLog');
             logDiv.innerHTML = '';
-            const entries = (LOGS[topic.id] || []).slice().reverse(); // newest first
+            function entrySortKey(e) {
+                if (typeof e.ts === 'number' && e.ts > 0) return e.ts;
+                const d = new Date(e.date);
+                return isNaN(d) ? 0 : d.getTime();
+            }
+            const entries = (LOGS[topic.id] || []).slice().sort((a, b) => entrySortKey(a) - entrySortKey(b)).reverse(); // newest first
             if (!entries.length) {
                 logDiv.innerHTML = '<p style="color:var(--text-muted);font-size:14px;">No log entries yet.</p>';
             } else {
                 entries.forEach(e => {
                     const div = document.createElement('div');
                     div.className = 'log-entry';
-                    div.innerHTML = `<p class="log-date">${e.date}</p><p class="log-text">${e.entry}</p>`;
+                    const who = e.name ? `<strong>${e.name}</strong>` : (e.email ? e.email : '');
+                    const dateLine = who ? `${e.date} <span style="color:var(--text-muted);font-weight:400;">— ${who}</span>` : e.date;
+                    div.innerHTML = `<p class="log-date">${dateLine}</p><p class="log-text">${linkify(e.entry)}</p>`;
                     logDiv.appendChild(div);
                 });
             }
 
-            const resSection = document.getElementById('panelResources');
-            const resList = document.getElementById('resourcesList');
-            resList.innerHTML = '';
-            if (topic.resources && topic.resources.length) {
-                resSection.style.display = 'block';
-                topic.resources.forEach(r => {
-                    const li = document.createElement('li');
-                    li.textContent = r;
-                    resList.appendChild(li);
-                });
-            } else {
-                resSection.style.display = 'none';
-            }
+            renderResources(topic.id);
             document.getElementById('overlay').classList.add('open');
         }
 
+        // Renders the vetted reading list for one topic into the panel's
+        // resources rail, grouped by type (papers, then textbooks, then
+        // articles, etc. — order set by RESOURCE_TYPE_ORDER). Shows a quiet
+        // empty state for topics that don't have any vetted resources yet,
+        // so the two-column layout doesn't look broken while the list grows.
+        function renderResources(topicId) {
+            const list = document.getElementById('resourcesList');
+            const items = RESOURCES[topicId] || [];
+            if (!items.length) {
+                list.innerHTML = '<p class="resource-empty">No vetted resources yet for this topic.</p>';
+                return;
+            }
+            const byType = {};
+            items.forEach(r => { (byType[r.type] || (byType[r.type] = [])).push(r); });
+
+            list.innerHTML = RESOURCE_TYPE_ORDER
+                .filter(type => byType[type] && byType[type].length)
+                .map(type => `
+      <div class="resource-group">
+        <p class="resource-type-label">${RESOURCE_TYPE_LABELS[type]}</p>
+        ${byType[type].map(r => `
+          <div class="resource-item">
+            ${r.link
+                        ? `<a class="resource-title" href="${escapeHtml(r.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.title)}</a>`
+                        : `<span class="resource-title" style="cursor:default;">${escapeHtml(r.title)}</span>`}
+            <div class="resource-meta">${escapeHtml([r.authors, r.year].filter(Boolean).join(' · '))}</div>
+            ${r.why ? `<p class="resource-why">${escapeHtml(r.why)}</p>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+        }
+
+        /* ===================================================================
+           GLOBAL EVENT LISTENERS
+           =================================================================== */
         document.getElementById('closeBtn').addEventListener('click', () => document.getElementById('overlay').classList.remove('open'));
         document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') document.getElementById('overlay').classList.remove('open'); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('overlay').classList.remove('open'); });
         document.getElementById('refreshBtn').addEventListener('click', loadFromSheet);
 
+        /* ===================================================================
+           ADD LOG ENTRY — Google Form submission flow
+           Submits via a hidden iframe pointed at a pre-filled Form URL (no
+           API key / auth needed). Waits for two iframe loads (the form page,
+           then the "response recorded" page) before treating it as done,
+           then re-syncs from the Sheet so the new entry shows up.
+           =================================================================== */
         document.getElementById('addLogBtn').addEventListener('click', () => {
             if (!currentTopicId) return;
             if (!FORM_ID || !FORM_ENTRY_ID) {
@@ -884,14 +1800,60 @@
                 alert('Write the log entry in the box first.');
                 return;
             }
-            let url = `https://docs.google.com/forms/d/e/${FORM_ID}/viewform?usp=pp_url&entry.${FORM_ENTRY_ID}=${encodeURIComponent(currentTopicId)}`;
+            let url = `https://docs.google.com/forms/d/e/${FORM_ID}/viewform?embedded=true&usp=pp_url&entry.${FORM_ENTRY_ID}=${encodeURIComponent(currentTopicId)}`;
             if (FORM_ENTRY_TEXT) {
                 url += `&entry.${FORM_ENTRY_TEXT}=${encodeURIComponent(text)}`;
             }
-            window.open(url, '_blank');
+            const frame = document.getElementById('formFrame');
+            let loadCount = 0;
+            formModalOpen = true;
+            frame.onload = () => {
+                loadCount += 1;
+                if (loadCount >= 2) {
+                    frame.onload = null; // stop listening immediately — prevents the about:blank reset below from re-firing this
+                    document.getElementById('newLogText').value = '';
+                    setTimeout(() => {
+                        document.getElementById('formOverlay').classList.remove('open');
+                        frame.src = 'about:blank';
+                        formModalOpen = false;
+                        document.getElementById('syncStatus').textContent = 'Refreshing to show your new entry…';
+                        setTimeout(async () => {
+                            await loadFromSheet();
+                            const stillOpenId = currentTopicId;
+                            if (stillOpenId) {
+                                const fresh = TOPICS.find(x => x.id === stillOpenId);
+                                if (fresh) openPanel(fresh);
+                            }
+                        }, 2000); // give the Sheet a couple seconds to catch up before reading it back
+                    }, 800);
+                }
+            };
+            frame.src = url;
+            document.getElementById('formOverlay').classList.add('open');
         });
 
+        document.getElementById('formCloseBtn').addEventListener('click', () => {
+            document.getElementById('formOverlay').classList.remove('open');
+            document.getElementById('formFrame').onload = null;
+            document.getElementById('formFrame').src = 'about:blank';
+            formModalOpen = false;
+        });
+        document.getElementById('formOverlay').addEventListener('click', (e) => {
+            if (e.target.id === 'formOverlay') {
+                document.getElementById('formOverlay').classList.remove('open');
+                document.getElementById('formFrame').onload = null;
+                document.getElementById('formFrame').src = 'about:blank';
+                formModalOpen = false;
+            }
+        });
+
+        let formModalOpen = false;
+
+        /* ===================================================================
+           INIT
+           =================================================================== */
         renderCategories();
+        renderDiagram();
         loadFromSheet();
     </script>
 </body>
