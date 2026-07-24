@@ -37,8 +37,8 @@
         }
 
         /* ===================================================================
-   BASE / LAYOUT
-   =================================================================== */
+        BASE / LAYOUT
+        =================================================================== */
         .wrap {
             max-width: 1400px;
             margin: 0 auto;
@@ -136,12 +136,12 @@
         }
 
         /* ===================================================================
-   HUB DIAGRAM
-   PACE -> category -> topic web. SVG draws the connecting lines;
-   the HTML node boxes sit on top in a positioned overlay div so text
-   stays crisp (SVG text render is limited to plain text without
-   flexbox/wrap).
-   =================================================================== */
+        HUB DIAGRAM
+        PACE -> category -> topic web. SVG draws the connecting lines;
+        the HTML node boxes sit on top in a positioned overlay div so text
+        stays crisp (SVG text render is limited to plain text without
+        flexbox/wrap).
+        =================================================================== */
         .diagram-wrap {
             position: relative;
             width: 100%;
@@ -149,9 +149,9 @@
             margin-bottom: 8px;
             container-type: inline-size;
             /* lets node boxes size off THIS element's
-                                  width (cqw units below), not the viewport —
-                                  so they scale correctly even when the page
-                                  itself is centered in a wide window */
+            width (cqw units below), not the viewport —
+            so they scale correctly even when the page
+            itself is centered in a wide window */
         }
 
         .diagram-wrap svg {
@@ -177,7 +177,7 @@
         }
 
         /* "Sneak peek" stub lines at root view — one per topic, hinting at
-   what's inside a category without drawing every topic box */
+        what's inside a category without drawing every topic box */
         .hub-peek-line {
             stroke: var(--border);
             stroke-width: 1;
@@ -185,7 +185,7 @@
         }
 
         /* Invisible wide hit-area twin stacked over each thin line so it's
-   actually hoverable/clickable — see diagLine() in the script */
+        actually hoverable/clickable — see diagLine() in the script */
         .hub-line-hit {
             stroke: transparent;
             stroke-width: 14;
@@ -200,7 +200,7 @@
         }
 
         /* Node boxes (category + topic). Higher specificity than
-   .hub-node-box below so line-hover can override the base border. */
+        .hub-node-box below so line-hover can override the base border. */
         .hub-node-box.hub-node-hot {
             border-color: var(--teal);
         }
@@ -213,15 +213,15 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             /* padding + max-width scale with the diagram's own rendered width
-     (cqw = 1% of the container's inline size) so boxes shrink together
-     with the space between them instead of overlapping when the
-     window narrows. Clamp keeps them from getting silly-huge on a
-     very wide screen or unreadably tiny on a very narrow one. The
-     coefficients here are tuned to hit their floor at roughly the
-     same container width as .hub-node-title's font-size below — if
-     one bottoms out well before the other, you get a "box keeps
-     shrinking but the text doesn't" mismatch that forces extra line
-     wraps and makes the box look stretched tall. */
+            (cqw = 1% of the container's inline size) so boxes shrink together
+            with the space between them instead of overlapping when the
+            window narrows. Clamp keeps them from getting silly-huge on a
+            very wide screen or unreadably tiny on a very narrow one. The
+            coefficients here are tuned to hit their floor at roughly the
+            same container width as .hub-node-title's font-size below — if
+            one bottoms out well before the other, you get a "box keeps
+            shrinking but the text doesn't" mismatch that forces extra line
+            wraps and makes the box look stretched tall. */
             padding: clamp(3px, 2.2cqw, 12px) clamp(4px, 3cqw, 18px);
             max-width: clamp(32px, 13cqw, 150px);
             text-align: center;
@@ -242,9 +242,9 @@
             text-align: center;
             line-height: 1.25;
             /* Hard cap at 2 lines so a long title (e.g. "Uncertainty & Learning")
-     never keeps growing the box taller as it narrows — it truncates
-     with an ellipsis instead. Full title is always visible elsewhere
-     (the grid card / topic panel), so nothing is actually lost. */
+            never keeps growing the box taller as it narrows — it truncates
+            with an ellipsis instead. Full title is always visible elsewhere
+            (the grid card / topic panel), so nothing is actually lost. */
             display: -webkit-box;
             -webkit-box-orient: vertical;
             -webkit-line-clamp: 2;
@@ -274,9 +274,9 @@
         }
 
         /* The central "PACE" node — circular, always present. aspect-ratio
-   (rather than a separate height clamp) guarantees it stays a true
-   circle at every size, and max-width:none stops the .hub-node-box
-   max-width above — meant for the text chips — from squashing it. */
+        (rather than a separate height clamp) guarantees it stays a true
+        circle at every size, and max-width:none stops the .hub-node-box
+        max-width above — meant for the text chips — from squashing it. */
         .hub-root-box {
             cursor: pointer;
             background: var(--surface-2);
@@ -303,7 +303,7 @@
         }
 
         /* Topic node text can wrap since titles are longer than category names —
-   a taller max-width budget than the default .hub-node-box above */
+        a taller max-width budget than the default .hub-node-box above */
         .hub-topic-box {
             max-width: clamp(36px, 13cqw, 175px);
         }
@@ -329,8 +329,8 @@
         }
 
         /* Cross-highlighting: hovering a diagram node brightens its card/chip
-   below, and vice versa. Deliberately a subtle brighten, not teal —
-   teal is reserved for direct hover/selection in the diagram itself. */
+        below, and vice versa. Deliberately a subtle brighten, not teal —
+        teal is reserved for direct hover/selection in the diagram itself. */
         .card-highlight {
             background: var(--surface-2) !important;
             border-color: #354A64 !important;
@@ -343,8 +343,8 @@
         }
 
         /* ===================================================================
-   CATEGORY CARDS + TOPIC CHIPS GRID
-   =================================================================== */
+        CATEGORY CARDS + TOPIC CHIPS GRID
+        =================================================================== */
         .categories {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -426,8 +426,8 @@
         }
 
         /* ===================================================================
-   TOPIC DETAIL MODAL
-   =================================================================== */
+        TOPIC DETAIL MODAL
+        =================================================================== */
         .overlay {
             position: fixed;
             inset: 0;
@@ -455,8 +455,8 @@
             position: relative;
             container-type: inline-size;
             /* lets .panel-grid below switch to two
-                                  columns based on the panel's own
-                                  rendered width, not the viewport */
+            columns based on the panel's own
+            rendered width, not the viewport */
         }
 
         .panel-close {
@@ -542,9 +542,9 @@
         }
 
         /* Two-column layout: main content + resources rail. Collapses to a
-   single column (resources rail falls below the main content, in
-   source order) when the panel itself is narrower than 560px — e.g.
-   on a phone, where .panel has no room to spare for a side column. */
+        single column (resources rail falls below the main content, in
+        source order) when the panel itself is narrower than 560px — e.g.
+        on a phone, where .panel has no room to spare for a side column. */
         .panel-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -570,8 +570,8 @@
         }
 
         /* In the single-column mobile layout the rail drops below the main
-   content instead of beside it, so the vertical divider stops making
-   sense there — swap it for a horizontal one above the rail instead. */
+        content instead of beside it, so the vertical divider stops making
+        sense there — swap it for a horizontal one above the rail instead. */
         @container (max-width:559.98px) {
             .panel-resources {
                 padding-left: 0;
@@ -1313,11 +1313,11 @@
         let RESOURCES = FALLBACK_RESOURCES;
 
         /* ===================================================================
-           GOOGLE SHEET SYNC
-           Reads the public Sheet via the gviz JSON endpoint (no API key
-           needed since the Sheet is link-shared as Viewer). Falls back to
-           the embedded snapshot above on any failure.
-           =================================================================== */
+        GOOGLE SHEET SYNC
+        Reads the public Sheet via the gviz JSON endpoint (no API key
+        needed since the Sheet is link-shared as Viewer). Falls back to
+        the embedded snapshot above on any failure.
+        =================================================================== */
         function gvizUrl(tab) {
             return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}&headers=1`;
         }
@@ -1413,8 +1413,8 @@
         }
 
         /* ===================================================================
-           RENDER: category cards + topic chips grid (below the diagram)
-           =================================================================== */
+        RENDER: category cards + topic chips grid (below the diagram)
+        =================================================================== */
         function renderCategories() {
             const container = document.getElementById('categories');
             container.innerHTML = '';
@@ -1452,20 +1452,20 @@
         }
 
         /* ===================================================================
-           RENDER: interactive hub diagram (PACE -> category -> topic web)
+        RENDER: interactive hub diagram (PACE -> category -> topic web)
 
-           Two views, toggled by diagramSelected:
-             - root view (diagramSelected === null): PACE circle, 6 category
-               boxes, and per-category "sneak peek" stub lines hinting at the
-               topics inside without drawing every topic box.
-             - expanded view (diagramSelected === <cat id>): that category's
-               topic boxes fan out below it; other categories dim.
+        Two views, toggled by diagramSelected:
+            - root view (diagramSelected === null): PACE circle, 6 category
+            boxes, and per-category "sneak peek" stub lines hinting at the
+            topics inside without drawing every topic box.
+            - expanded view (diagramSelected === <cat id>): that category's
+            topic boxes fan out below it; other categories dim.
 
-           Lines are SVG paths; node boxes are absolutely-positioned HTML divs
-           layered on top (see .diagram-nodes), so labels can wrap and use
-           normal CSS. diagLine() draws a thin visible line plus a wide
-           invisible "hit" twin so thin lines are actually hoverable/clickable.
-           =================================================================== */
+        Lines are SVG paths; node boxes are absolutely-positioned HTML divs
+        layered on top (see .diagram-nodes), so labels can wrap and use
+        normal CSS. diagLine() draws a thin visible line plus a wide
+        invisible "hit" twin so thin lines are actually hoverable/clickable.
+        =================================================================== */
         let diagramSelected = null; // null = root view, otherwise a category id
         const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -1558,6 +1558,7 @@
                     const catLine = diagLine(svg, rootX, rootY + 30, cx, catY - 24, 'hub-line', on => {
                         setNodeHover(cat.id, on);
                         highlightGrid(cat.id, null, on);
+                        catLine.stubPaths.forEach(sp => sp.classList.toggle('hub-line-hot', on));
                     }, selectCat);
                     // sneak-peek stubs below each category — one per topic, boxes not shown
                     const stubs = topics.length;
@@ -1572,6 +1573,7 @@
                         }, selectCat);
                         stubPaths.push(p);
                     });
+                    catLine.stubPaths = stubPaths;
                     catLines[cat.id] = [catLine, ...stubPaths];
                 });
 
@@ -1679,8 +1681,8 @@
         });
 
         /* ===================================================================
-           TOPIC DETAIL PANEL (modal)
-           =================================================================== */
+        TOPIC DETAIL PANEL (modal)
+        =================================================================== */
         const statusLabel = { explored: 'Actively studied', progress: 'Partially framed', none: 'Not started' };
 
         function escapeHtml(str) {
@@ -1783,12 +1785,12 @@
         document.getElementById('refreshBtn').addEventListener('click', loadFromSheet);
 
         /* ===================================================================
-           ADD LOG ENTRY — Google Form submission flow
-           Submits via a hidden iframe pointed at a pre-filled Form URL (no
-           API key / auth needed). Waits for two iframe loads (the form page,
-           then the "response recorded" page) before treating it as done,
-           then re-syncs from the Sheet so the new entry shows up.
-           =================================================================== */
+        ADD LOG ENTRY — Google Form submission flow
+        Submits via a hidden iframe pointed at a pre-filled Form URL (no
+        API key / auth needed). Waits for two iframe loads (the form page,
+        then the "response recorded" page) before treating it as done,
+        then re-syncs from the Sheet so the new entry shows up.
+        =================================================================== */
         document.getElementById('addLogBtn').addEventListener('click', () => {
             if (!currentTopicId) return;
             if (!FORM_ID || !FORM_ENTRY_ID) {
@@ -1850,8 +1852,8 @@
         let formModalOpen = false;
 
         /* ===================================================================
-           INIT
-           =================================================================== */
+        INIT
+        =================================================================== */
         renderCategories();
         renderDiagram();
         loadFromSheet();
