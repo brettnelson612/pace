@@ -1765,15 +1765,6 @@
                 // the row-to-row vertical gap (170) for a consistent rhythm.
                 const STEP_X = 160;
 
-                // Fixed center-to-center spacing (not stretched to fill the full
-                // width) so every row — regardless of how many topics are in it —
-                // has the same visual gap between nodes, and so that gap is wide
-                // enough for a box at its max width to never crowd its neighbor.
-                // 160 keeps the worst case (6 in one row) within the same ~100-unit
-                // side margins the category row above uses, and roughly matches
-                // the row-to-row vertical gap (170) for a consistent rhythm.
-                const STEP_X = 160;
-
                 function topicPos(j) {
                     const inRow1 = j < row1Count;
                     const rowN = inRow1
