@@ -2,26 +2,26 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PACE Knowledge Map</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
         :root {
-            --bg: #0A1018;
-            --surface: #121B28;
+            --bg: #0a1018;
+            --surface: #121b28;
             --surface-2: #182535;
-            --border: #26374C;
-            --text: #E7EDF4;
-            --text-muted: #8393AA;
-            --teal: #45D6C4;
-            --forest-green: #1B4D3E;
-            --teal-dim: #1E4A46;
-            --amber: #F0A860;
-            --amber-dim: #4A3A22;
-            --slate: #5B6B84;
-            --slate-dim: #202B3B;
+            --border: #26374c;
+            --text: #e7edf4;
+            --text-muted: #8393aa;
+            --teal: #45d6c4;
+            --forest-green: #1b4d3e;
+            --teal-dim: #1e4a46;
+            --amber: #f0a860;
+            --amber-dim: #4a3a22;
+            --slate: #5b6b84;
+            --slate-dim: #202b3b;
         }
 
         * {
@@ -32,13 +32,11 @@
             margin: 0;
             background: var(--bg);
             color: var(--text);
-            font-family: 'IBM Plex Sans', sans-serif;
+            font-family: "IBM Plex Sans", sans-serif;
             min-height: 100vh;
         }
 
-        /* ===================================================================
-        BASE / LAYOUT
-        =================================================================== */
+        /* ===== BASE / LAYOUT ==== */
         .wrap {
             max-width: 1400px;
             margin: 0 auto;
@@ -46,9 +44,9 @@
         }
 
         .eyebrow {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 12px;
-            letter-spacing: .12em;
+            letter-spacing: 0.12em;
             text-transform: uppercase;
             color: var(--teal);
             margin: 0 0 10px;
@@ -58,7 +56,7 @@
             font-size: 34px;
             font-weight: 700;
             margin: 0 0 8px;
-            letter-spacing: -.01em;
+            letter-spacing: -0.01em;
         }
 
         .sub {
@@ -76,7 +74,7 @@
             gap: 12px;
             flex-wrap: wrap;
             margin-bottom: 20px;
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 12px;
             color: var(--text-muted);
         }
@@ -85,7 +83,7 @@
             background: var(--surface-2);
             border: 1px solid var(--border);
             color: var(--text);
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 12px;
             padding: 6px 12px;
             border-radius: 6px;
@@ -97,12 +95,12 @@
         }
 
         /* ===================================================================
-        HUB DIAGRAM
-        PACE -> category -> topic web. SVG draws the connecting lines;
-        the HTML node boxes sit on top in a positioned overlay div so text
-        stays crisp (SVG text render is limited to plain text without
-        flexbox/wrap).
-        =================================================================== */
+            HUB DIAGRAM
+            PACE -> category -> topic web. SVG draws the connecting lines;
+            the HTML node boxes sit on top in a positioned overlay div so text
+            stays crisp (SVG text render is limited to plain text without
+            flexbox/wrap).
+            =================================================================== */
         .diagram-wrap {
             position: relative;
             width: 100%;
@@ -110,14 +108,14 @@
             margin-bottom: 8px;
             container-type: inline-size;
             /* lets node boxes size off THIS element's
-            width (cqw units below), not the viewport —
-            so they scale correctly even when the page
-            itself is centered in a wide window.
-            --vb-h is set by renderDiagram() in the script — root view
-            and expanded view use different total heights (see there),
-            since the two views need very different amounts of vertical
-            room and forcing them to share one fixed height was causing
-            either wasted space (root) or crowding (expanded, 2-row). */
+                width (cqw units below), not the viewport —
+                so they scale correctly even when the page
+                itself is centered in a wide window.
+                --vb-h is set by renderDiagram() in the script — root view
+                and expanded view use different total heights (see there),
+                since the two views need very different amounts of vertical
+                room and forcing them to share one fixed height was causing
+                either wasted space (root) or crowding (expanded, 2-row). */
         }
 
         .diagram-wrap svg {
@@ -143,7 +141,7 @@
         }
 
         /* "Sneak peek" stub lines at root view — one per topic, hinting at
-        what's inside a category without drawing every topic box */
+            what's inside a category without drawing every topic box */
         .hub-peek-line {
             stroke: var(--border);
             stroke-width: 1;
@@ -151,7 +149,7 @@
         }
 
         /* Invisible wide hit-area twin stacked over each thin line so it's
-        actually hoverable/clickable — see diagLine() in the script */
+            actually hoverable/clickable — see diagLine() in the script */
         .hub-line-hit {
             stroke: transparent;
             stroke-width: 14;
@@ -166,7 +164,7 @@
         }
 
         /* Node boxes (category + topic). Higher specificity than
-        .hub-node-box below so line-hover can override the base border. */
+            .hub-node-box below so line-hover can override the base border. */
         .hub-node-box.hub-node-hot {
             border-color: var(--teal);
         }
@@ -179,15 +177,15 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             /* padding + max-width scale with the diagram's own rendered width
-            (cqw = 1% of the container's inline size) so boxes shrink together
-            with the space between them instead of overlapping when the
-            window narrows. Clamp keeps them from getting silly-huge on a
-            very wide screen or unreadably tiny on a very narrow one. The
-            coefficients here are tuned to hit their floor at roughly the
-            same container width as .hub-node-title's font-size below — if
-            one bottoms out well before the other, you get a "box keeps
-            shrinking but the text doesn't" mismatch that forces extra line
-            wraps and makes the box look stretched tall. */
+                (cqw = 1% of the container's inline size) so boxes shrink together
+                with the space between them instead of overlapping when the
+                window narrows. Clamp keeps them from getting silly-huge on a
+                very wide screen or unreadably tiny on a very narrow one. The
+                coefficients here are tuned to hit their floor at roughly the
+                same container width as .hub-node-title's font-size below — if
+                one bottoms out well before the other, you get a "box keeps
+                shrinking but the text doesn't" mismatch that forces extra line
+                wraps and makes the box look stretched tall. */
             padding: clamp(3px, 2.2cqw, 12px) clamp(4px, 3cqw, 18px);
             max-width: clamp(32px, 13cqw, 150px);
             min-height: 68px;
@@ -197,8 +195,11 @@
             text-align: center;
             cursor: pointer;
             white-space: normal;
-            transition: opacity .3s ease, border-color .2s ease, box-shadow .2s ease;
-            font-family: 'IBM Plex Sans', sans-serif;
+            transition:
+                opacity 0.3s ease,
+                border-color 0.2s ease,
+                box-shadow 0.2s ease;
+            font-family: "IBM Plex Sans", sans-serif;
         }
 
         .hub-node-box:hover {
@@ -212,9 +213,9 @@
             text-align: center;
             line-height: 1.25;
             /* Hard cap at 2 lines so a long title (e.g. "Uncertainty & Learning")
-            never keeps growing the box taller as it narrows — it truncates
-            with an ellipsis instead. Full title is always visible elsewhere
-            (the grid card / topic panel), so nothing is actually lost. */
+                never keeps growing the box taller as it narrows — it truncates
+                with an ellipsis instead. Full title is always visible elsewhere
+                (the grid card / topic panel), so nothing is actually lost. */
             display: -webkit-box;
             -webkit-box-orient: vertical;
             -webkit-line-clamp: 2;
@@ -225,25 +226,25 @@
         }
 
         .hub-node-count {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: clamp(7.5px, 2.8cqw, 11px);
             color: var(--text-muted);
             margin-top: 3px;
         }
 
         .hub-node-dimmed {
-            opacity: .35;
+            opacity: 0.35;
         }
 
         .hub-node-selected {
             border-color: var(--teal);
-            box-shadow: 0 0 0 2px rgba(69, 214, 196, .25);
+            box-shadow: 0 0 0 2px rgba(69, 214, 196, 0.25);
         }
 
         /* The central "PACE" node — circular, always present. aspect-ratio
-        (rather than a separate height clamp) guarantees it stays a true
-        circle at every size, and max-width:none stops the .hub-node-box
-        max-width above — meant for the text chips — from squashing it. */
+            (rather than a separate height clamp) guarantees it stays a true
+            circle at every size, and max-width:none stops the .hub-node-box
+            max-width above — meant for the text chips — from squashing it. */
         .hub-root-box {
             cursor: pointer;
             background: var(--surface-2);
@@ -262,27 +263,22 @@
         }
 
         .hub-root-box .hub-node-title {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-weight: 600;
             font-size: clamp(11px, 2.4cqw, 17px);
         }
 
-        .hub-root-box.hub-hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
         /* Topic node text can wrap since titles are longer than category names —
-        a taller max-width budget than the default .hub-node-box above */
+            a taller max-width budget than the default .hub-node-box above */
         .hub-topic-box {
             max-width: clamp(36px, 12cqw, 150px);
         }
 
         /* "← Back" button shown only in expanded (single-category) view.
-        Styled as a real button chip (like .sync-btn) rather than bare text —
-        plain teal text with no border/background was easy to miss against
-        the diagram. Sized with clamp()/cqw like the nodes so it can't
-        dominate a narrow container and crowd the category row below it. */
+            Styled as a real button chip (like .sync-btn) rather than bare text —
+            plain teal text with no border/background was easy to miss against
+            the diagram. Sized with clamp()/cqw like the nodes so it can't
+            dominate a narrow container and crowd the category row below it. */
         .diagram-back {
             position: absolute;
             top: clamp(4px, 1.5cqw, 10px);
@@ -290,7 +286,7 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: clamp(10px, 2.2cqw, 14px);
             font-weight: 600;
             color: var(--teal);
@@ -301,7 +297,9 @@
             border: 1px solid var(--teal-dim);
             border-radius: 7px;
             padding: clamp(4px, 1.2cqw, 7px) clamp(8px, 2.4cqw, 14px);
-            transition: border-color .15s ease, background .15s ease;
+            transition:
+                border-color 0.15s ease,
+                background 0.15s ease;
         }
 
         .diagram-back:hover {
@@ -310,22 +308,20 @@
         }
 
         /* Cross-highlighting: hovering a diagram node brightens its card/chip
-        below, and vice versa. Deliberately a subtle brighten, not teal —
-        teal is reserved for direct hover/selection in the diagram itself. */
+            below, and vice versa. Deliberately a subtle brighten, not teal —
+            teal is reserved for direct hover/selection in the diagram itself. */
         .card-highlight {
             background: var(--surface-2) !important;
-            border-color: #354A64 !important;
+            border-color: #354a64 !important;
             border-top-color: var(--cat-color, var(--teal)) !important;
         }
 
         .chip-highlight {
             border-color: var(--teal) !important;
-            background: #1B2C33 !important;
+            background: #1b2c33 !important;
         }
 
-        /* ===================================================================
-        CATEGORY CARDS + TOPIC CHIPS GRID
-        =================================================================== */
+        /* ========== CATEGORY CARDS + TOPIC CHIPS GRID ========== */
         .categories {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -333,13 +329,13 @@
             margin-top: 28px;
         }
 
-        @media (max-width:900px) {
+        @media (max-width: 900px) {
             .categories {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
 
-        @media (max-width:620px) {
+        @media (max-width: 620px) {
             .categories {
                 grid-template-columns: 1fr;
             }
@@ -352,12 +348,15 @@
             padding: 18px 18px 14px;
             border-top: 3px solid var(--cat-color, var(--teal));
             cursor: pointer;
-            transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+            transition:
+                border-color 0.2s ease,
+                box-shadow 0.2s ease,
+                background 0.2s ease;
         }
 
         .cat-card:hover {
             background: var(--surface-2);
-            border-color: #354A64;
+            border-color: #354a64;
             border-top-color: var(--cat-color, var(--teal));
         }
 
@@ -368,7 +367,7 @@
         }
 
         .cat-meta {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 11px;
             color: var(--text-muted);
             margin: 0 0 14px;
@@ -383,18 +382,20 @@
             background: var(--surface-2);
             border: 1px solid var(--border);
             color: var(--text);
-            font-family: 'IBM Plex Sans', sans-serif;
+            font-family: "IBM Plex Sans", sans-serif;
             font-size: 13px;
             padding: 9px 11px;
             border-radius: 7px;
             margin-bottom: 7px;
             cursor: pointer;
-            transition: border-color .15s, background .15s;
+            transition:
+                border-color 0.15s,
+                background 0.15s;
         }
 
         .topic-chip:hover {
             border-color: var(--teal);
-            background: #1B2C33;
+            background: #1b2c33;
         }
 
         .topic-chip span.tname {
@@ -402,13 +403,11 @@
             line-height: 1.3;
         }
 
-        /* ===================================================================
-        TOPIC DETAIL MODAL
-        =================================================================== */
+        /* ============== TOPIC DETAIL MODAL ============= */
         .overlay {
             position: fixed;
             inset: 0;
-            background: rgba(5, 8, 12, .6);
+            background: rgba(5, 8, 12, 0.6);
             display: none;
             align-items: center;
             justify-content: center;
@@ -432,8 +431,8 @@
             position: relative;
             container-type: inline-size;
             /* lets .panel-grid below switch to two
-            columns based on the panel's own
-            rendered width, not the viewport */
+                columns based on the panel's own
+                rendered width, not the viewport */
         }
 
         .panel-close {
@@ -453,9 +452,9 @@
         }
 
         .panel-cat {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 11px;
-            letter-spacing: .08em;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
             color: var(--teal);
             margin: 0 0 8px;
@@ -474,10 +473,10 @@
         }
 
         .section-label {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 11px;
             text-transform: uppercase;
-            letter-spacing: .08em;
+            letter-spacing: 0.08em;
             color: var(--text-muted);
             margin: 0 0 8px;
             display: flex;
@@ -486,7 +485,7 @@
         }
 
         .section-label::after {
-            content: '';
+            content: "";
             flex: 1;
             height: 1px;
             background: var(--border);
@@ -497,9 +496,9 @@
         }
 
         /* Two-column layout: main content + resources rail. Collapses to a
-        single column (resources rail falls below the main content, in
-        source order) when the panel itself is narrower than 560px — e.g.
-        on a phone, where .panel has no room to spare for a side column. */
+            single column (resources rail falls below the main content, in
+            source order) when the panel itself is narrower than 560px — e.g.
+            on a phone, where .panel has no room to spare for a side column. */
         .panel-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -517,7 +516,7 @@
         }
 
         /* lets long unbroken text (e.g. a URL) shrink
-                                 instead of forcing the grid track wider */
+            instead of forcing the grid track wider */
         .panel-resources {
             min-width: 0;
             padding-left: 24px;
@@ -525,8 +524,8 @@
         }
 
         /* In the single-column mobile layout the rail drops below the main
-        content instead of beside it, so the vertical divider stops making
-        sense there — swap it for a horizontal one above the rail instead. */
+            content instead of beside it, so the vertical divider stops making
+            sense there — swap it for a horizontal one above the rail instead. */
         @container (max-width:559.98px) {
             .panel-resources {
                 padding-left: 0;
@@ -545,9 +544,9 @@
         }
 
         .resource-type-label {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 10px;
-            letter-spacing: .08em;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
             color: var(--teal);
             margin: 0 0 8px;
@@ -577,7 +576,7 @@
         }
 
         .resource-meta {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 10.5px;
             color: var(--text-muted);
             margin-top: 2px;
@@ -586,7 +585,7 @@
         .resource-why {
             font-size: 12px;
             line-height: 1.5;
-            color: #A9B4C4;
+            color: #a9b4c4;
             margin-top: 5px;
         }
 
@@ -599,7 +598,7 @@
         .panel-body p {
             font-size: 14.5px;
             line-height: 1.65;
-            color: #C7D1DE;
+            color: #c7d1de;
             margin: 0 0 12px;
         }
 
@@ -611,7 +610,7 @@
         }
 
         .log-date {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 11.5px;
             color: var(--teal);
             margin: 0 0 4px;
@@ -620,16 +619,15 @@
         .log-text {
             font-size: 14px;
             line-height: 1.6;
-            color: #C7D1DE;
+            color: #c7d1de;
             margin: 0;
+            white-space: pre-line;
         }
 
-        /* ===================================================================
-   FOOTER
-   =================================================================== */
+        /* ======== FOOTER ======== */
         footer {
             margin-top: 40px;
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 11.5px;
             color: var(--text-muted);
             border-top: 1px solid var(--border);
@@ -642,28 +640,381 @@
             padding: 1px 5px;
             border-radius: 4px;
         }
+
+        /* ===================================================================
+            PROBLEM PRACTICE — user select + Generate Problem Set button (lined
+            up with "Refresh from Sheet" in the sync row so the feature reads as
+            secondary to browsing), topic-scoping on chips (only shown while
+            "By Topic" selection is active), and the quiz modal itself.
+            =================================================================== */
+        .practice-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-left: auto;
+        }
+
+        .user-select {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 12px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .user-select:hover {
+            border-color: var(--teal);
+        }
+
+        .generate-wrap {
+            position: relative;
+            display: inline-block;
+        }
+
+        .generate-btn {
+            background: var(--teal);
+            border: 1px solid var(--teal);
+            color: #06231f;
+            font-family: "IBM Plex Mono", monospace;
+            font-weight: 600;
+            font-size: 12.5px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition:
+                background 0.15s ease,
+                opacity 0.15s ease;
+        }
+
+        .generate-btn:hover {
+            background: #5ee9d7;
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Popover offering Random vs. By Topic, anchored under the button */
+        .generate-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 5px;
+            min-width: 170px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+            z-index: 30;
+        }
+
+        .generate-menu.open {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .generate-menu button {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 12px;
+            text-align: left;
+            padding: 8px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .generate-menu button:hover {
+            background: var(--slate-dim);
+            color: var(--teal);
+        }
+
+        .cancel-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 12px;
+            padding: 7px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .cancel-btn:hover {
+            border-color: var(--amber);
+            color: var(--amber);
+        }
+
+        /* Small selectable marker on each topic chip — hidden until "By
+            Topic" selection mode is active, so scope-picking doesn't clutter
+            the page's main browsing purpose. Click handler stops propagation. */
+        .tsel {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid var(--slate);
+            border-radius: 4px;
+            flex-shrink: 0;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: transparent;
+            transition:
+                border-color 0.15s,
+                background 0.15s;
+        }
+
+        #categories.topic-select-active .tsel {
+            display: flex;
+        }
+
+        .tsel:hover {
+            border-color: var(--teal);
+        }
+
+        .tsel.selected {
+            background: var(--teal);
+            border-color: var(--teal);
+            color: #06231f;
+        }
+
+        .topic-chip.chip-quiz-selected {
+            border-color: var(--teal);
+        }
+
+        /* Quiz modal — reuses .overlay/.panel from the topic detail modal */
+        .quiz-empty {
+            font-size: 13.5px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .panel-head-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .quiz-note {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            font-family: "IBM Plex Mono", monospace;
+            font-weight: 400;
+        }
+
+        .quiz-problem {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 18px;
+            margin-bottom: 14px;
+        }
+
+        .quiz-problem-meta {
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 10.5px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--teal);
+            margin: 0 0 8px;
+        }
+
+        .quiz-source-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 10.5px;
+            letter-spacing: 0.04em;
+            padding: 0;
+            margin: 0 0 8px;
+            cursor: pointer;
+            text-decoration: underline;
+            display: inline-block;
+        }
+
+        .quiz-source-btn:hover {
+            color: var(--teal);
+        }
+
+        .quiz-problem-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #c7d1de;
+            margin: 0 0 12px;
+            white-space: pre-line;
+        }
+
+        .quiz-answer {
+            display: none;
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--surface-2);
+            border-left: 2px solid var(--teal);
+            padding: 10px 12px;
+            margin: 0 0 12px;
+            border-radius: 0 6px 6px 0;
+            white-space: pre-line;
+        }
+
+        .quiz-answer.open {
+            display: block;
+        }
+
+        .quiz-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .quiz-show-btn {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: "IBM Plex Mono", monospace;
+            font-size: 11.5px;
+            padding: 6px 11px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .quiz-show-btn:hover {
+            border-color: var(--teal);
+        }
+
+        .quiz-mark-btn {
+            font-family: "IBM Plex Mono", monospace;
+            font-weight: 600;
+            font-size: 11.5px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition:
+                background 0.15s ease,
+                border-color 0.15s ease,
+                color 0.15s ease;
+        }
+
+        .quiz-mark-btn.correct {
+            border: 1px solid #2e5c54;
+            background: rgba(69, 214, 196, 0.1);
+            color: var(--teal);
+        }
+
+        .quiz-mark-btn.correct:hover {
+            border-color: var(--teal);
+            background: rgba(69, 214, 196, 0.18);
+        }
+
+        .quiz-mark-btn.correct.active {
+            border-color: var(--teal);
+            color: #06231f;
+            background: var(--teal);
+        }
+
+        .quiz-mark-btn.incorrect {
+            border: 1px solid #5c4a2e;
+            background: rgba(240, 168, 96, 0.1);
+            color: var(--amber);
+        }
+
+        .quiz-mark-btn.incorrect:hover {
+            border-color: var(--amber);
+            background: var(--amber-dim);
+        }
+
+        .quiz-mark-btn.incorrect.active {
+            border-color: var(--amber);
+            color: #2a1b06;
+            background: var(--amber);
+        }
+
+        .quiz-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 6px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .quiz-freshness-desc {
+            font-size: 11.5px;
+            line-height: 1.5;
+            color: var(--text-muted);
+            font-family: "IBM Plex Mono", monospace;
+        }
+
+        .quiz-freshness-desc a {
+            color: var(--teal);
+        }
     </style>
 </head>
 
 <body>
     <div class="wrap">
-
         <!-- Title and sync status -->
         <header>
             <p class="eyebrow">PACE</p>
             <h1>Knowledge Base</h1>
-            <p class="sub">A growing record of what we know, what we've learned, and where the gaps are, across
-                everything PACE touches. Click any topic to dig in.</p>
+            <p class="sub">
+                A growing record of what we know, what we've learned, and
+                where the gaps are, across everything PACE touches. Click
+                any topic to dig in.
+            </p>
 
             <div class="sync-row">
                 <span id="syncStatus">Loading from embedded snapshot…</span>
-                <button class="sync-btn" id="refreshBtn">Refresh from Sheet</button>
+                <button class="sync-btn" id="refreshBtn">
+                    Refresh from Sheet
+                </button>
+                <!-- Problem practice controls — lined up with Refresh from Sheet
+                    so the feature reads as secondary to browsing the KB. -->
+                <div class="practice-controls">
+                    <select class="user-select" id="userSelect">
+                        <option value="">Select User…</option>
+                        <option value="brett">Brett</option>
+                        <option value="paul">Paul</option>
+                        <option value="eeron">Eeron</option>
+                    </select>
+                    <div class="generate-wrap">
+                        <button class="generate-btn" id="generateSetBtn" disabled>
+                            Generate Problem Set
+                        </button>
+                        <div class="generate-menu" id="generateMenu">
+                            <button type="button" data-mode="random">
+                                Random Set
+                            </button>
+                            <button type="button" data-mode="topics">
+                                By Selected Topics
+                            </button>
+                        </div>
+                    </div>
+                    <button class="cancel-btn" id="cancelTopicSelectBtn" style="display: none">
+                        Cancel
+                    </button>
+                </div>
             </div>
         </header>
 
         <!-- Interactive hub diagram — populated by renderDiagram() in the script -->
         <div class="diagram-wrap">
-            <button class="diagram-back" id="diagramBack" style="display:none;">↑ Back</button>
+            <button class="diagram-back" id="diagramBack" style="display: none">
+                ↑ Back
+            </button>
             <svg id="hubSvg" viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid meet"></svg>
             <div class="diagram-nodes" id="diagramNodes"></div>
         </div>
@@ -672,9 +1023,11 @@
         <div class="categories" id="categories"></div>
 
         <footer>
-            Part of the <a href="https://github.com/brettnelson612/pace" target="_blank" rel="noopener noreferrer"
-                style="color:var(--teal);">PACE</a> project on GitHub. Contributors: Brett Nelson, Paul Varkey, Eeron
-            Grant
+            Part of the
+            <a href="https://github.com/brettnelson612/pace" target="_blank" rel="noopener noreferrer"
+                style="color: var(--teal)">PACE</a>
+            project on GitHub. Contributors: Brett Nelson, Paul Varkey,
+            Eeron Grant
         </footer>
     </div>
 
@@ -689,8 +1042,8 @@
             </div>
 
             <!-- Two-column at wide panel widths (main content + resources rail),
-         collapses to one column on a narrow screen — see @container rule
-         on .panel-grid below. -->
+                collapses to one column on a narrow screen — see @container rule
+                on .panel-grid below. -->
             <div class="panel-grid">
                 <div class="panel-main">
                     <div class="panel-section">
@@ -703,15 +1056,29 @@
                     </div>
                     <div class="panel-section">
                         <p class="section-label">Log</p>
-                        <textarea id="newLogText" placeholder="Write the log entry here…"
-                            style="width:100%;min-height:70px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;padding:9px 11px;margin-bottom:8px;resize:vertical;"></textarea>
-                        <button class="sync-btn" id="addLogBtn" style="margin-bottom:14px;">Submit →</button>
+                        <textarea id="newLogText" placeholder="Write the log entry here…" style="
+                                    width: 100%;
+                                    min-height: 70px;
+                                    background: var(--surface-2);
+                                    border: 1px solid var(--border);
+                                    border-radius: 7px;
+                                    color: var(--text);
+                                    font-family: &quot;IBM Plex Sans&quot;,
+                                        sans-serif;
+                                    font-size: 13.5px;
+                                    padding: 9px 11px;
+                                    margin-bottom: 8px;
+                                    resize: vertical;
+                                "></textarea>
+                        <button class="sync-btn" id="addLogBtn" style="margin-bottom: 14px">
+                            Submit →
+                        </button>
                         <div id="panelLog"></div>
                     </div>
                 </div>
 
                 <!-- Vetted reading list for this topic — grouped by type (paper /
-           textbook / article / course), rendered by renderResources() -->
+                    textbook / article / course), rendered by renderResources() -->
                 <aside class="panel-resources">
                     <p class="section-label">Resources</p>
                     <div id="resourcesList"></div>
@@ -720,92 +1087,110 @@
         </div>
     </div>
 
-    <!-- Hidden iframe modal used to submit a new log entry via the Google Form
-     (see the "ADD LOG ENTRY" section in the script) -->
-    <div class="overlay" id="formOverlay">
-        <div class="panel" style="max-width:520px;">
-            <button class="panel-close" id="formCloseBtn">✕</button>
-            <p class="panel-cat" style="margin-bottom:16px;">Submitting log entry…</p>
-            <iframe id="formFrame"
-                style="width:100%;height:480px;border:1px solid var(--border);border-radius:8px;background:#fff;"
-                frameborder="0"></iframe>
+    <!-- Fully hidden iframe (never shown to the user) used to silently submit
+        log entries straight to the Form's formResponse endpoint — see the
+        addLogBtn handler in the "ADD LOG ENTRY" section of the script. No
+        click-to-submit, no modal to review. -->
+    <iframe id="logSubmitFrame" style="display: none" aria-hidden="true"></iframe>
+
+    <!-- Fully hidden iframe (never shown to the user) used to silently submit
+        freshness results straight to the Form's formResponse endpoint — see
+        submitFreshnessForm() in the script. No click-to-submit, no modal. -->
+    <iframe id="freshnessSubmitFrame" style="display: none" aria-hidden="true"></iframe>
+
+    <!-- Small picker shown when submitting a log entry (or generating a
+        problem set) before a user has been selected yet — see
+        ensureUserSelected() in the script. -->
+    <div class="overlay" id="userPromptOverlay">
+        <div class="panel" style="max-width: 300px">
+            <button class="panel-close" id="userPromptCloseBtn">✕</button>
+            <p class="panel-cat" style="margin-bottom: 6px">Select User</p>
+            <h2 class="panel-title" style="font-size: 17px; margin-bottom: 14px">
+                Who's logging this?
+            </h2>
+            <div id="userPromptOptions" style="display: flex; flex-direction: column; gap: 8px"></div>
+        </div>
+    </div>
+
+    <!-- Problem practice quiz modal — filled in by openQuizPanel() in the script -->
+    <div class="overlay" id="quizOverlay">
+        <div class="panel">
+            <button class="panel-close" id="quizCloseBtn">✕</button>
+            <div class="panel-head">
+                <p class="panel-cat" id="quizScopeLabel"></p>
+                <div class="panel-head-row">
+                    <h2 class="panel-title" style="margin-bottom: 0">
+                        Problem Set
+                    </h2>
+                    <span class="quiz-note">Mark each problem right or wrong as you go.</span>
+                </div>
+            </div>
+            <div id="quizList"></div>
+            <div class="quiz-footer">
+                <button class="generate-btn" id="syncFreshnessBtn" disabled style="align-self: flex-start">
+                    Submit Results
+                </button>
+                <p class="quiz-freshness-desc" id="freshnessDesc">
+                    Mark problems above, then submit — this logs your
+                    results to Quiz Log automatically, nothing to copy or
+                    paste.
+                </p>
+            </div>
         </div>
     </div>
 
     <script>
         /* ====== CONFIG — set this once your Google Sheet is ready ====== */
         const SHEET_ID = "1rr0va5ERXby3-P2Y-ohQnsttxp8RHZmdw0O6rhErA6Y"; // paste the Sheet ID from its URL between /d/ and /edit
-        /* Sheet must be shared as "Anyone with the link — Viewer".
-           Tab "Topics": id | title | category | description | relevance
-             - category must match one of: framing, physics, uncertainty, trust, systems, impact
-             - a "status" column, if still present in the Sheet, is ignored — the status feature was removed
-           Tab "Logs": id | date | entry
-             - one row per log entry; same id can repeat across many rows (that's how a topic's log grows)
-             - date as YYYY-MM-DD sorts and displays cleanly
-           Tab "Resources": id | type | title | authors | year | link | why
-             - one row per resource; same id can repeat (a topic can have several)
-             - type must be one of: paper, textbook, article, course (anything else
-               falls into a catch-all "Other" group so a typo doesn't drop the row)
-             - why is the one-line vetting note shown under the resource
-        */
 
-        /* ====== ADD-LOG FORM CONFIG (optional but recommended) ======
-           The "+ Add log entry" button opens a Google Form pre-filled with the
-           correct topic id, so whoever's logging never has to type/select it.
-           The date is handled automatically — no need to enter it.
-
-           One-time setup:
-           1. Create a Google Form with two fields, in this order:
-                - "Topic ID" (Short answer)
-                - "Entry" (Paragraph)
-           2. Under Responses, click the Sheets icon and link it to send responses
-              into your existing Sheet as a NEW tab (e.g. "Form Responses 1").
-              Google automatically adds a "Timestamp" column to that tab on every
-              submission — that's what the app uses as the log entry's date.
-              Rename the other two columns to "id" and "entry" (or just point
-              LOGS_TAB_NAME below at whatever that tab is called and the app
-              will read "date"/"timestamp" and "entry" either way).
-           3. In the Form editor, click the ⋮ menu → "Pre-fill form". Fill in a
-              test value for BOTH "Topic ID" and "Entry", click "Get link", and
-              copy the resulting URL. It will look like:
-                https://docs.google.com/forms/d/e/FORM_ID/viewform?usp=pp_url&entry.111111111=test&entry.222222222=test2
-              Paste FORM_ID and both entry.NNNNNNNNN numbers below.
-        */
-        const FORM_ID = "1FAIpQLSfe_AAh0Atf1zHPCF9vnWov-Bqu_dGyVXwPxsYQTitRCADMEw";           // the long id in the pre-filled link, between /d/e/ and /viewform
-        const FORM_ENTRY_ID = "232548039";     // entry.NNNNNNNNN number for the "Topic ID" field
-        const FORM_ENTRY_TEXT = "1643492085";   // entry.NNNNNNNNN number for the "Entry" field
-        const LOGS_TAB_NAME = "Logs"; // change if your linked responses tab has a different name
+        /* ====== Tab Names ====== */
+        const TOPICS_TAB_NAME = "Topics";
+        const LOGS_TAB_NAME = "Comment Log"; // change if your linked responses tab has a different name
         const RESOURCES_TAB_NAME = "Resources"; // change if you name that tab something else
+        const PROBLEMS_TAB_NAME = "Problems"; // shared problem list — no per-user data
+        const FRESHNESS_LOG_TAB_NAME = "Quiz Log"; // single shared tab — one row per quiz session, any user
 
-        /* ====== NAME MAPPING ======
-           If your Form has "Collect email addresses" turned on (Settings > Responses),
-           Google automatically records who submitted each entry — no typing required.
-           Map those emails to display names here, so logs show "Brett — <entry>" etc.
-        */
-        const NAME_MAP = {
-            "brettleenelson@gmail.com": "Brett",
-            "paul.varkey@gmail.com": "Paul",
-        };
+        /* ====== ADD-LOG FORM CONFIG ======*/
+        const FORM_ID =
+            "1FAIpQLSfe_AAh0Atf1zHPCF9vnWov-Bqu_dGyVXwPxsYQTitRCADMEw"; // the long id in the pre-filled link, between /d/e/ and /viewform
+        const FORM_ENTRY_ID = "232548039"; // entry.NNNNNNNNN number for the "Topic ID" field
+        const FORM_ENTRY_TEXT = "1643492085"; // entry.NNNNNNNNN number for the "Entry" field
+        const FORM_ENTRY_USER = "1648276915"; // entry.NNNNNNNNN number for the "User Key" field — add this question to the Form, then fill this in
+
+        /* ====== FRESHNESS LOG FORM CONFIG ====== */
+        const FRESHNESS_FORM_ID =
+            "1FAIpQLSfiloB-DGn9_GyR6svm8PqTU-hk5nkOgykRJSdi9Zkk-r6P3Q"; // the long id in the pre-filled link, between /d/e/ and /viewform
+        const FRESHNESS_FORM_ENTRY_USER = "581280627"; // entry.NNNNNNNNN number for the "User Key" field
+        const FRESHNESS_FORM_ENTRY_RESULTS = "1003985249"; // entry.NNNNNNNNN number for the "Results" field
+        const QUIZ_SIZE = 10; // how many problems a generated set pulls, capped by how many are eligible
+        const FRESHNESS_STALE_DAYS = 7; // never-attempted or older than this get priority in weighting
 
         /* ===================================================================
-           DATA
-           CATEGORIES is static. TOPICS/LOGS start as the embedded fallback
-           snapshot below, then get replaced by loadFromSheet() once the
-           Google Sheet responds (see maybeRerender()).
-           =================================================================== */
+        DATA
+        CATEGORIES is static. TOPICS/LOGS start as the embedded fallback
+        snapshot below, then get replaced by loadFromSheet() once the
+        Google Sheet responds (see maybeRerender()).
+        =================================================================== */
         const CATEGORIES = [
-            { id: 'framing', name: 'Framing & Landscape', color: '#45D6C4' },
-            { id: 'physics', name: 'Core Physics', color: '#F0A860' },
-            { id: 'uncertainty', name: 'Uncertainty & Learning', color: '#9D8CF0' },
-            { id: 'trust', name: 'Trust & Verification', color: '#E85D75' },
-            { id: 'systems', name: 'Systems & Engineering', color: '#5FB8E0' },
-            { id: 'impact', name: 'Economics & Impact', color: '#8393AA' },
+            {
+                id: "framing",
+                name: "Framing & Landscape",
+                color: "#45D6C4",
+            },
+            { id: "physics", name: "Core Physics", color: "#F0A860" },
+            {
+                id: "uncertainty",
+                name: "Uncertainty & Learning",
+                color: "#9D8CF0",
+            },
+            { id: "trust", name: "Trust & Verification", color: "#E85D75" },
+            {
+                id: "systems",
+                name: "Systems & Engineering",
+                color: "#5FB8E0",
+            },
+            { id: "impact", name: "Economics & Impact", color: "#8393AA" },
         ];
-
-        // Embedded fallback snapshot — used until SHEET_ID is set / while a fetch is in flight
-        const FALLBACK_TOPICS = [];
-
-        const FALLBACK_LOGS = {};
 
         // Vetted reading list per topic, grouped by type (paper / textbook /
         // article / course). Each entry has been checked against citation
@@ -813,14 +1198,35 @@
         // see the "why" field for the one-line justification. Only two topics
         // are populated so far (dt-current, uq) as a proof of concept; the
         // rest fill in the same way once the format's confirmed.
-        const RESOURCE_TYPE_ORDER = ['paper', 'textbook', 'article', 'course', 'other'];
-        const RESOURCE_TYPE_LABELS = { paper: 'Papers', textbook: 'Textbooks', article: 'Articles', course: 'Courses / Tutorials', other: 'Other' };
+        const RESOURCE_TYPE_ORDER = [
+            "paper",
+            "textbook",
+            "article",
+            "course",
+            "other",
+        ];
+        const RESOURCE_TYPE_LABELS = {
+            paper: "Papers",
+            textbook: "Textbooks",
+            article: "Articles",
+            course: "Courses / Tutorials",
+            other: "Other",
+        };
 
-        const FALLBACK_RESOURCES = {};
+        let TOPICS = [];
+        let LOGS = {};
+        let RESOURCES = {};
 
-        let TOPICS = FALLBACK_TOPICS;
-        let LOGS = FALLBACK_LOGS;
-        let RESOURCES = FALLBACK_RESOURCES;
+        // Problem practice state — PROBLEMS and RESOURCES_BY_ID are shared
+        // (loaded alongside Topics/Comment Log/Resources); FRESHNESS_CACHE is
+        // per-user and loaded on demand the first time that user generates
+        // a set, then reused for the rest of the session.
+        let PROBLEMS = [];
+        let RESOURCES_BY_ID = {};
+        let FRESHNESS_CACHE = {}; // { brett: {problem_id: {lastAttemptedDate, timesAttempted, lastResult}}, ... }
+        let selectedTopicIds = new Set(); // topics chosen via chip toggles — empty means "all covered topics"
+        let currentQuizProblems = [];
+        let quizResults = {}; // { problem_id: 'correct' | 'incorrect' } for the currently open quiz
 
         /* ===================================================================
         GOOGLE SHEET SYNC
@@ -833,15 +1239,27 @@
         }
 
         function parseGviz(text) {
-            const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?\s*$/);
-            if (!match) throw new Error('Unexpected response format');
+            const match = text.match(
+                /google\.visualization\.Query\.setResponse\(([\s\S]*)\);?\s*$/,
+            );
+            if (!match) throw new Error("Unexpected response format");
             const json = JSON.parse(match[1]);
-            const cols = json.table.cols.map(c => (c.label || c.id || '').toLowerCase());
-            return json.table.rows.map(r => {
+            const cols = json.table.cols.map((c) =>
+                (c.label || c.id || "").toLowerCase(),
+            );
+            return json.table.rows.map((r) => {
                 const obj = {};
                 r.c.forEach((cell, i) => {
-                    if (!cell) { obj[cols[i]] = ''; return; }
-                    obj[cols[i]] = (cell.f !== undefined && cell.f !== null && cell.f !== '') ? cell.f : cell.v;
+                    if (!cell) {
+                        obj[cols[i]] = "";
+                        return;
+                    }
+                    obj[cols[i]] =
+                        cell.f !== undefined &&
+                            cell.f !== null &&
+                            cell.f !== ""
+                            ? cell.f
+                            : cell.v;
                 });
                 return obj;
             });
@@ -853,58 +1271,141 @@
             isSyncing = true;
             try {
                 if (!SHEET_ID) {
-                    document.getElementById('syncStatus').textContent = 'Showing embedded snapshot (no SHEET_ID configured yet)';
+                    document.getElementById("syncStatus").textContent =
+                        "Showing embedded snapshot (no SHEET_ID configured yet)";
                     return;
                 }
-                document.getElementById('syncStatus').textContent = 'Syncing with Google Sheet…';
+                document.getElementById("syncStatus").textContent =
+                    "Syncing with Google Sheet…";
                 try {
-                    const [topicsRes, logsRes, resourcesRes] = await Promise.all([
-                        fetch(gvizUrl('Topics')).then(r => r.text()),
-                        fetch(gvizUrl(LOGS_TAB_NAME)).then(r => r.text()),
-                        fetch(gvizUrl(RESOURCES_TAB_NAME)).then(r => r.text()),
-                    ]);
+                    const [topicsRes, logsRes, resourcesRes] =
+                        await Promise.all([
+                            fetch(gvizUrl(TOPICS_TAB_NAME)).then((r) =>
+                                r.text(),
+                            ),
+                            fetch(gvizUrl(LOGS_TAB_NAME)).then((r) =>
+                                r.text(),
+                            ),
+                            fetch(gvizUrl(RESOURCES_TAB_NAME)).then((r) =>
+                                r.text(),
+                            ),
+                        ]);
                     const topicRows = parseGviz(topicsRes);
                     const logRows = parseGviz(logsRes);
                     const resourceRows = parseGviz(resourcesRes);
 
-                    const parsedTopics = topicRows.map(r => ({
-                        id: r.id, title: r.title, cat: r.category,
-                        description: r.description, relevance: r.relevance,
+                    // Fetched/parsed separately from the block above on purpose: the
+                    // Problems tab is newer and may not exist yet in every copy
+                    // of the Sheet, or may briefly be mid-edit. A failure here should
+                    // only disable problem practice, never take down Topics/Comment Log/Resources.
+                    let problemRows = [];
+                    try {
+                        const problemsRes = await fetch(
+                            gvizUrl(PROBLEMS_TAB_NAME),
+                        ).then((r) => r.text());
+                        problemRows = parseGviz(problemsRes);
+                    } catch (probErr) {
+                        console.warn(
+                            "Problems tab not available yet:",
+                            probErr,
+                        );
+                    }
+
+                    const parsedTopics = topicRows.map((r) => ({
+                        id: r.topic_id,
+                        title: r.title,
+                        cat: r.category,
+                        description: r.description,
+                        relevance: r.relevance,
                     }));
 
                     if (parsedTopics.length === 0) {
-                        document.getElementById('syncStatus').textContent = 'Connected to Sheet, but the Topics tab has no data rows yet — showing embedded snapshot';
+                        document.getElementById("syncStatus").textContent =
+                            "Connected to Sheet, but the Topics tab has no data rows yet — showing embedded snapshot";
                     } else {
                         TOPICS = parsedTopics;
 
                         LOGS = {};
-                        logRows.forEach(r => {
+                        logRows.forEach((r) => {
                             if (!LOGS[r.id]) LOGS[r.id] = [];
-                            let rawDate = r.date || r.timestamp || '';
+                            let rawDate = r.date || r.timestamp || "";
                             let displayDate = rawDate;
                             const parsed = new Date(rawDate);
                             const ts = isNaN(parsed) ? 0 : parsed.getTime();
                             if (!isNaN(parsed)) {
-                                displayDate = parsed.toISOString().slice(0, 10);
+                                displayDate = parsed
+                                    .toISOString()
+                                    .slice(0, 10);
                             }
-                            const email = (r['email address'] || r.email || '').trim().toLowerCase();
-                            const name = NAME_MAP[email] || null;
-                            LOGS[r.id].push({ date: displayDate, entry: r.entry, name, email, ts });
+                            const userKey = (r.user_key || "")
+                                .trim()
+                                .toLowerCase();
+                            const name = userKey
+                                ? userKey.charAt(0).toUpperCase() +
+                                userKey.slice(1)
+                                : null;
+                            LOGS[r.id].push({
+                                date: displayDate,
+                                entry: r.entry,
+                                name,
+                                ts,
+                            });
                         });
 
                         RESOURCES = {};
-                        resourceRows.forEach(r => {
-                            if (!r.id || !r.title) return;
-                            if (!RESOURCES[r.id]) RESOURCES[r.id] = [];
-                            const type = RESOURCE_TYPE_ORDER.includes((r.type || '').trim().toLowerCase()) ? r.type.trim().toLowerCase() : 'other';
-                            RESOURCES[r.id].push({ type, title: r.title, authors: r.authors, year: r.year, link: r.link, why: r.why });
+                        RESOURCES_BY_ID = {};
+                        resourceRows.forEach((r) => {
+                            if (!r.topic_id || !r.title) return;
+                            if (!RESOURCES[r.topic_id])
+                                RESOURCES[r.topic_id] = [];
+                            const type = RESOURCE_TYPE_ORDER.includes(
+                                (r.type || "").trim().toLowerCase(),
+                            )
+                                ? r.type.trim().toLowerCase()
+                                : "other";
+                            RESOURCES[r.topic_id].push({
+                                type,
+                                title: r.title,
+                                authors: r.authors,
+                                year: r.year,
+                                link: r.link,
+                                why: r.why,
+                            });
+                            if (r.resource_id) {
+                                RESOURCES_BY_ID[r.resource_id] = {
+                                    resourceId: r.resource_id,
+                                    topicId: r.topic_id,
+                                    type,
+                                    title: r.title,
+                                    coverage: {
+                                        brett: r.brett_coverage || "",
+                                        paul: r.paul_coverage || "",
+                                        eeron: r.eeron_coverage || "",
+                                    },
+                                };
+                            }
                         });
 
-                        document.getElementById('syncStatus').textContent = 'Synced from Google Sheet just now';
+                        PROBLEMS = problemRows
+                            .filter((r) => r.problem_id && r.resource_id)
+                            .map((r) => ({
+                                id: r.problem_id,
+                                resourceId: r.resource_id,
+                                chapter: r.chapter,
+                                section: r.section,
+                                kbTopicId: r.kb_topic_id,
+                                problemNumber: r.problem_number,
+                                problemText: r.problem_text,
+                                answerText: r.answer_text,
+                            }));
+
+                        document.getElementById("syncStatus").textContent =
+                            "Synced from Google Sheet just now";
                     }
                 } catch (err) {
                     console.error(err);
-                    document.getElementById('syncStatus').textContent = 'Could not reach Sheet — showing embedded snapshot (check sharing settings / SHEET_ID)';
+                    document.getElementById("syncStatus").textContent =
+                        "Could not reach Sheet — showing embedded snapshot (check sharing settings / SHEET_ID)";
                 }
                 maybeRerender();
             } finally {
@@ -912,7 +1413,7 @@
             }
         }
 
-        let lastSnapshot = '';
+        let lastSnapshot = "";
         function maybeRerender() {
             const snapshot = JSON.stringify({ TOPICS, LOGS, RESOURCES });
             if (snapshot !== lastSnapshot) {
@@ -926,35 +1427,65 @@
         RENDER: category cards + topic chips grid (below the diagram)
         =================================================================== */
         function renderCategories() {
-            const container = document.getElementById('categories');
-            container.innerHTML = '';
-            CATEGORIES.forEach(cat => {
-                const topics = TOPICS.filter(d => d.cat === cat.id);
+            const container = document.getElementById("categories");
+            container.innerHTML = "";
+            CATEGORIES.forEach((cat) => {
+                const topics = TOPICS.filter((d) => d.cat === cat.id);
                 if (!topics.length) return;
-                const card = document.createElement('div');
-                card.className = 'cat-card';
+                const card = document.createElement("div");
+                card.className = "cat-card";
                 card.dataset.cat = cat.id;
-                card.style.setProperty('--cat-color', cat.color);
-                const title = document.createElement('p');
-                title.className = 'cat-title';
+                card.style.setProperty("--cat-color", cat.color);
+                const title = document.createElement("p");
+                title.className = "cat-title";
                 title.textContent = cat.name;
-                const meta = document.createElement('p');
-                meta.className = 'cat-meta';
-                meta.textContent = topics.length + (topics.length === 1 ? ' topic' : ' topics');
+                const meta = document.createElement("p");
+                meta.className = "cat-meta";
+                meta.textContent =
+                    topics.length +
+                    (topics.length === 1 ? " topic" : " topics");
                 card.appendChild(title);
                 card.appendChild(meta);
-                card.addEventListener('click', (e) => {
-                    if (e.target.closest('.topic-chip')) return; // chip clicks still open the topic panel
+                card.addEventListener("click", (e) => {
+                    if (e.target.closest(".topic-chip")) return; // chip clicks still open the topic panel
                     diagramSelected = cat.id;
                     renderDiagram();
-                    document.querySelector('.diagram-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    document
+                        .querySelector(".diagram-wrap")
+                        .scrollIntoView({
+                            behavior: "smooth",
+                            block: "nearest",
+                        });
                 });
-                topics.forEach(t => {
-                    const chip = document.createElement('button');
-                    chip.className = 'topic-chip';
+                topics.forEach((t) => {
+                    const chip = document.createElement("button");
+                    chip.className =
+                        "topic-chip" +
+                        (selectedTopicIds.has(t.id)
+                            ? " chip-quiz-selected"
+                            : "");
                     chip.dataset.topicId = t.id;
-                    chip.innerHTML = `<span class="tname">${t.title}</span>`;
-                    chip.addEventListener('click', () => openPanel(t));
+                    chip.innerHTML = `<span class="tname">${t.title}</span><span class="tsel${selectedTopicIds.has(t.id) ? " selected" : ""}" title="Include in problem set scope">✓</span>`;
+                    chip.addEventListener("click", () => openPanel(t));
+                    chip.querySelector(".tsel").addEventListener(
+                        "click",
+                        (e) => {
+                            e.stopPropagation();
+                            const marker = e.currentTarget;
+                            const isSelected = selectedTopicIds.has(t.id);
+                            if (isSelected) selectedTopicIds.delete(t.id);
+                            else selectedTopicIds.add(t.id);
+                            marker.classList.toggle(
+                                "selected",
+                                !isSelected,
+                            );
+                            chip.classList.toggle(
+                                "chip-quiz-selected",
+                                !isSelected,
+                            );
+                            updateGenerateButtonForSelection();
+                        },
+                    );
                     card.appendChild(chip);
                 });
                 container.appendChild(card);
@@ -977,30 +1508,36 @@
         invisible "hit" twin so thin lines are actually hoverable/clickable.
         =================================================================== */
         let diagramSelected = null; // null = root view, otherwise a category id
-        const SVGNS = 'http://www.w3.org/2000/svg';
+        const SVGNS = "http://www.w3.org/2000/svg";
 
         // Draws one line segment in the hub diagram. Optionally wires it up to be
         // interactive: `hover(isOn)` fires on mouse enter/leave, `click()` fires on
         // click — both act through an invisible wide "hit" path since the visible
         // line is only ~1.5px and would be nearly impossible to hover precisely.
         function diagLine(svg, x1, y1, x2, y2, cls, hover, click) {
-            const p = document.createElementNS(SVGNS, 'path');
-            p.setAttribute('d', `M${x1},${y1} L${x2},${y2}`);
-            p.setAttribute('class', cls);
+            const p = document.createElementNS(SVGNS, "path");
+            p.setAttribute("d", `M${x1},${y1} L${x2},${y2}`);
+            p.setAttribute("class", cls);
             svg.appendChild(p);
             if (hover || click) {
                 // wide invisible twin so thin lines are actually hoverable
-                const hit = document.createElementNS(SVGNS, 'path');
-                hit.setAttribute('d', `M${x1},${y1} L${x2},${y2}`);
-                hit.setAttribute('class', 'hub-line-hit');
+                const hit = document.createElementNS(SVGNS, "path");
+                hit.setAttribute("d", `M${x1},${y1} L${x2},${y2}`);
+                hit.setAttribute("class", "hub-line-hit");
                 svg.appendChild(hit);
                 if (hover) {
-                    hit.addEventListener('mouseenter', () => { p.classList.add('hub-line-hot'); hover(true); });
-                    hit.addEventListener('mouseleave', () => { p.classList.remove('hub-line-hot'); hover(false); });
+                    hit.addEventListener("mouseenter", () => {
+                        p.classList.add("hub-line-hot");
+                        hover(true);
+                    });
+                    hit.addEventListener("mouseleave", () => {
+                        p.classList.remove("hub-line-hot");
+                        hover(false);
+                    });
                 }
                 if (click) {
-                    hit.style.cursor = 'pointer';
-                    hit.addEventListener('click', click);
+                    hit.style.cursor = "pointer";
+                    hit.addEventListener("click", click);
                 }
             }
             return p;
@@ -1009,8 +1546,10 @@
         // Toggles the teal "hot" border on a node box by its data-node id —
         // used so hovering a line also lights up the node it points to.
         function setNodeHover(id, on) {
-            const el = document.querySelector(`.hub-node-box[data-node="${id}"]`);
-            if (el) el.classList.toggle('hub-node-hot', on);
+            const el = document.querySelector(
+                `.hub-node-box[data-node="${id}"]`,
+            );
+            if (el) el.classList.toggle("hub-node-hot", on);
         }
 
         function diagCatX(i, n) {
@@ -1025,12 +1564,16 @@
         // cross-highlighting that setNodeHover() and .hub-line-hot handle above.
         function highlightGrid(catId, topicId, on) {
             if (catId) {
-                const card = document.querySelector(`.cat-card[data-cat="${catId}"]`);
-                if (card) card.classList.toggle('card-highlight', on);
+                const card = document.querySelector(
+                    `.cat-card[data-cat="${catId}"]`,
+                );
+                if (card) card.classList.toggle("card-highlight", on);
             }
             if (topicId) {
-                const chip = document.querySelector(`.topic-chip[data-topic-id="${topicId}"]`);
-                if (chip) chip.classList.toggle('chip-highlight', on);
+                const chip = document.querySelector(
+                    `.topic-chip[data-topic-id="${topicId}"]`,
+                );
+                if (chip) chip.classList.toggle("chip-highlight", on);
             }
         }
 
@@ -1043,98 +1586,149 @@
         // currentViewBoxH-tall viewBox, so it stays aligned with the SVG
         // lines underneath regardless of screen size.
         function makeNode(x, y, cls, html) {
-            const el = document.createElement(cls.includes('hub-root-box') ? 'a' : 'button');
-            el.className = 'hub-node-box ' + cls;
-            el.style.left = (x / 1000 * 100) + '%';
-            el.style.top = (y / currentViewBoxH * 100) + '%';
+            const el = document.createElement(
+                cls.includes("hub-root-box") ? "a" : "button",
+            );
+            el.className = "hub-node-box " + cls;
+            el.style.left = (x / 1000) * 100 + "%";
+            el.style.top = (y / currentViewBoxH) * 100 + "%";
             el.innerHTML = html;
             return el;
         }
 
         function renderDiagram() {
-            const svg = document.getElementById('hubSvg');
-            const nodes = document.getElementById('diagramNodes');
-            const backBtn = document.getElementById('diagramBack');
-            const wrap = document.querySelector('.diagram-wrap');
-            svg.innerHTML = '';
-            nodes.innerHTML = '';
+            const svg = document.getElementById("hubSvg");
+            const nodes = document.getElementById("diagramNodes");
+            const backBtn = document.getElementById("diagramBack");
+            const wrap = document.querySelector(".diagram-wrap");
+            svg.innerHTML = "";
+            nodes.innerHTML = "";
 
-            const activeCats = CATEGORIES.filter(c => TOPICS.some(t => t.cat === c.id));
+            const activeCats = CATEGORIES.filter((c) =>
+                TOPICS.some((t) => t.cat === c.id),
+            );
             const n = activeCats.length;
             if (!n) return;
 
             if (!diagramSelected) {
-                backBtn.style.display = 'none';
+                backBtn.style.display = "none";
 
                 // Root view only needs room for the root circle, the category
                 // row, and the short sneak-peek stubs below it — a much
                 // shorter canvas than the expanded view needs, which is what
                 // was leaving all the dead space below the category row.
                 currentViewBoxH = 275;
-                svg.setAttribute('viewBox', `0 0 1000 ${currentViewBoxH}`);
-                wrap.style.setProperty('--vb-h', currentViewBoxH);
+                svg.setAttribute("viewBox", `0 0 1000 ${currentViewBoxH}`);
+                wrap.style.setProperty("--vb-h", currentViewBoxH);
 
-                const rootX = 500, rootY = 50, catY = 180;
+                const rootX = 500,
+                    rootY = 50,
+                    catY = 180;
                 const catLines = {}; // cat.id -> [root line, ...peek stubs]
 
                 activeCats.forEach((cat, i) => {
                     const cx = diagCatX(i, n);
-                    const topics = TOPICS.filter(t => t.cat === cat.id);
-                    const selectCat = () => { diagramSelected = cat.id; renderDiagram(); };
-                    const catLine = diagLine(svg, rootX, rootY + 12, cx, catY - 33, 'hub-line', on => {
-                        setNodeHover(cat.id, on);
-                        highlightGrid(cat.id, null, on);
-                        catLine.stubPaths.forEach(sp => sp.classList.toggle('hub-line-hot', on));
-                    }, selectCat);
+                    const topics = TOPICS.filter((t) => t.cat === cat.id);
+                    const selectCat = () => {
+                        diagramSelected = cat.id;
+                        renderDiagram();
+                    };
+                    const catLine = diagLine(
+                        svg,
+                        rootX,
+                        rootY + 12,
+                        cx,
+                        catY - 33,
+                        "hub-line",
+                        (on) => {
+                            setNodeHover(cat.id, on);
+                            highlightGrid(cat.id, null, on);
+                            catLine.stubPaths.forEach((sp) =>
+                                sp.classList.toggle("hub-line-hot", on),
+                            );
+                        },
+                        selectCat,
+                    );
                     // sneak-peek stubs below each category — one per topic, boxes not shown
                     const stubs = topics.length;
                     const stubPaths = [];
                     topics.forEach((t, j) => {
                         const spread = (j - (stubs - 1) / 2) * 16;
-                        const p = diagLine(svg, cx, catY + 33, cx + spread, catY + 80, 'hub-peek-line', on => {
-                            setNodeHover(cat.id, on);
-                            highlightGrid(cat.id, null, on);
-                            stubPaths.forEach(sp => sp.classList.toggle('hub-line-hot', on));
-                            catLine.classList.toggle('hub-line-hot', on);
-                        }, selectCat);
+                        const p = diagLine(
+                            svg,
+                            cx,
+                            catY + 33,
+                            cx + spread,
+                            catY + 80,
+                            "hub-peek-line",
+                            (on) => {
+                                setNodeHover(cat.id, on);
+                                highlightGrid(cat.id, null, on);
+                                stubPaths.forEach((sp) =>
+                                    sp.classList.toggle("hub-line-hot", on),
+                                );
+                                catLine.classList.toggle(
+                                    "hub-line-hot",
+                                    on,
+                                );
+                            },
+                            selectCat,
+                        );
                         stubPaths.push(p);
                     });
                     catLine.stubPaths = stubPaths;
                     catLines[cat.id] = [catLine, ...stubPaths];
                 });
 
-                const root = makeNode(rootX, rootY, 'hub-root-box', `<div class="hub-node-title">PACE</div>`);
+                const root = makeNode(
+                    rootX,
+                    rootY,
+                    "hub-root-box",
+                    `<div class="hub-node-title">PACE</div>`,
+                );
 
                 // Set root button attributes
-                root.href = 'https://github.com/brettnelson612/pace';
-                root.target = '_blank'; // Opens in new tab by default
-                root.rel = 'noopener noreferrer'; // Security best practice for external links
-                root.style.textDecoration = 'none';
-                root.style.color = 'inherit';
+                root.href = "https://github.com/brettnelson612/pace";
+                root.target = "_blank"; // Opens in new tab by default
+                root.rel = "noopener noreferrer"; // Security best practice for external links
+                root.style.textDecoration = "none";
+                root.style.color = "inherit";
 
                 nodes.appendChild(root);
 
                 activeCats.forEach((cat, i) => {
                     const cx = diagCatX(i, n);
-                    const topics = TOPICS.filter(t => t.cat === cat.id);
-                    const box = makeNode(cx, catY, 'hub-cat-box', `
+                    const topics = TOPICS.filter((t) => t.cat === cat.id);
+                    const box = makeNode(
+                        cx,
+                        catY,
+                        "hub-cat-box",
+                        `
         <div class="hub-node-title">${cat.name}</div>
-        <div class="hub-node-count">${topics.length} ${topics.length === 1 ? 'topic' : 'topics'}</div>
-      `);
+        <div class="hub-node-count">${topics.length} ${topics.length === 1 ? "topic" : "topics"}</div>
+      `,
+                    );
                     box.dataset.node = cat.id;
-                    box.addEventListener('click', () => { diagramSelected = cat.id; renderDiagram(); });
-                    box.addEventListener('mouseenter', () => {
-                        highlightGrid(cat.id, null, true);
-                        (catLines[cat.id] || []).forEach(p => p.classList.add('hub-line-hot'));
+                    box.addEventListener("click", () => {
+                        diagramSelected = cat.id;
+                        renderDiagram();
                     });
-                    box.addEventListener('mouseleave', () => {
+                    box.addEventListener("mouseenter", () => {
+                        highlightGrid(cat.id, null, true);
+                        (catLines[cat.id] || []).forEach((p) =>
+                            p.classList.add("hub-line-hot"),
+                        );
+                    });
+                    box.addEventListener("mouseleave", () => {
                         highlightGrid(cat.id, null, false);
-                        (catLines[cat.id] || []).forEach(p => p.classList.remove('hub-line-hot'));
+                        (catLines[cat.id] || []).forEach((p) =>
+                            p.classList.remove("hub-line-hot"),
+                        );
                     });
                     nodes.appendChild(box);
                 });
             } else {
-                backBtn.style.display = 'inline-flex';
+                backBtn.style.display = "inline-flex";
 
                 // Expanded view needs real room for up to two topic rows —
                 // independent of root view's height now, so growing this
@@ -1142,18 +1736,25 @@
                 // category row down a bit for back-button clearance without
                 // squeezing the row-to-row gap.
                 currentViewBoxH = 340;
-                svg.setAttribute('viewBox', `0 0 1000 ${currentViewBoxH}`);
-                wrap.style.setProperty('--vb-h', currentViewBoxH);
+                svg.setAttribute("viewBox", `0 0 1000 ${currentViewBoxH}`);
+                wrap.style.setProperty("--vb-h", currentViewBoxH);
 
                 const catY = 85; // pushed down well clear of the back button, at every width
-                const selIdx = activeCats.findIndex(c => c.id === diagramSelected);
+                const selIdx = activeCats.findIndex(
+                    (c) => c.id === diagramSelected,
+                );
                 const selX = diagCatX(selIdx, n);
-                const topics = TOPICS.filter(t => t.cat === diagramSelected);
+                const topics = TOPICS.filter(
+                    (t) => t.cat === diagramSelected,
+                );
 
                 // topic layout: one row up to 6 topics, two rows beyond that
                 const twoRows = topics.length > 6;
-                const rowY1 = 215, rowY2 = 295;
-                const row1Count = twoRows ? Math.ceil(topics.length / 2) : topics.length;
+                const rowY1 = 215,
+                    rowY2 = 295;
+                const row1Count = twoRows
+                    ? Math.ceil(topics.length / 2)
+                    : topics.length;
 
                 // Fixed center-to-center spacing (not stretched to fill the full
                 // width) so every row — regardless of how many topics are in it —
@@ -1166,54 +1767,88 @@
 
                 function topicPos(j) {
                     const inRow1 = j < row1Count;
-                    const rowN = inRow1 ? row1Count : topics.length - row1Count;
+                    const rowN = inRow1
+                        ? row1Count
+                        : topics.length - row1Count;
                     const idxInRow = inRow1 ? j : j - row1Count;
                     const rowWidth = (rowN - 1) * STEP_X;
-                    const x = rowN === 1 ? 500 : (500 - rowWidth / 2) + idxInRow * STEP_X;
+                    const x =
+                        rowN === 1
+                            ? 500
+                            : 500 - rowWidth / 2 + idxInRow * STEP_X;
                     return { x, y: inRow1 ? rowY1 : rowY2 };
                 }
 
                 const topicLines = {}; // t.id -> line back to category
                 topics.forEach((t, j) => {
                     const { x, y } = topicPos(j);
-                    const line = diagLine(svg, selX, catY + 28, x, y - 30, 'hub-line', on => {
-                        setNodeHover(t.id, on);
-                        highlightGrid(t.cat, t.id, on);
-                    });
+                    const line = diagLine(
+                        svg,
+                        selX,
+                        catY + 28,
+                        x,
+                        y - 30,
+                        "hub-line",
+                        (on) => {
+                            setNodeHover(t.id, on);
+                            highlightGrid(t.cat, t.id, on);
+                        },
+                    );
                     topicLines[t.id] = line;
                 });
 
                 activeCats.forEach((cat, i) => {
                     const cx = diagCatX(i, n);
-                    const catTopics = TOPICS.filter(t => t.cat === cat.id);
+                    const catTopics = TOPICS.filter(
+                        (t) => t.cat === cat.id,
+                    );
                     const isSel = cat.id === diagramSelected;
-                    const box = makeNode(cx, catY, isSel ? 'hub-cat-box hub-node-selected' : 'hub-cat-box hub-node-dimmed', `
+                    const box = makeNode(
+                        cx,
+                        catY,
+                        isSel
+                            ? "hub-cat-box hub-node-selected"
+                            : "hub-cat-box hub-node-dimmed",
+                        `
         <div class="hub-node-title">${cat.name}</div>
-        <div class="hub-node-count">${catTopics.length} ${catTopics.length === 1 ? 'topic' : 'topics'}</div>
-      `);
+        <div class="hub-node-count">${catTopics.length} ${catTopics.length === 1 ? "topic" : "topics"}</div>
+      `,
+                    );
                     box.dataset.node = cat.id;
-                    box.addEventListener('click', () => { diagramSelected = cat.id; renderDiagram(); });
-                    box.addEventListener('mouseenter', () => highlightGrid(cat.id, null, true));
-                    box.addEventListener('mouseleave', () => highlightGrid(cat.id, null, false));
+                    box.addEventListener("click", () => {
+                        diagramSelected = cat.id;
+                        renderDiagram();
+                    });
+                    box.addEventListener("mouseenter", () =>
+                        highlightGrid(cat.id, null, true),
+                    );
+                    box.addEventListener("mouseleave", () =>
+                        highlightGrid(cat.id, null, false),
+                    );
                     nodes.appendChild(box);
                 });
 
                 topics.forEach((t, j) => {
                     const { x, y } = topicPos(j);
-                    const box = makeNode(x, y, 'hub-topic-box', `
+                    const box = makeNode(
+                        x,
+                        y,
+                        "hub-topic-box",
+                        `
         <div class="hub-node-title">${t.title}</div>
-      `);
+      `,
+                    );
                     box.dataset.node = t.id;
-                    box.addEventListener('click', () => openPanel(t));
-                    box.addEventListener('mouseenter', () => {
+                    box.addEventListener("click", () => openPanel(t));
+                    box.addEventListener("mouseenter", () => {
                         highlightGrid(t.cat, t.id, true);
                         const line = topicLines[t.id];
-                        if (line) line.classList.add('hub-line-hot');
+                        if (line) line.classList.add("hub-line-hot");
                     });
-                    box.addEventListener('mouseleave', () => {
+                    box.addEventListener("mouseleave", () => {
                         highlightGrid(t.cat, t.id, false);
                         const line = topicLines[t.id];
-                        if (line) line.classList.remove('hub-line-hot');
+                        if (line) line.classList.remove("hub-line-hot");
                     });
                     nodes.appendChild(box);
                 });
@@ -1230,17 +1865,21 @@
         function fitNodeTitles() {
             const FLOOR = 6.5; // px — absolute minimum before we give up
             const STEP = 0.4;
-            document.querySelectorAll('#diagramNodes .hub-node-title').forEach(el => {
-                el.style.fontSize = '';
-                let size = parseFloat(getComputedStyle(el).fontSize);
-                let guard = 0;
-                const overflowing = () => el.scrollHeight > el.clientHeight + 0.5 || el.scrollWidth > el.clientWidth + 0.5;
-                while (overflowing() && size > FLOOR && guard < 40) {
-                    size = Math.max(FLOOR, size - STEP);
-                    el.style.fontSize = size + 'px';
-                    guard++;
-                }
-            });
+            document
+                .querySelectorAll("#diagramNodes .hub-node-title")
+                .forEach((el) => {
+                    el.style.fontSize = "";
+                    let size = parseFloat(getComputedStyle(el).fontSize);
+                    let guard = 0;
+                    const overflowing = () =>
+                        el.scrollHeight > el.clientHeight + 0.5 ||
+                        el.scrollWidth > el.clientWidth + 0.5;
+                    while (overflowing() && size > FLOOR && guard < 40) {
+                        size = Math.max(FLOOR, size - STEP);
+                        el.style.fontSize = size + "px";
+                        guard++;
+                    }
+                });
         }
 
         // Re-run the fit whenever the diagram's own width changes (window
@@ -1250,31 +1889,33 @@
         new ResizeObserver(() => {
             if (fitNodeTitlesRAF) cancelAnimationFrame(fitNodeTitlesRAF);
             fitNodeTitlesRAF = requestAnimationFrame(fitNodeTitles);
-        }).observe(document.querySelector('.diagram-wrap'));
+        }).observe(document.querySelector(".diagram-wrap"));
 
-        document.getElementById('diagramBack').addEventListener('click', () => {
-            diagramSelected = null;
-            renderDiagram();
-        });
+        document
+            .getElementById("diagramBack")
+            .addEventListener("click", () => {
+                diagramSelected = null;
+                renderDiagram();
+            });
 
-        /* ===================================================================
-        TOPIC DETAIL PANEL (modal)
-        =================================================================== */
+        /* ========== TOPIC DETAIL PANEL (modal) ========= */
 
         function escapeHtml(str) {
-            const div = document.createElement('div');
+            const div = document.createElement("div");
             div.textContent = str;
             return div.innerHTML;
         }
 
         function linkify(text) {
-            const escaped = escapeHtml(text || '');
+            const escaped = escapeHtml(text || "");
             const urlPattern = /(\bhttps?:\/\/[^\s<]+)/g;
             return escaped.replace(urlPattern, (url) => {
                 // trim trailing punctuation that's likely not part of the URL
                 const trailingMatch = url.match(/[),.;:!?]+$/);
-                const trailing = trailingMatch ? trailingMatch[0] : '';
-                const clean = trailing ? url.slice(0, -trailing.length) : url;
+                const trailing = trailingMatch ? trailingMatch[0] : "";
+                const clean = trailing
+                    ? url.slice(0, -trailing.length)
+                    : url;
                 return `<a href="${clean}" target="_blank" rel="noopener noreferrer" style="color:var(--teal);text-decoration:underline;">${clean}</a>${trailing}`;
             });
         }
@@ -1283,37 +1924,47 @@
 
         function openPanel(topic) {
             currentTopicId = topic.id;
-            document.getElementById('newLogText').value = '';
-            const cat = CATEGORIES.find(c => c.id === topic.cat);
-            document.getElementById('panelCat').textContent = cat ? cat.name : topic.cat;
-            document.getElementById('panelTitle').textContent = topic.title;
+            document.getElementById("newLogText").value = "";
+            const cat = CATEGORIES.find((c) => c.id === topic.cat);
+            document.getElementById("panelCat").textContent = cat
+                ? cat.name
+                : topic.cat;
+            document.getElementById("panelTitle").textContent = topic.title;
 
-            document.getElementById('panelDesc').innerHTML = `<p>${topic.description || '—'}</p>`;
-            document.getElementById('panelRelevance').innerHTML = `<p>${topic.relevance || '—'}</p>`;
+            document.getElementById("panelDesc").innerHTML =
+                `<p>${topic.description || "—"}</p>`;
+            document.getElementById("panelRelevance").innerHTML =
+                `<p>${topic.relevance || "—"}</p>`;
 
-            const logDiv = document.getElementById('panelLog');
-            logDiv.innerHTML = '';
+            const logDiv = document.getElementById("panelLog");
+            logDiv.innerHTML = "";
             function entrySortKey(e) {
-                if (typeof e.ts === 'number' && e.ts > 0) return e.ts;
+                if (typeof e.ts === "number" && e.ts > 0) return e.ts;
                 const d = new Date(e.date);
                 return isNaN(d) ? 0 : d.getTime();
             }
-            const entries = (LOGS[topic.id] || []).slice().sort((a, b) => entrySortKey(a) - entrySortKey(b)).reverse(); // newest first
+            const entries = (LOGS[topic.id] || [])
+                .slice()
+                .sort((a, b) => entrySortKey(a) - entrySortKey(b))
+                .reverse(); // newest first
             if (!entries.length) {
-                logDiv.innerHTML = '<p style="color:var(--text-muted);font-size:14px;">No log entries yet.</p>';
+                logDiv.innerHTML =
+                    '<p style="color:var(--text-muted);font-size:14px;">No log entries yet.</p>';
             } else {
-                entries.forEach(e => {
-                    const div = document.createElement('div');
-                    div.className = 'log-entry';
-                    const who = e.name ? `<strong>${e.name}</strong>` : (e.email ? e.email : '');
-                    const dateLine = who ? `${e.date} <span style="color:var(--text-muted);font-weight:400;">— ${who}</span>` : e.date;
+                entries.forEach((e) => {
+                    const div = document.createElement("div");
+                    div.className = "log-entry";
+                    const who = e.name ? `<strong>${e.name}</strong>` : "";
+                    const dateLine = who
+                        ? `${e.date} <span style="color:var(--text-muted);font-weight:400;">— ${who}</span>`
+                        : e.date;
                     div.innerHTML = `<p class="log-date">${dateLine}</p><p class="log-text">${linkify(e.entry)}</p>`;
                     logDiv.appendChild(div);
                 });
             }
 
             renderResources(topic.id);
-            document.getElementById('overlay').classList.add('open');
+            document.getElementById("overlay").classList.add("open");
         }
 
         // Renders the vetted reading list for one topic into the panel's
@@ -1322,111 +1973,622 @@
         // empty state for topics that don't have any vetted resources yet,
         // so the two-column layout doesn't look broken while the list grows.
         function renderResources(topicId) {
-            const list = document.getElementById('resourcesList');
+            const list = document.getElementById("resourcesList");
             const items = RESOURCES[topicId] || [];
             if (!items.length) {
-                list.innerHTML = '<p class="resource-empty">No vetted resources yet for this topic.</p>';
+                list.innerHTML =
+                    '<p class="resource-empty">No vetted resources yet for this topic.</p>';
                 return;
             }
             const byType = {};
-            items.forEach(r => { (byType[r.type] || (byType[r.type] = [])).push(r); });
+            items.forEach((r) => {
+                (byType[r.type] || (byType[r.type] = [])).push(r);
+            });
 
-            list.innerHTML = RESOURCE_TYPE_ORDER
-                .filter(type => byType[type] && byType[type].length)
-                .map(type => `
+            list.innerHTML = RESOURCE_TYPE_ORDER.filter(
+                (type) => byType[type] && byType[type].length,
+            )
+                .map(
+                    (type) => `
       <div class="resource-group">
         <p class="resource-type-label">${RESOURCE_TYPE_LABELS[type]}</p>
-        ${byType[type].map(r => `
+        ${byType[type]
+                            .map(
+                                (r) => `
           <div class="resource-item">
             ${r.link
-                        ? `<a class="resource-title" href="${escapeHtml(r.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.title)}</a>`
-                        : `<span class="resource-title" style="cursor:default;">${escapeHtml(r.title)}</span>`}
-            <div class="resource-meta">${escapeHtml([r.authors, r.year].filter(Boolean).join(' · '))}</div>
-            ${r.why ? `<p class="resource-why">${escapeHtml(r.why)}</p>` : ''}
+                                        ? `<a class="resource-title" href="${escapeHtml(r.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.title)}</a>`
+                                        : `<span class="resource-title" style="cursor:default;">${escapeHtml(r.title)}</span>`
+                                    }
+            <div class="resource-meta">${escapeHtml([r.authors, r.year].filter(Boolean).join(" · "))}</div>
+            ${r.why ? `<p class="resource-why">${escapeHtml(r.why)}</p>` : ""}
           </div>
-        `).join('')}
+        `,
+                            )
+                            .join("")}
       </div>
-    `).join('');
+    `,
+                )
+                .join("");
         }
 
         /* ===================================================================
-           GLOBAL EVENT LISTENERS
-           =================================================================== */
-        document.getElementById('closeBtn').addEventListener('click', () => document.getElementById('overlay').classList.remove('open'));
-        document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') document.getElementById('overlay').classList.remove('open'); });
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('overlay').classList.remove('open'); });
-        document.getElementById('refreshBtn').addEventListener('click', loadFromSheet);
+        PROBLEM PRACTICE
+        Coverage (from Resources) gates which problems are eligible for a
+        given user; freshness (folded from the shared Quiz Log tab)
+        weights which of the eligible problems actually get picked. Submit
+        Results is the only write path, and it only ever appends one row via
+        the freshness Form — nothing here does a live Sheet write directly.
+        =================================================================== */
+
+        // Splits one submission's packed "results" field back into
+        // {pid, result} pairs. Format: "pid:result|pid:result|...".
+        function parseResultsField(str) {
+            return (str || "")
+                .split("|")
+                .map((pair) => {
+                    const [pid, result] = pair.split(":");
+                    return {
+                        pid: (pid || "").trim(),
+                        result: (result || "").trim().toLowerCase(),
+                    };
+                })
+                .filter((x) => x.pid);
+        }
+
+        // Packs this session's quizResults into the same "pid:result|..."
+        // format for submission.
+        function buildResultsField() {
+            return Object.entries(quizResults)
+                .map(([pid, result]) => `${pid}:${result}`)
+                .join("|");
+        }
+
+        // Fetches the single shared Quiz Log tab once per session (all
+        // users' rows live there together — appends only, so concurrent
+        // submissions from different collaborators never collide). Cached
+        // as raw rows so each user's profile can be folded out of it without
+        // re-fetching.
+        let FRESHNESS_LOG_ROWS = null;
+        async function loadFreshnessLogRows() {
+            if (FRESHNESS_LOG_ROWS) return FRESHNESS_LOG_ROWS;
+            let rows = [];
+            try {
+                const text = await fetch(
+                    gvizUrl(FRESHNESS_LOG_TAB_NAME),
+                ).then((r) => r.text());
+                rows = parseGviz(text);
+            } catch (err) {
+                console.warn(
+                    `${FRESHNESS_LOG_TAB_NAME} tab not available yet:`,
+                    err,
+                );
+            }
+            FRESHNESS_LOG_ROWS = rows;
+            return rows;
+        }
+
+        // Builds one user's freshness profile by folding every session row
+        // that belongs to them, in submission order, into a running
+        // per-problem table — times_attempted accumulates, last_result and
+        // last_attempted_date take the most recent row's values.
+        async function loadFreshnessForUser(userKey) {
+            if (FRESHNESS_CACHE[userKey]) return FRESHNESS_CACHE[userKey];
+            const table = {};
+            const rows = await loadFreshnessLogRows();
+            rows.forEach((r) => {
+                if (
+                    (r.user_key || "").toString().trim().toLowerCase() !==
+                    userKey
+                )
+                    return;
+                const dateStr = (r.timestamp || "").toString().slice(0, 10);
+                parseResultsField(r.results).forEach(({ pid, result }) => {
+                    const prior = table[pid];
+                    table[pid] = {
+                        lastAttemptedDate:
+                            dateStr ||
+                            (prior ? prior.lastAttemptedDate : ""),
+                        timesAttempted:
+                            (prior ? prior.timesAttempted : 0) + 1,
+                        lastResult: result,
+                    };
+                });
+            });
+            FRESHNESS_CACHE[userKey] = table;
+            return table;
+        }
+
+        // Submits one row to the freshness Form via a hidden iframe pointed
+        // straight at its formResponse endpoint (GET) — no visible modal, no
+        // click-to-submit inside an embedded form; this just fires and
+        // resolves once the iframe finishes loading the response.
+        function submitFreshnessForm(userKey, resultsField) {
+            return new Promise((resolve) => {
+                if (
+                    !FRESHNESS_FORM_ID ||
+                    !FRESHNESS_FORM_ENTRY_USER ||
+                    !FRESHNESS_FORM_ENTRY_RESULTS
+                ) {
+                    resolve(false);
+                    return;
+                }
+                const frame = document.getElementById(
+                    "freshnessSubmitFrame",
+                );
+                const url =
+                    `https://docs.google.com/forms/d/e/${FRESHNESS_FORM_ID}/formResponse?usp=pp_url` +
+                    `&entry.${FRESHNESS_FORM_ENTRY_USER}=${encodeURIComponent(userKey)}` +
+                    `&entry.${FRESHNESS_FORM_ENTRY_RESULTS}=${encodeURIComponent(resultsField)}`;
+                frame.onload = () => {
+                    frame.onload = null;
+                    resolve(true);
+                };
+                frame.src = url;
+            });
+        }
+
+        // A problem is eligible only if its resource shows coverage for this
+        // user at (at least) this problem's chapter. Textbooks store a
+        // comma-separated chapter list; anything else stores yes/no.
+        function isCovered(resource, userKey, chapter) {
+            if (!resource) return false;
+            const raw = (resource.coverage[userKey] || "")
+                .toString()
+                .trim();
+            if (!raw) return false;
+            if (resource.type === "textbook") {
+                const chapters = raw
+                    .split(",")
+                    .map((c) => c.trim())
+                    .filter(Boolean)
+                    .map(Number);
+                return chapters.includes(Number(chapter));
+            }
+            return raw.toLowerCase() === "yes";
+        }
+
+        // Higher score = more due for review. Never-attempted and previously
+        // -incorrect problems get bumped up; anything attempted correctly in
+        // the last FRESHNESS_STALE_DAYS days gets pushed down.
+        function scoreProblem(problem, freshnessTable) {
+            const entry = freshnessTable[problem.id];
+            if (!entry || !entry.lastAttemptedDate) return 3;
+            let score = 1;
+            if (entry.lastResult === "incorrect") score += 2;
+            const daysSince =
+                (Date.now() - new Date(entry.lastAttemptedDate).getTime()) /
+                86400000;
+            if (isNaN(daysSince) || daysSince >= FRESHNESS_STALE_DAYS)
+                score += 1;
+            return score;
+        }
+
+        // "By Topic" selection mode: reveals the .tsel checkmarks on topic
+        // chips and repurposes the Generate button itself into the confirm
+        // action, with a Cancel button beside it to back out entirely.
+        let topicSelectMode = false;
+
+        function enterTopicSelectMode() {
+            topicSelectMode = true;
+            document
+                .getElementById("categories")
+                .classList.add("topic-select-active");
+            document.getElementById("cancelTopicSelectBtn").style.display =
+                "inline-block";
+            updateGenerateButtonForSelection();
+        }
+
+        function exitTopicSelectMode() {
+            topicSelectMode = false;
+            selectedTopicIds.clear();
+            document
+                .querySelectorAll(".tsel.selected")
+                .forEach((el) => el.classList.remove("selected"));
+            document
+                .querySelectorAll(".topic-chip.chip-quiz-selected")
+                .forEach((el) => el.classList.remove("chip-quiz-selected"));
+            document
+                .getElementById("categories")
+                .classList.remove("topic-select-active");
+            document.getElementById("cancelTopicSelectBtn").style.display =
+                "none";
+            const btn = document.getElementById("generateSetBtn");
+            btn.textContent = "Generate Problem Set";
+            btn.disabled = !document.getElementById("userSelect").value;
+        }
+
+        function updateGenerateButtonForSelection() {
+            const btn = document.getElementById("generateSetBtn");
+            const n = selectedTopicIds.size;
+            btn.textContent = `Generate (${n} selected)`;
+            btn.disabled = n === 0;
+        }
+
+        async function generateProblemSet() {
+            const userKey = document.getElementById("userSelect").value;
+            if (!userKey) return;
+            const freshnessTable = await loadFreshnessForUser(userKey);
+
+            const eligible = PROBLEMS.filter((p) => {
+                if (
+                    selectedTopicIds.size &&
+                    !selectedTopicIds.has(p.kbTopicId)
+                )
+                    return false;
+                return isCovered(
+                    RESOURCES_BY_ID[p.resourceId],
+                    userKey,
+                    p.chapter,
+                );
+            });
+
+            // Weighted random pick: each problem gets a random key scaled by
+            // its score, then we take the top N — higher-score problems are
+            // more likely to land in the set without it being deterministic.
+            const picked = eligible
+                .map((p) => ({
+                    p,
+                    key: Math.random() * scoreProblem(p, freshnessTable),
+                }))
+                .sort((a, b) => b.key - a.key)
+                .slice(0, QUIZ_SIZE)
+                .map((x) => x.p);
+
+            currentQuizProblems = picked;
+            quizResults = {};
+            openQuizPanel(userKey, eligible.length);
+            if (topicSelectMode) exitTopicSelectMode();
+        }
+
+        function openQuizPanel(userKey, eligibleCount) {
+            const scopeText = selectedTopicIds.size
+                ? `${selectedTopicIds.size} selected topic${selectedTopicIds.size === 1 ? "" : "s"}`
+                : "all covered topics";
+            document.getElementById("quizScopeLabel").textContent =
+                `${userKey.charAt(0).toUpperCase() + userKey.slice(1)} · ${scopeText} · ${currentQuizProblems.length} of ${eligibleCount} eligible`;
+            renderQuizList();
+            document.getElementById("syncFreshnessBtn").disabled = true;
+            document.getElementById("freshnessDesc").textContent =
+                "Mark problems above, then submit — this logs your results to Quiz Log automatically, nothing to copy or paste.";
+            document.getElementById("quizOverlay").classList.add("open");
+        }
+
+        function renderQuizList() {
+            const list = document.getElementById("quizList");
+            if (!currentQuizProblems.length) {
+                list.innerHTML =
+                    '<p class="quiz-empty">No eligible problems yet for this selection — mark more coverage on the Resources tab, or widen the topic scope.</p>';
+                return;
+            }
+            list.innerHTML = currentQuizProblems
+                .map(
+                    (p) => `
+        <div class="quiz-problem" data-problem-id="${escapeHtml(p.id)}">
+          <button class="quiz-source-btn" data-show-source="${escapeHtml(p.id)}">Show Problem Source</button>
+          <p class="quiz-problem-meta" id="source-${escapeHtml(p.id)}" style="display:none;">${escapeHtml(p.resourceId)} · ch. ${escapeHtml(String(p.chapter))}${p.problemNumber ? " · #" + escapeHtml(String(p.problemNumber)) : ""}</p>
+          <p class="quiz-problem-text">${escapeHtml(p.problemText)}</p>
+          <div class="quiz-answer" id="answer-${escapeHtml(p.id)}">${escapeHtml(p.answerText || "No answer recorded for this problem yet.")}</div>
+          <div class="quiz-controls">
+            <button class="quiz-show-btn" data-toggle-answer="${escapeHtml(p.id)}">Show Answer</button>
+            <button class="quiz-mark-btn correct" data-mark="${escapeHtml(p.id)}" data-result="correct">Got it right</button>
+            <button class="quiz-mark-btn incorrect" data-mark="${escapeHtml(p.id)}" data-result="incorrect">Got it wrong</button>
+          </div>
+        </div>
+      `,
+                )
+                .join("");
+
+            list.querySelectorAll("[data-show-source]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    document.getElementById(
+                        `source-${btn.dataset.showSource}`,
+                    ).style.display = "block";
+                    btn.remove();
+                });
+            });
+            list.querySelectorAll("[data-toggle-answer]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    document
+                        .getElementById(
+                            `answer-${btn.dataset.toggleAnswer}`,
+                        )
+                        .classList.toggle("open");
+                });
+            });
+            list.querySelectorAll("[data-mark]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    const pid = btn.dataset.mark;
+                    quizResults[pid] = btn.dataset.result;
+                    const card = btn.closest(".quiz-problem");
+                    card.querySelectorAll(".quiz-mark-btn").forEach((b) =>
+                        b.classList.remove("active"),
+                    );
+                    btn.classList.add("active");
+                    document.getElementById("syncFreshnessBtn").disabled =
+                        Object.keys(quizResults).length === 0;
+                });
+            });
+        }
+
+        // Applies this session's marks on top of the cached freshness table
+        // so a second quiz for the same user later in this session reflects
+        // them immediately, without waiting on a re-fetch of the log tab.
+        function applyResultsToLocalCache(userKey) {
+            const freshnessTable = FRESHNESS_CACHE[userKey] || {};
+            const today = new Date().toISOString().slice(0, 10);
+            Object.entries(quizResults).forEach(([pid, result]) => {
+                const prior = freshnessTable[pid];
+                const timesAttempted =
+                    (prior ? prior.timesAttempted : 0) + 1;
+                freshnessTable[pid] = {
+                    lastAttemptedDate: today,
+                    timesAttempted,
+                    lastResult: result,
+                };
+            });
+            FRESHNESS_CACHE[userKey] = freshnessTable;
+        }
+
+        /* ===================================================================
+        GLOBAL EVENT LISTENERS
+        =================================================================== */
+        document
+            .getElementById("closeBtn")
+            .addEventListener("click", () =>
+                document.getElementById("overlay").classList.remove("open"),
+            );
+        document
+            .getElementById("overlay")
+            .addEventListener("click", (e) => {
+                if (e.target.id === "overlay")
+                    document
+                        .getElementById("overlay")
+                        .classList.remove("open");
+            });
+        document.addEventListener("keydown", (e) => {
+            if (e.key !== "Escape") return;
+            document.getElementById("overlay").classList.remove("open");
+            document.getElementById("quizOverlay").classList.remove("open");
+            if (
+                document
+                    .getElementById("userPromptOverlay")
+                    .classList.contains("open")
+            ) {
+                document.getElementById("userPromptCloseBtn").click();
+            }
+        });
+        document
+            .getElementById("refreshBtn")
+            .addEventListener("click", loadFromSheet);
+
+        /* ---- Problem practice: user select, Generate Problem Set, quiz modal ---- */
+        const USER_SELECT_STORAGE_KEY = "pace_kb_user";
+        document
+            .getElementById("userSelect")
+            .addEventListener("change", (e) => {
+                const val = e.target.value;
+                if (val) localStorage.setItem(USER_SELECT_STORAGE_KEY, val);
+                else localStorage.removeItem(USER_SELECT_STORAGE_KEY);
+                if (!topicSelectMode)
+                    document.getElementById("generateSetBtn").disabled =
+                        !val;
+            });
+
+        // Generate Problem Set: while not already in "By Topic" selection
+        // mode, clicking opens a small popover to choose Random vs. By Topic
+        // rather than generating immediately — keeps the default page state
+        // scope-free. Once in selection mode, the same button becomes the
+        // confirm action (see updateGenerateButtonForSelection).
+        document
+            .getElementById("generateSetBtn")
+            .addEventListener("click", (e) => {
+                if (topicSelectMode) {
+                    generateProblemSet();
+                    return;
+                }
+                document
+                    .getElementById("generateMenu")
+                    .classList.toggle("open");
+            });
+        document
+            .querySelectorAll("#generateMenu [data-mode]")
+            .forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    document
+                        .getElementById("generateMenu")
+                        .classList.remove("open");
+                    if (btn.dataset.mode === "random") {
+                        selectedTopicIds.clear();
+                        generateProblemSet();
+                    } else {
+                        enterTopicSelectMode();
+                    }
+                });
+            });
+        document.addEventListener("click", (e) => {
+            const wrap = document.querySelector(".generate-wrap");
+            if (wrap && !wrap.contains(e.target))
+                document
+                    .getElementById("generateMenu")
+                    .classList.remove("open");
+        });
+        document
+            .getElementById("cancelTopicSelectBtn")
+            .addEventListener("click", exitTopicSelectMode);
+
+        document
+            .getElementById("quizCloseBtn")
+            .addEventListener("click", () =>
+                document
+                    .getElementById("quizOverlay")
+                    .classList.remove("open"),
+            );
+        document
+            .getElementById("quizOverlay")
+            .addEventListener("click", (e) => {
+                if (e.target.id === "quizOverlay")
+                    document
+                        .getElementById("quizOverlay")
+                        .classList.remove("open");
+            });
+        document
+            .getElementById("syncFreshnessBtn")
+            .addEventListener("click", async () => {
+                const userKey = document.getElementById("userSelect").value;
+                if (!userKey || !Object.keys(quizResults).length) return;
+                if (
+                    !FRESHNESS_FORM_ID ||
+                    !FRESHNESS_FORM_ENTRY_USER ||
+                    !FRESHNESS_FORM_ENTRY_RESULTS
+                ) {
+                    alert(
+                        "Freshness form isn't configured yet. See the FRESHNESS_FORM_ID / entry IDs setup notes near the top of the script.",
+                    );
+                    return;
+                }
+                const btn = document.getElementById("syncFreshnessBtn");
+                const desc = document.getElementById("freshnessDesc");
+                btn.disabled = true;
+                desc.textContent = "Submitting…";
+                await submitFreshnessForm(userKey, buildResultsField());
+                applyResultsToLocalCache(userKey);
+                desc.textContent =
+                    "Submitted — your results are logged to Quiz Log.";
+            });
 
         /* ===================================================================
         ADD LOG ENTRY — Google Form submission flow
-        Submits via a hidden iframe pointed at a pre-filled Form URL (no
-        API key / auth needed). Waits for two iframe loads (the form page,
-        then the "response recorded" page) before treating it as done,
+        Submits silently straight to the Form's formResponse endpoint via a
+        hidden iframe (no API key / auth needed, no embedded form to review),
         then re-syncs from the Sheet so the new entry shows up.
         =================================================================== */
-        document.getElementById('addLogBtn').addEventListener('click', () => {
-            if (!currentTopicId) return;
-            if (!FORM_ID || !FORM_ENTRY_ID) {
-                alert('Add-log form isn\'t configured yet. See the FORM_ID / FORM_ENTRY_ID setup notes near the top of the script, or just add a row to the Logs sheet manually with id: "' + currentTopicId + '".');
-                return;
-            }
-            const text = document.getElementById('newLogText').value.trim();
-            if (!text) {
-                alert('Write the log entry in the box first.');
-                return;
-            }
-            let url = `https://docs.google.com/forms/d/e/${FORM_ID}/viewform?embedded=true&usp=pp_url&entry.${FORM_ENTRY_ID}=${encodeURIComponent(currentTopicId)}`;
-            if (FORM_ENTRY_TEXT) {
-                url += `&entry.${FORM_ENTRY_TEXT}=${encodeURIComponent(text)}`;
-            }
-            const frame = document.getElementById('formFrame');
-            let loadCount = 0;
-            formModalOpen = true;
-            frame.onload = () => {
-                loadCount += 1;
-                if (loadCount >= 2) {
-                    frame.onload = null; // stop listening immediately — prevents the about:blank reset below from re-firing this
-                    document.getElementById('newLogText').value = '';
-                    setTimeout(() => {
-                        document.getElementById('formOverlay').classList.remove('open');
-                        frame.src = 'about:blank';
-                        formModalOpen = false;
-                        document.getElementById('syncStatus').textContent = 'Refreshing to show your new entry…';
-                        setTimeout(async () => {
-                            await loadFromSheet();
-                            const stillOpenId = currentTopicId;
-                            if (stillOpenId) {
-                                const fresh = TOPICS.find(x => x.id === stillOpenId);
-                                if (fresh) openPanel(fresh);
-                            }
-                        }, 2000); // give the Sheet a couple seconds to catch up before reading it back
-                    }, 800);
+
+        // Users a log entry (or a problem set) can be attributed to. Shared
+        // by the header "Select User" dropdown and the small picker below —
+        // single source so the two never drift out of sync.
+        const USER_OPTIONS = [
+            { key: "brett", label: "Brett" },
+            { key: "paul", label: "Paul" },
+            { key: "eeron", label: "Eeron" },
+        ];
+
+        // Resolves the currently selected user, prompting with a small
+        // picker if none is set yet. A picked user is stored the same way
+        // the header dropdown stores its own selection, so picking one here
+        // also sets it there. Resolves null if the picker is dismissed.
+        function ensureUserSelected() {
+            return new Promise((resolve) => {
+                const existing =
+                    document.getElementById("userSelect").value;
+                if (existing) {
+                    resolve(existing);
+                    return;
                 }
-            };
-            frame.src = url;
-            document.getElementById('formOverlay').classList.add('open');
-        });
 
-        document.getElementById('formCloseBtn').addEventListener('click', () => {
-            document.getElementById('formOverlay').classList.remove('open');
-            document.getElementById('formFrame').onload = null;
-            document.getElementById('formFrame').src = 'about:blank';
-            formModalOpen = false;
-        });
-        document.getElementById('formOverlay').addEventListener('click', (e) => {
-            if (e.target.id === 'formOverlay') {
-                document.getElementById('formOverlay').classList.remove('open');
-                document.getElementById('formFrame').onload = null;
-                document.getElementById('formFrame').src = 'about:blank';
-                formModalOpen = false;
-            }
-        });
+                const overlay =
+                    document.getElementById("userPromptOverlay");
+                const wrap = document.getElementById("userPromptOptions");
+                wrap.innerHTML = USER_OPTIONS.map(
+                    (u) =>
+                        `<button type="button" class="cancel-btn" data-user-key="${u.key}" style="text-align:left;">${u.label}</button>`,
+                ).join("");
 
-        let formModalOpen = false;
+                let settled = false;
+                function finish(value) {
+                    if (settled) return;
+                    settled = true;
+                    overlay.classList.remove("open");
+                    wrap.querySelectorAll("[data-user-key]").forEach((b) =>
+                        b.removeEventListener("click", onPick),
+                    );
+                    document
+                        .getElementById("userPromptCloseBtn")
+                        .removeEventListener("click", onCancel);
+                    overlay.removeEventListener("click", onBackdrop);
+                    resolve(value);
+                }
+                function onPick(e) {
+                    const key = e.currentTarget.dataset.userKey;
+                    document.getElementById("userSelect").value = key;
+                    localStorage.setItem(USER_SELECT_STORAGE_KEY, key);
+                    if (!topicSelectMode)
+                        document.getElementById("generateSetBtn").disabled =
+                            false;
+                    finish(key);
+                }
+                function onCancel() {
+                    finish(null);
+                }
+                function onBackdrop(e) {
+                    if (e.target === overlay) finish(null);
+                }
 
-        /* ===================================================================
-        INIT
-        =================================================================== */
+                wrap.querySelectorAll("[data-user-key]").forEach((b) =>
+                    b.addEventListener("click", onPick),
+                );
+                document
+                    .getElementById("userPromptCloseBtn")
+                    .addEventListener("click", onCancel);
+                overlay.addEventListener("click", onBackdrop);
+                overlay.classList.add("open");
+            });
+        }
+
+        document
+            .getElementById("addLogBtn")
+            .addEventListener("click", async () => {
+                if (!currentTopicId) return;
+                if (!FORM_ID || !FORM_ENTRY_ID) {
+                    alert(
+                        "Add-log form isn't configured yet. See the FORM_ID / FORM_ENTRY_ID setup notes near the top of the script, or just add a row to the Comment Log sheet manually with id: \"" +
+                        currentTopicId +
+                        '".',
+                    );
+                    return;
+                }
+                const text = document
+                    .getElementById("newLogText")
+                    .value.trim();
+                if (!text) {
+                    alert("Write the log entry in the box first.");
+                    return;
+                }
+                const userKey = await ensureUserSelected();
+                if (!userKey) return; // picker was dismissed without a choice
+
+                let url = `https://docs.google.com/forms/d/e/${FORM_ID}/formResponse?usp=pp_url&entry.${FORM_ENTRY_ID}=${encodeURIComponent(currentTopicId)}`;
+                if (FORM_ENTRY_TEXT)
+                    url += `&entry.${FORM_ENTRY_TEXT}=${encodeURIComponent(text)}`;
+                if (FORM_ENTRY_USER)
+                    url += `&entry.${FORM_ENTRY_USER}=${encodeURIComponent(userKey)}`;
+
+                const frame = document.getElementById("logSubmitFrame");
+                frame.onload = () => {
+                    frame.onload = null;
+                    document.getElementById("newLogText").value = "";
+                    document.getElementById("syncStatus").textContent =
+                        "Refreshing to show your new entry…";
+                    setTimeout(async () => {
+                        await loadFromSheet();
+                        const stillOpenId = currentTopicId;
+                        if (stillOpenId) {
+                            const fresh = TOPICS.find(
+                                (x) => x.id === stillOpenId,
+                            );
+                            if (fresh) openPanel(fresh);
+                        }
+                    }, 2000); // give the Sheet a couple seconds to catch up before reading it back
+                };
+                frame.src = url;
+            });
+
+        /* ======== INIT ========= */
+        const savedUser = localStorage.getItem(USER_SELECT_STORAGE_KEY);
+        if (savedUser) {
+            document.getElementById("userSelect").value = savedUser;
+            document.getElementById("generateSetBtn").disabled = false;
+        }
         renderCategories();
         renderDiagram();
         loadFromSheet();
