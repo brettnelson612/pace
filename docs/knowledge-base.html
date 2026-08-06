@@ -895,12 +895,24 @@
             border-color: var(--teal);
         }
 
+        /* Score-group wrapper: 5 buttons on the 0-1 retest-need scale,
+            colors set inline per-button (see scoreColor() in the script)
+            since they interpolate continuously rather than falling into
+            two fixed classes the way correct/incorrect used to. */
+        .quiz-score-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-left: auto
+        }
+
         .quiz-mark-btn {
             font-family: "IBM Plex Mono", monospace;
             font-weight: 600;
             font-size: 11.5px;
             padding: 6px 12px;
             border-radius: 6px;
+            border: 1px solid transparent;
             cursor: pointer;
             transition:
                 background 0.15s ease,
@@ -908,38 +920,12 @@
                 color 0.15s ease;
         }
 
-        .quiz-mark-btn.correct {
-            border: 1px solid #2e5c54;
-            background: rgba(69, 214, 196, 0.1);
-            color: var(--teal);
+        .quiz-mark-btn:hover {
+            filter: brightness(1.25);
         }
 
-        .quiz-mark-btn.correct:hover {
-            border-color: var(--teal);
-            background: rgba(69, 214, 196, 0.18);
-        }
-
-        .quiz-mark-btn.correct.active {
-            border-color: var(--teal);
-            color: #06231f;
-            background: var(--teal);
-        }
-
-        .quiz-mark-btn.incorrect {
-            border: 1px solid #5c4a2e;
-            background: rgba(240, 168, 96, 0.1);
-            color: var(--amber);
-        }
-
-        .quiz-mark-btn.incorrect:hover {
-            border-color: var(--amber);
-            background: var(--amber-dim);
-        }
-
-        .quiz-mark-btn.incorrect.active {
-            border-color: var(--amber);
-            color: #2a1b06;
-            background: var(--amber);
+        .quiz-mark-btn.active {
+            font-weight: 700;
         }
 
         .quiz-footer {
@@ -1175,21 +1161,22 @@
             {
                 id: "framing",
                 name: "Framing & Landscape",
-                color: "#45D6C4",
+                color: "#9C6644", // warm rust-brown
             },
-            { id: "physics", name: "Core Physics", color: "#F0A860" },
+            { id: "math", name: "Applied Mathematics", color: "#F2B84D" }, // warm amber
+            { id: "physics", name: "Core Physics", color: "#F0763D" }, // deep orange
             {
                 id: "uncertainty",
                 name: "Uncertainty & Learning",
-                color: "#9D8CF0",
+                color: "#B98AC9", // warm mauve
             },
-            { id: "trust", name: "Trust & Verification", color: "#E85D75" },
+            { id: "trust", name: "Trust & Verification", color: "#E0607A" }, // warm rose
             {
                 id: "systems",
                 name: "Systems & Engineering",
-                color: "#5FB8E0",
+                color: "#6FAE96", // warm sage-teal
             },
-            { id: "impact", name: "Economics & Impact", color: "#8393AA" },
+            { id: "impact", name: "Economics & Impact", color: "#A68A6D" }, // warm taupe
         ];
 
         // Vetted reading list per topic, grouped by type (paper / textbook /
@@ -1223,10 +1210,10 @@
         // a set, then reused for the rest of the session.
         let PROBLEMS = [];
         let RESOURCES_BY_ID = {};
-        let FRESHNESS_CACHE = {}; // { brett: {problem_id: {lastAttemptedDate, timesAttempted, lastResult}}, ... }
+        let FRESHNESS_CACHE = {}; // { brett: {problem_id: {lastAttemptedDate, timesAttempted, lastScore}}, ... } — lastScore is a 0-1 retest-need float
         let selectedTopicIds = new Set(); // topics chosen via chip toggles — empty means "all covered topics"
         let currentQuizProblems = [];
-        let quizResults = {}; // { problem_id: 'correct' | 'incorrect' } for the currently open quiz
+        let quizResults = {}; // { problem_id: 0-1 float } — retest-need score, for the currently open quiz
 
         /* ===================================================================
         GOOGLE SHEET SYNC
@@ -2014,33 +2001,64 @@
 
         /* ===================================================================
         PROBLEM PRACTICE
-        Coverage (from Resources) gates which problems are eligible for a
-        given user; freshness (folded from the shared Quiz Log tab)
-        weights which of the eligible problems actually get picked. Submit
-        Results is the only write path, and it only ever appends one row via
-        the freshness Form — nothing here does a live Sheet write directly.
+        Every problem is eligible the moment it exists in the Problems tab —
+        no coverage gate. The only scoping choice is random (all problems)
+        vs. topic-restricted (selectedTopicIds). Freshness (folded from the
+        shared Quiz Log tab) weights which of the eligible problems actually
+        get picked, using each problem's last logged retest-need score
+        (0 = solid, 1 = needs retest) plus a staleness bump. Submit Results
+        is the only write path, and it only ever appends one row via the
+        freshness Form — nothing here does a live Sheet write directly.
         =================================================================== */
 
+        // The 5 discrete points offered on the 0-1 retest-need scale.
+        // 0 = solid, no need to retest soon. 1 = needs retest ASAP.
+        // Discrete buttons rather than a free slider, to keep this a single
+        // tap on mobile and to keep the logged values clean/comparable.
+        const SCORE_LEVELS = [
+            { score: 0, label: "Confident" },
+            { score: 0.3, label: "Okay" },
+            { score: 0.6, label: "Struggled" },
+            { score: 1, label: "Dead Wrong" },
+        ];
+
+        // Interpolates teal (score 0) -> amber (score 1), same semantic
+        // direction as the old correct=teal/incorrect=amber coloring.
+        // alpha controls opacity — low alpha for the idle background tint,
+        // 1 for the solid active-state fill and for text color.
+        function scoreColor(score, alpha) {
+            const c1 = [0x45, 0xd6, 0xc4];
+            const c2 = [0xf0, 0xa8, 0x60];
+            const mix = c1.map((v, i) =>
+                Math.round(v + (c2[i] - v) * score),
+            );
+            return `rgba(${mix[0]},${mix[1]},${mix[2]},${alpha})`;
+        }
+
         // Splits one submission's packed "results" field back into
-        // {pid, result} pairs. Format: "pid:result|pid:result|...".
+        // {pid, score} pairs. Format: "pid:score|pid:score|...", where
+        // score is a float from 0 (solid, no need to retest) to 1 (needs
+        // retest). Clamped defensively in case anything malformed slips
+        // into the sheet by hand.
         function parseResultsField(str) {
             return (str || "")
                 .split("|")
                 .map((pair) => {
-                    const [pid, result] = pair.split(":");
-                    return {
-                        pid: (pid || "").trim(),
-                        result: (result || "").trim().toLowerCase(),
-                    };
+                    const [pid, scoreStr] = pair.split(":");
+                    const parsed = parseFloat(scoreStr);
+                    const score = isNaN(parsed)
+                        ? null
+                        : Math.min(1, Math.max(0, parsed));
+                    return { pid: (pid || "").trim(), score };
                 })
-                .filter((x) => x.pid);
+                .filter((x) => x.pid && x.score !== null);
         }
 
-        // Packs this session's quizResults into the same "pid:result|..."
-        // format for submission.
+        // Packs this session's quizResults ({problem_id: score}) into the
+        // same "pid:score|..." format for submission, fixed to 2 decimals.
         function buildResultsField() {
             return Object.entries(quizResults)
-                .map(([pid, result]) => `${pid}:${result}`)
+                .map(([pid, score]) => `${pid}:${Number(score).toFixed(2)}`)
                 .join("|");
         }
 
@@ -2070,7 +2088,7 @@
 
         // Builds one user's freshness profile by folding every session row
         // that belongs to them, in submission order, into a running
-        // per-problem table — times_attempted accumulates, last_result and
+        // per-problem table — times_attempted accumulates, last_score and
         // last_attempted_date take the most recent row's values.
         async function loadFreshnessForUser(userKey) {
             if (FRESHNESS_CACHE[userKey]) return FRESHNESS_CACHE[userKey];
@@ -2083,7 +2101,7 @@
                 )
                     return;
                 const dateStr = (r.timestamp || "").toString().slice(0, 10);
-                parseResultsField(r.results).forEach(({ pid, result }) => {
+                parseResultsField(r.results).forEach(({ pid, score }) => {
                     const prior = table[pid];
                     table[pid] = {
                         lastAttemptedDate:
@@ -2091,7 +2109,7 @@
                             (prior ? prior.lastAttemptedDate : ""),
                         timesAttempted:
                             (prior ? prior.timesAttempted : 0) + 1,
-                        lastResult: result,
+                        lastScore: score,
                     };
                 });
             });
@@ -2128,40 +2146,26 @@
             });
         }
 
-        // A problem is eligible only if its resource shows coverage for this
-        // user at (at least) this problem's chapter. Textbooks store a
-        // comma-separated chapter list; anything else stores yes/no.
-        function isCovered(resource, userKey, chapter) {
-            if (!resource) return false;
-            const raw = (resource.coverage[userKey] || "")
-                .toString()
-                .trim();
-            if (!raw) return false;
-            if (resource.type === "textbook") {
-                const chapters = raw
-                    .split(",")
-                    .map((c) => c.trim())
-                    .filter(Boolean)
-                    .map(Number);
-                return chapters.includes(Number(chapter));
-            }
-            return raw.toLowerCase() === "yes";
-        }
-
-        // Higher score = more due for review. Never-attempted and previously
-        // -incorrect problems get bumped up; anything attempted correctly in
-        // the last FRESHNESS_STALE_DAYS days gets pushed down.
+        // Higher weight = more due for review. A never-attempted problem
+        // gets the max base weight (1 — same ceiling as the logged score
+        // range, so it competes fairly against a problem logged at 1.0).
+        // Otherwise the weight starts from the last logged retest-need
+        // score itself (0 = solid, 1 = needs retest) and gets a flat
+        // staleness bump on top if it hasn't been seen in a while — the
+        // bump is smaller than it used to be, since the float score now
+        // carries most of the signal that a binary correct/incorrect flag
+        // previously couldn't.
         function scoreProblem(problem, freshnessTable) {
             const entry = freshnessTable[problem.id];
-            if (!entry || !entry.lastAttemptedDate) return 3;
-            let score = 1;
-            if (entry.lastResult === "incorrect") score += 2;
+            if (!entry || !entry.lastAttemptedDate) return 1;
+            let weight =
+                typeof entry.lastScore === "number" ? entry.lastScore : 1;
             const daysSince =
                 (Date.now() - new Date(entry.lastAttemptedDate).getTime()) /
                 86400000;
             if (isNaN(daysSince) || daysSince >= FRESHNESS_STALE_DAYS)
-                score += 1;
-            return score;
+                weight += 0.5;
+            return weight;
         }
 
         // "By Topic" selection mode: reveals the .tsel checkmarks on topic
@@ -2210,18 +2214,11 @@
             if (!userKey) return;
             const freshnessTable = await loadFreshnessForUser(userKey);
 
-            const eligible = PROBLEMS.filter((p) => {
-                if (
-                    selectedTopicIds.size &&
-                    !selectedTopicIds.has(p.kbTopicId)
-                )
-                    return false;
-                return isCovered(
-                    RESOURCES_BY_ID[p.resourceId],
-                    userKey,
-                    p.chapter,
-                );
-            });
+            const eligible = PROBLEMS.filter(
+                (p) =>
+                    !selectedTopicIds.size ||
+                    selectedTopicIds.has(p.kbTopicId),
+            );
 
             // Weighted random pick: each problem gets a random key scaled by
             // its score, then we take the top N — higher-score problems are
@@ -2244,7 +2241,7 @@
         function openQuizPanel(userKey, eligibleCount) {
             const scopeText = selectedTopicIds.size
                 ? `${selectedTopicIds.size} selected topic${selectedTopicIds.size === 1 ? "" : "s"}`
-                : "all covered topics";
+                : "random, all topics";
             document.getElementById("quizScopeLabel").textContent =
                 `${userKey.charAt(0).toUpperCase() + userKey.slice(1)} · ${scopeText} · ${currentQuizProblems.length} of ${eligibleCount} eligible`;
             renderQuizList();
@@ -2258,7 +2255,7 @@
             const list = document.getElementById("quizList");
             if (!currentQuizProblems.length) {
                 list.innerHTML =
-                    '<p class="quiz-empty">No eligible problems yet for this selection — mark more coverage on the Resources tab, or widen the topic scope.</p>';
+                    '<p class="quiz-empty">No problems found for this selection yet — try widening the topic scope, or pick a random set instead.</p>';
                 return;
             }
             list.innerHTML = currentQuizProblems
@@ -2271,8 +2268,13 @@
           <div class="quiz-answer" id="answer-${escapeHtml(p.id)}">${escapeHtml(p.answerText || "No answer recorded for this problem yet.")}</div>
           <div class="quiz-controls">
             <button class="quiz-show-btn" data-toggle-answer="${escapeHtml(p.id)}">Show Answer</button>
-            <button class="quiz-mark-btn correct" data-mark="${escapeHtml(p.id)}" data-result="correct">Got it right</button>
-            <button class="quiz-mark-btn incorrect" data-mark="${escapeHtml(p.id)}" data-result="incorrect">Got it wrong</button>
+            <div class="quiz-score-group" data-score-group="${escapeHtml(p.id)}">
+              ${SCORE_LEVELS.map(
+                        (lvl) => `
+                <button class="quiz-mark-btn" data-mark="${escapeHtml(p.id)}" data-score="${lvl.score}" style="border-color:${scoreColor(lvl.score, 0.35)};background:${scoreColor(lvl.score, 0.1)};color:${scoreColor(lvl.score, 1)};">${lvl.label}</button>
+              `,
+                    ).join("")}
+            </div>
           </div>
         </div>
       `,
@@ -2299,12 +2301,18 @@
             list.querySelectorAll("[data-mark]").forEach((btn) => {
                 btn.addEventListener("click", () => {
                     const pid = btn.dataset.mark;
-                    quizResults[pid] = btn.dataset.result;
-                    const card = btn.closest(".quiz-problem");
-                    card.querySelectorAll(".quiz-mark-btn").forEach((b) =>
-                        b.classList.remove("active"),
-                    );
+                    const score = parseFloat(btn.dataset.score);
+                    quizResults[pid] = score;
+                    const group = btn.closest("[data-score-group]");
+                    group.querySelectorAll(".quiz-mark-btn").forEach((b) => {
+                        const s = parseFloat(b.dataset.score);
+                        b.classList.remove("active");
+                        b.style.background = scoreColor(s, 0.1);
+                        b.style.color = scoreColor(s, 1);
+                    });
                     btn.classList.add("active");
+                    btn.style.background = scoreColor(score, 1);
+                    btn.style.color = "var(--bg)";
                     document.getElementById("syncFreshnessBtn").disabled =
                         Object.keys(quizResults).length === 0;
                 });
@@ -2317,14 +2325,14 @@
         function applyResultsToLocalCache(userKey) {
             const freshnessTable = FRESHNESS_CACHE[userKey] || {};
             const today = new Date().toISOString().slice(0, 10);
-            Object.entries(quizResults).forEach(([pid, result]) => {
+            Object.entries(quizResults).forEach(([pid, score]) => {
                 const prior = freshnessTable[pid];
                 const timesAttempted =
                     (prior ? prior.timesAttempted : 0) + 1;
                 freshnessTable[pid] = {
                     lastAttemptedDate: today,
                     timesAttempted,
-                    lastResult: result,
+                    lastScore: score,
                 };
             });
             FRESHNESS_CACHE[userKey] = freshnessTable;
