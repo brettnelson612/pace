@@ -7,6 +7,7 @@ name = "pace"
 version = "0.1.0"
 description = "PACE (Physics-Aware Coupled Emulator) platform"
 requires-python = ">=3.11,<3.12"
+# don't put dependencies here, put them in root pixi.toml instead
 
 [tool.setuptools.packages.find]
 include = ["pace*"]

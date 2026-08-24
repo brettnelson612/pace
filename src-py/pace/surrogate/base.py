@@ -1,1 +1,0 @@
-"""Placeholder interface (architecture undecided)."""
