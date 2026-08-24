@@ -1,0 +1,49 @@
+[workspace]
+authors = [
+    "Brett Nelson <brettleenelson@gmail.com>",
+    "Paul Varkey <paul.varkey@gmail.com>",
+    "Eeron Grant <eerongrant@gmail.com>",
+]
+channels = ["conda-forge"]
+name = "pace"
+platforms = ["osx-arm64", "osx-64", "linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+# conda-forge installs
+[feature.pace-py.dependencies]
+python = ">=3.11,<3.12"
+fastapi = "*"
+
+# pypi-specific installs
+[feature.pace-py.pypi-dependencies]
+pace = { path = "src-py", editable = true }
+
+# no apple-silicon implementation of openmc so we limit any
+# builds which include openmc to osx-64 (would require
+# emulation on apple silicon), or linux...
+[feature.openmc]
+platforms = ["osx-64", "linux-64"]
+
+[feature.openmc.dependencies]
+openmc = "*"
+
+# cpp-specific stuff
+[feature.cpp-build.dependencies]
+cmake = "*"
+compilers = "*"
+
+# rust-specific stuff
+[feature.rust-build.dependencies]
+rust = "*"
+
+[environments]
+dev = ["pace-py"] # native osx-arm64, no OpenMC — service/API work
+physics = ["pace-py", "openmc"] # OpenMC-dependent work, osx-64/linux-64 only
+default = [
+    "pace-py",
+    "openmc",
+    "cpp-build",
+    "rust-build",
+] # everything, full contributor setup
