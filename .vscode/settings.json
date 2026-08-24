@@ -2,4 +2,10 @@
     "python-envs.defaultEnvManager": "renan-r-santos.pixi-code:pixi",
     "python-envs.defaultPackageManager": "renan-r-santos.pixi-code:pixi",
     "python.defaultInterpreterPath": "${workspaceFolder}/.pixi/envs/dev/bin/python"
+    // If you see this alert from VSCode:
+    // -------------------------
+    // "The following extensions want to relaunch the terminal to contribute to its environment..."
+    // -------------------------
+    // Then go to (Cmd+Shift+P → "Preferences: Open User Settings (JSON)") and add this line to fix:
+    // "python-envs.terminal.autoActivationType": "shellStartup"
 }
