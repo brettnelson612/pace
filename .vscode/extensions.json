@@ -1,0 +1,15 @@
+{
+    "recommendations": [
+        "renan-r-santos.pixi-code",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "ms-python.vscode-python-envs",
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools",
+        "h5web.vscode-h5web",
+        "tamasfe.even-better-toml",
+        "yzhang.markdown-all-in-one",
+        "redhat.vscode-yaml"
+    ]
+}
