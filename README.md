@@ -3,7 +3,7 @@ Monorepo to hold PACE (Physics-Aware Coupled Emulator) platform and digital twin
 
 ## Developer workflow
 
-### What Pixi is
+### What is Pixi?
 
 We use [Pixi](https://pixi.prefix.dev/) to manage PACE's dependencies and environments — one manifest (`pixi.toml`) resolving both conda-forge and PyPI packages together into fully reproducible, per-platform lockfiles. We're on Pixi rather than plain pip/venv because OpenMC is distributed primarily through conda-forge (it ships compiled C++ code and native libraries that pip wheels handle poorly), and Pixi is what lets us manage that alongside our pure-Python dependencies in one place.
 
