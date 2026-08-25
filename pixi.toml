@@ -11,6 +11,15 @@ version = "0.1.0"
 
 [tasks]
 
+
+# dev tools
+[feature.dev-tools.dependencies]
+black = ">=26.5.1,<27"
+ruff = ">=0.16.4,<0.17"
+mypy = ">=2.3.1,<3"
+pytest = ">=9.1.1,<10"
+pre-commit = ">=4.6.2,<5"
+
 # conda-forge installs
 [feature.pace-py.dependencies]
 python = ">=3.11,<3.12"
@@ -39,11 +48,19 @@ compilers = "*"
 rust = "*"
 
 [environments]
-dev = ["pace-py"] # native osx-arm64, no OpenMC — service/API work
-physics = ["pace-py", "openmc"] # OpenMC-dependent work, osx-64/linux-64 only
-default = [
+no-phys-dev = [
+    "dev-tools",
+    "pace-py",
+] # service/API work, src-py only, no OpenMC —- native osx-arm64, or osx-64/linux-64
+py-phys-dev = [
+    "dev-tools",
+    "pace-py",
+    "openmc",
+] # OpenMC-dependent work, src-py only —- osx-64/linux-64 only
+full-phys-dev = [
+    "dev-tools",
     "pace-py",
     "openmc",
     "cpp-build",
     "rust-build",
-] # everything, full contributor setup
+] # OpenMC-dependent work with cpp/rs —- osx-64/linux-64 only
