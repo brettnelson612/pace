@@ -1,3 +1,8 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}/.pixi/envs/no-phys-dev/bin/python"
+    "python.defaultInterpreterPath": "${workspaceFolder}/.pixi/envs/no-phys-dev/bin/python",
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    }
 }
