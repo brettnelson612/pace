@@ -23,13 +23,13 @@ jobs:
           locked: true
 
       - name: Ruff (lint)
-        run: pixi run -e no-phys-dev ruff check .
+        run: pixi run -e no-phys-dev ruff
 
       - name: Black (format check — no autofix in CI)
-        run: pixi run -e no-phys-dev black --check .
+        run: pixi run -e no-phys-dev black-check
 
       - name: mypy (type check)
-        run: pixi run -e no-phys-dev mypy python/src/pace
+        run: pixi run -e no-phys-dev typecheck
 
       - name: pytest (unit tests + coverage)
         run: pixi run -e no-phys-dev test-py
