@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  no-phys-dev:
+    runs-on: macos-14  # arm64 runner — matches no-phys-dev's native osx-arm64 support
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          environments: no-phys-dev
+          # pixi.lock is committed — this installs exactly what's pinned,
+          # never re-resolves in CI. A drifted lock file fails the run
+          # instead of silently installing something different than local.
+          locked: true
+
+      - name: Ruff (lint)
+        run: pixi run -e no-phys-dev ruff check .
+
+      - name: Black (format check — no autofix in CI)
+        run: pixi run -e no-phys-dev black --check .
+
+      - name: mypy (type check)
+        run: pixi run -e no-phys-dev mypy python/src/pace
+
+      - name: pytest (unit tests + coverage)
+        run: pixi run -e no-phys-dev test-py

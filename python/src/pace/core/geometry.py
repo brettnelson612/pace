@@ -8,11 +8,9 @@ Mirrors material.py's Geometry/GeometryVersion <-> Material/MaterialVersion
 split intentionally — kept in sync by design, not by accident.
 """
 
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from abc import abstractmethod
-
-from typing import Optional
 
 from pace.core.constraints import Constraint, validate_fields
 from pace.core.ids import (
@@ -62,8 +60,8 @@ class GeometryVersion(PaceModelObject):
 
     id: GeometryVersionID
     geometry_id: GeometryID
-    derived_from: Optional[GeometryVersionID] = None
-    gt_run_id: Optional[GTRunID] = None
+    derived_from: GeometryVersionID | None = None
+    gt_run_id: GTRunID | None = None
 
     def __post_init__(self):
         """Perform geometry-type-specific validation post-init."""
@@ -80,17 +78,14 @@ class GeometryVersion(PaceModelObject):
     @abstractmethod
     def _validate_shape(self):
         """Shape-specific validation, implemented per concrete geometry type."""
-        pass
 
     @abstractmethod
     def to_open_mc(self):
         """Method to convert geometry to OpenMC equivalent."""
-        pass
 
     @abstractmethod
     def to_moose(self):
         """Method to convert geometry to MOOSE equivalent."""
-        pass
 
     def to_dict(self) -> dict:
         return {
@@ -365,15 +360,6 @@ class GNull(GeometryVersion):
 
     def to_dict(self) -> dict:
         return super().to_dict()
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "GNull":
-        return cls(
-            id=data["id"],
-            geometry_id=data["geometry_id"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
-        )
 
     def _validate_shape(self):
         # no shape-specific fields — nothing beyond the base pairing

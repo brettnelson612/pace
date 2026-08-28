@@ -21,7 +21,6 @@ class PaceModelObject(ABC):
     def to_dict(self) -> dict:
         """Plain-field representation. References to other PaceModelObjects
         are always represented as bare IDs, never embedded/hydrated content."""
-        pass
 
     @classmethod
     @abstractmethod
@@ -29,4 +28,3 @@ class PaceModelObject(ABC):
         """Reconstruct an instance from its to_dict() representation.
         Raises on missing or malformed fields — no partial/best-effort
         reconstruction."""
-        pass
