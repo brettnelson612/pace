@@ -1,3 +1,30 @@
+# ---------------------------------------------------------------------------
+# pixi.toml — PACE's dependency, environment, and task manager, powered by
+# Pixi (https://pixi.sh). Pixi resolves and locks dependencies (conda +
+# PyPI) into reproducible, named environments, and provides a task runner
+# (`pixi run <task>`) for common workflows — all from this one file.
+#
+# This is the single source of truth for dependencies across PACE's whole
+# monorepo (Python, C++, Rust) — there is no separate requirements.txt,
+# Cargo-managed toolchain, etc. Dependencies are grouped into reusable
+# "features" (e.g. [feature.openmc]), which are inert on their own; actual
+# installable, named [environments] compose a set of features together
+# (e.g. no-phys-dev = dev-tools + pace-py). An environment's supported
+# platforms are the *intersection* of its features' platforms, not the
+# union — this is why environments that include openmc or moose lose
+# osx-arm64 even though pace-py itself supports it.
+#
+# Quick start:
+#   pixi install -e <environment>     # build/rebuild an environment
+#   pixi shell -e <environment>       # drop into an activated shell
+#   pixi run -e <environment> <task>  # run a task without shelling in
+#   pixi run check                    # everything CI runs, before pushing
+#
+# See docs/ (or ask the team) for which environment fits a given task —
+# short version: no-phys-dev for everyday service/API work, py-phys-dev
+# once you need OpenMC, full-phys-dev for MOOSE/Cardinal work.
+# ---------------------------------------------------------------------------
+
 [workspace]
 authors = [
     "Brett Nelson <brettleenelson@gmail.com>",
@@ -6,8 +33,32 @@ authors = [
 ]
 channels = ["conda-forge"]
 name = "pace"
-platforms = ["osx-arm64", "osx-64", "linux-64"]
+platforms = ["osx-arm64", "osx-64", "linux-64", { name = "osx-64-moose", platform = "osx-64", macos = "13.3" },]
 version = "0.1.0"
+
+# ---------------------------------------------------------------------------
+# Composite dev-workflow tasks. `check` mirrors exactly what CI runs — a
+# clean local pass here means CI will pass.
+#
+# Tasks:
+# - ruff: lint only, no autofix.
+# - ruff-fix: lint, autofixing what's safely fixable.
+# - black-check: formatting check only — fails if black would reformat
+#       anything, doesn't rewrite files. What CI runs.
+# - black-fix: actually reformats files in place.
+# - typecheck: static type checking.
+# - test-py: full test suite with coverage, including which specific lines
+#       are missed.
+# - check: everything CI runs, in the same order. Run this before pushing.
+# - format: fast local autofix pass (lint-fix, then format — order
+#       matters, black gets final say over formatting). Does not run
+#       typecheck/test-py.
+#
+# Common workflow:
+#   pixi run format
+#   pixi run check
+#
+# ---------------------------------------------------------------------------
 
 [tasks]
 ruff = "ruff check ."
@@ -19,55 +70,147 @@ test-py = "pytest python/tests/ --cov=pace --cov-report=term-missing"
 check = { depends-on = ["ruff", "black-check", "typecheck", "test-py"] }
 format = { depends-on = ["ruff-fix", "black-fix"] }
 
-# dev tools
+
+# ---------------------------------------------------------------------------
+# "dev-tools" feature — Anything dev-related, lint, testing, etc
+#
+# IMPORTANT: Please consult team before changing -- specific versions
+# required to satisfy our physics solver tools
+# ---------------------------------------------------------------------------
+
 [feature.dev-tools.dependencies]
-black = ">=26.5.1,<27"
-ruff = ">=0.16.4,<0.17"
+black = ">=26.1.0,<27"
+ruff = ">=0.15.1,<0.17"
 mypy = ">=2.3.1,<3"
 pytest = ">=9.1.1,<10"
 pytest-cov = ">=7.1.0,<8"
 
-# conda-forge installs
+# ---------------------------------------------------------------------------
+# "pace-py" feature - PACE's python setup
+#
+# IMPORTANT: Please consult team before changing -- specific versions
+# required to satisfy our physics solver tools
+# ---------------------------------------------------------------------------
+
 [feature.pace-py.dependencies]
-python = ">=3.11,<3.12"
+python = ">=3.10,<3.15"
 fastapi = "*"
 
-# pypi-specific installs
 [feature.pace-py.pypi-dependencies]
 pace = { path = "python", editable = true }
 
-# no apple-silicon implementation of openmc so we limit any
-# builds which include openmc to osx-64 (would require
-# emulation on apple silicon), or linux...
+# ---------------------------------------------------------------------------
+# "openmc" feature — OpenMC (https://openmc.org/)
+#
+# There is currently no apple-silicon implementation of openmc so we limit
+# any builds which include openmc to osx-64 (would require
+# emulation on apple silicon), or linux.
+# ---------------------------------------------------------------------------
+
 [feature.openmc]
 platforms = ["osx-64", "linux-64"]
 
 [feature.openmc.dependencies]
 openmc = "*"
 
-# cpp-specific stuff
+# ---------------------------------------------------------------------------
+# "moose" feature — MOOSE (https://mooseframework.inl.gov/)
+#
+# Known gotchas (don't re-derive):
+# - moose-dev's version and the .moose/ git checkout must stay in lockstep —
+#       a mismatch produces real libMesh API compile errors, not a warning.
+#       moose-dev prints the exact version it wants on mismatch; match it here.
+# - moose-libmesh-vtk isn't bundled into moose-dev — it's a separate
+#       dependency. Leave it at "*" and let the solver pick it — moose-dev
+#       pins its exact required VTK version transitively; pinning VTK
+#       yourself is what breaks the link step (learned the hard way).
+# - macOS needs >=13.3 for moose-libmesh (see the osx-64-moose platform
+#       variant in [workspace] — that's why it exists).
+# - Build/test targets live in .moose/test, not .moose/ itself — MOOSE's
+#       repo root has no top-level Makefile.
+#
+# Tasks:
+# - moose-clone: clone idaholab/moose (master) into .moose/, if not already
+#       present. No-op if .moose/framework already exists.
+# - moose-clean: remove git-ignored build artifacts from .moose/ (source is
+#       untouched). Reach for this manually when you suspect a stale build
+#       cache — e.g. after bumping moose-dev's version.
+# - moose-build: incremental build of the MOOSE framework test binary. Fast
+#       on repeat runs; can miss issues a stale build cache masks.
+# - moose-verify: run MOOSE's own test harness against the current build —
+#       the real proof the toolchain (compilers, moose-dev's PETSc/libMesh)
+#       works end to end.
+# - moose-fresh-build: same as moose-build, but wipes build artifacts
+#       first. Slower — use when you don't trust the existing build cache.
+# - moose-fresh-build-and-verify: fresh build + verify in one call. The
+#       safest option when the environment itself changed (moose-dev/VTK
+#       version bump) — incremental build/verify can silently pass against
+#       stale artifacts otherwise.
+#
+# First time fresh build (outside of shell):
+#   pixi run -e full-phys-dev moose-fresh-build-and-verify
+#
+# First time fresh build (in shell):
+#   pixi run moose-fresh-build-and-verify
+#
+# ---------------------------------------------------------------------------
+
+[feature.moose]
+channels = [{ channel = "https://conda.software.inl.gov/public", priority = 1 }]
+platforms = ["osx-64-moose", "linux-64"]
+
+[feature.moose.dependencies]
+moose-dev = "2026.8.23.*"
+moose-libmesh-vtk = "*"
+
+[feature.moose.tasks]
+moose-clone = { cmd = "test -d .moose/framework || git clone --branch master https://github.com/idaholab/moose.git .moose" }
+moose-clean = { cmd = "git clean -Xfd && git submodule foreach --recursive git clean -Xfd", cwd = ".moose", depends-on = ["moose-clone"] }
+moose-build = { cmd = "make -j $(nproc 2>/dev/null || sysctl -n hw.ncpu)", cwd = ".moose/test", depends-on = ["moose-clone"] }
+moose-verify = { cmd = "./run_tests -j 2", cwd = ".moose/test", depends-on = ["moose-build"] }
+moose-fresh-build = { cmd = "make -j $(nproc 2>/dev/null || sysctl -n hw.ncpu)", cwd = ".moose/test", depends-on = ["moose-clean"] }
+moose-fresh-build-and-verify = { cmd = "./run_tests -j 4", cwd = ".moose/test", depends-on = ["moose-fresh-build"] }
+
+# ---------------------------------------------------------------------------
+# "cpp-build" feature - PACE's cpp setup
+# ---------------------------------------------------------------------------
+
 [feature.cpp-build.dependencies]
 cmake = "*"
 compilers = "*"
 
-# rust-specific stuff
+# ---------------------------------------------------------------------------
+# "rust-build" feature - PACE's rust setup
+# ---------------------------------------------------------------------------
+
 [feature.rust-build.dependencies]
 rust = "*"
 
+# ---------------------------------------------------------------------------
+# Environments. dev-tools is intentionally present in every environment —
+# its black/ruff versions are exact-pinned (not ranged) specifically to
+# match moose-tools' own requirements, so every environment shares one
+# consistent toolchain rather than full-phys-dev drifting from the rest.
+#
+# Environments:
+# - no-phys-dev: service/API work only — no OpenMC, no MOOSE. Native
+#       osx-arm64 (or osx-64/linux-64) — the only environment that runs
+#       natively on Apple Silicon rather than under Rosetta emulation.
+# - py-phys-dev: OpenMC-dependent work, src-py only — no C++/Rust build
+#       tooling, no MOOSE. osx-64 (emulated on Apple Silicon) / linux-64 only.
+# - full-phys-dev: everything — OpenMC + MOOSE + C++/Rust build tooling —
+#       the Cardinal build target. osx-64 (emulated) / linux-64 only. The
+#       only environment with the moose-* tasks available.
+#
+# Shelling into an env:
+#   pixi shell -e <environment>
+#
+# Exiting an env:
+#   exit
+#
+# ---------------------------------------------------------------------------
+
 [environments]
-no-phys-dev = [
-    "dev-tools",
-    "pace-py",
-] # service/API work, src-py only, no OpenMC —- native osx-arm64, or osx-64/linux-64
-py-phys-dev = [
-    "dev-tools",
-    "pace-py",
-    "openmc",
-] # OpenMC-dependent work, src-py only —- osx-64/linux-64 only
-full-phys-dev = [
-    "dev-tools",
-    "pace-py",
-    "openmc",
-    "cpp-build",
-    "rust-build",
-] # OpenMC-dependent work with cpp/rs —- osx-64/linux-64 only
+no-phys-dev = ["dev-tools", "pace-py"]
+py-phys-dev = ["dev-tools", "pace-py", "openmc"]
+full-phys-dev = ["dev-tools", "pace-py", "openmc", "cpp-build", "rust-build", "moose"]

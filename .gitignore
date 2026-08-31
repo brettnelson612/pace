@@ -224,3 +224,6 @@ scratch
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# MOOSE stuff
+.moose/
