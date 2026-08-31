@@ -37,8 +37,7 @@ platforms = ["osx-arm64", "osx-64", "linux-64", { name = "osx-64-moose", platfor
 version = "0.1.0"
 
 # ---------------------------------------------------------------------------
-# Composite dev-workflow tasks. `check` mirrors exactly what CI runs — a
-# clean local pass here means CI will pass.
+# Composite dev-workflow tasks.
 #
 # Tasks:
 # - ruff: lint only, no autofix.
