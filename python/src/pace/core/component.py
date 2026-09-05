@@ -6,5 +6,5 @@ collection of >=2 PComponents, no position).
 
 Deliberately has no import dependency on geometry.py or material.py —
 LComponent references GeometryVersionID/MaterialVersionID only (bare
-IDs, never embedded objects), per PaceModelObject's bare-IDs-always rule.
+IDs, never embedded objects), per PaceObject's bare-IDs-always rule.
 """

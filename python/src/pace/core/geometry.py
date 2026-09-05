@@ -8,6 +8,8 @@ Mirrors material.py's Geometry/GeometryVersion <-> Material/MaterialVersion
 split intentionally — kept in sync by design, not by accident.
 """
 
+from __future__ import annotations
+
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -18,7 +20,7 @@ from pace.core.ids import (
     GeometryVersionID,
     GTRunID,
 )
-from pace.core.pace_model_object import PaceModelObject
+from pace.core.pace_object import PaceObject
 
 MIN_LATTICE_DIMENSION_COUNT = 0
 MAX_LATTICE_DIMENSION_COUNT = 1000
@@ -39,7 +41,7 @@ class GeometryType(Enum):
 
 
 @dataclass(kw_only=True, frozen=True)
-class Geometry(PaceModelObject):
+class Geometry(PaceObject):
     """A registry-level geometry identity — holds no shape
     data itself; see GeometryVersion for shape data and
     versioning."""
@@ -50,22 +52,18 @@ class Geometry(PaceModelObject):
         return {"id": self.id}
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PaceModelObject":
+    def from_dict(cls, data: dict) -> PaceObject:
         return cls(id=data["id"])
 
 
 @dataclass(kw_only=True, frozen=True)
-class GeometryVersion(PaceModelObject):
+class GeometryVersion(PaceObject):
     """General interface for a specific geometry version."""
 
     id: GeometryVersionID
     geometry_id: GeometryID
     derived_from: GeometryVersionID | None = None
     gt_run_id: GTRunID | None = None
-
-    def __post_init__(self):
-        """Perform geometry-type-specific validation post-init."""
-        self.validate()
 
     def validate(self):
         if (self.derived_from is None) != (self.gt_run_id is None):
@@ -82,10 +80,12 @@ class GeometryVersion(PaceModelObject):
     @abstractmethod
     def to_open_mc(self):
         """Method to convert geometry to OpenMC equivalent."""
+        raise NotImplementedError
 
     @abstractmethod
     def to_moose(self):
         """Method to convert geometry to MOOSE equivalent."""
+        raise NotImplementedError
 
     def to_dict(self) -> dict:
         return {
@@ -96,7 +96,7 @@ class GeometryVersion(PaceModelObject):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GeometryVersion":
+    def from_dict(cls, data: dict) -> GeometryVersion:
         return cls(
             id=data["id"],
             geometry_id=data["geometry_id"],
@@ -130,7 +130,7 @@ class GCylinder(GeometryVersion):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GCylinder":
+    def from_dict(cls, data: dict) -> GCylinder:
         return cls(
             id=data["id"],
             geometry_id=data["geometry_id"],
@@ -145,11 +145,11 @@ class GCylinder(GeometryVersion):
 
     def to_open_mc(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
     def to_moose(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -184,7 +184,7 @@ class GAnnulus(GeometryVersion):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GAnnulus":
+    def from_dict(cls, data: dict) -> GAnnulus:
         return cls(
             id=data["id"],
             geometry_id=data["geometry_id"],
@@ -206,11 +206,11 @@ class GAnnulus(GeometryVersion):
 
     def to_open_mc(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
     def to_moose(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -238,7 +238,7 @@ class GHexPrism(GeometryVersion):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GHexPrism":
+    def from_dict(cls, data: dict) -> GHexPrism:
         return cls(
             id=data["id"],
             geometry_id=data["geometry_id"],
@@ -253,11 +253,11 @@ class GHexPrism(GeometryVersion):
 
     def to_open_mc(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
     def to_moose(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -278,7 +278,7 @@ class GSphere(GeometryVersion):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GSphere":
+    def from_dict(cls, data: dict) -> GSphere:
         return cls(
             id=data["id"],
             geometry_id=data["geometry_id"],
@@ -292,11 +292,11 @@ class GSphere(GeometryVersion):
 
     def to_open_mc(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
     def to_moose(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -331,7 +331,7 @@ class GRectanglePrism(GeometryVersion):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GRectanglePrism":
+    def from_dict(cls, data: dict) -> GRectanglePrism:
         return cls(
             id=data["id"],
             geometry_id=data["geometry_id"],
@@ -347,11 +347,11 @@ class GRectanglePrism(GeometryVersion):
 
     def to_open_mc(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
     def to_moose(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -368,15 +368,15 @@ class GNull(GeometryVersion):
 
     def to_open_mc(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
     def to_moose(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
-class GPos(PaceModelObject):
+class GPose(PaceObject):
     """Class representation of a position in 3D space."""
 
     x_m: float
@@ -391,7 +391,7 @@ class GPos(PaceModelObject):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GPos":
+    def from_dict(cls, data: dict) -> GPose:
         return cls(x_m=data["x_m"], y_m=data["y_m"], z_m=data["z_m"])
 
 
@@ -405,7 +405,7 @@ class GAddition(GeometryVersion):
     the geometries does not touch or overlap with any of the others.
     """
 
-    units: list[tuple[GeometryVersionID, GPos]]
+    units: list[tuple[GeometryVersionID, GPose]]
 
     def __eq__(self, value: object) -> bool:
         return isinstance(value, GAddition) and self.id == value.id
@@ -423,14 +423,14 @@ class GAddition(GeometryVersion):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GAddition":
+    def from_dict(cls, data: dict) -> GAddition:
         return cls(
             id=data["id"],
             geometry_id=data["geometry_id"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
             units=[
-                (u["geometry_version_id"], GPos.from_dict(u["position"]))
+                (u["geometry_version_id"], GPose.from_dict(u["position"]))
                 for u in data["units"]
             ],
         )
@@ -449,11 +449,11 @@ class GAddition(GeometryVersion):
 
     def to_open_mc(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
     def to_moose(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -465,8 +465,8 @@ class GSubtraction(GeometryVersion):
     from it. Every cut must overlap with the base.
     """
 
-    base: tuple[GeometryVersionID, GPos]
-    cuts: list[tuple[GeometryVersionID, GPos]]
+    base: tuple[GeometryVersionID, GPose]
+    cuts: list[tuple[GeometryVersionID, GPose]]
 
     def __eq__(self, value: object) -> bool:
         return isinstance(value, GSubtraction) and self.id == value.id
@@ -486,7 +486,7 @@ class GSubtraction(GeometryVersion):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GSubtraction":
+    def from_dict(cls, data: dict) -> GSubtraction:
         return cls(
             id=data["id"],
             geometry_id=data["geometry_id"],
@@ -494,10 +494,10 @@ class GSubtraction(GeometryVersion):
             gt_run_id=data["gt_run_id"],
             base=(
                 data["base"]["geometry_version_id"],
-                GPos.from_dict(data["base"]["position"]),
+                GPose.from_dict(data["base"]["position"]),
             ),
             cuts=[
-                (cut["geometry_version_id"], GPos.from_dict(cut["position"]))
+                (cut["geometry_version_id"], GPose.from_dict(cut["position"]))
                 for cut in data["cuts"]
             ],
         )
@@ -516,8 +516,8 @@ class GSubtraction(GeometryVersion):
 
     def to_open_mc(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
 
     def to_moose(self):
         # TODO: implement this
-        pass
+        raise NotImplementedError
