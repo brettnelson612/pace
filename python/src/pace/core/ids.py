@@ -1,4 +1,6 @@
 """
+pace/core/ids.py
+
 Distinct, mypy-checkable ID types for PACE's modeling-domain objects.
 
 Each is a typing.NewType wrapping str — zero runtime cost (a GeometryID

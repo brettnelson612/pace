@@ -27,7 +27,7 @@ from pace.core.geometry import (
     GeometryVersion,
     GHexPrism,
     GNull,
-    GPos,
+    GPose,
     GRectanglePrism,
     GSphere,
     GSubtraction,
@@ -202,7 +202,7 @@ class TestGNull:
 class TestGAddition:
     @staticmethod
     def _unit(geo_id: str, x: float = 0.0):
-        return (GeometryVersionID(geo_id), GPos(x_m=x, y_m=0.0, z_m=0.0))
+        return (GeometryVersionID(geo_id), GPose(x_m=x, y_m=0.0, z_m=0.0))
 
     def test_valid_construction(self):
         make(GAddition, units=[self._unit("g-a", 0.0), self._unit("g-b", 1.0)])
@@ -249,7 +249,7 @@ class TestGAddition:
 class TestGSubtraction:
     @staticmethod
     def _pair(geo_id: str, x: float = 0.0):
-        return (GeometryVersionID(geo_id), GPos(x_m=x, y_m=0.0, z_m=0.0))
+        return (GeometryVersionID(geo_id), GPose(x_m=x, y_m=0.0, z_m=0.0))
 
     def test_valid_construction(self):
         make(GSubtraction, base=self._pair("g-base"), cuts=[self._pair("g-cut", 0.5)])
@@ -309,7 +309,7 @@ class TestRoundTripAndImmutability:
         with pytest.raises(dataclasses.FrozenInstanceError):
             setattr(instance, field_name, 999.0)
 
-    def test_gpos_frozen(self):
-        pos = GPos(x_m=0.0, y_m=0.0, z_m=0.0)
+    def test_GPose_frozen(self):
+        pos = GPose(x_m=0.0, y_m=0.0, z_m=0.0)
         with pytest.raises(dataclasses.FrozenInstanceError):
             pos.x_m = 1.0  # type: ignore[misc]

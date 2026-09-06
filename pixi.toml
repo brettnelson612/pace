@@ -116,35 +116,35 @@ openmc = "*"
 # "moose" feature — MOOSE (https://mooseframework.inl.gov/)
 #
 # Known gotchas (don't re-derive):
-# - moose-dev's version and the .moose/ git checkout must stay in lockstep —
-#       a mismatch produces real libMesh API compile errors, not a warning.
-#       moose-dev prints the exact version it wants on mismatch; match it here.
-# - moose-libmesh-vtk isn't bundled into moose-dev — it's a separate
-#       dependency. Leave it at "*" and let the solver pick it — moose-dev
-#       pins its exact required VTK version transitively; pinning VTK
-#       yourself is what breaks the link step (learned the hard way).
-# - macOS needs >=13.3 for moose-libmesh (see the osx-64-moose platform
-#       variant in [workspace] — that's why it exists).
-# - Build/test targets live in .moose/test, not .moose/ itself — MOOSE's
-#       repo root has no top-level Makefile.
+#    - moose-dev's version and the .moose/ git checkout must stay in lockstep —
+#          a mismatch produces real libMesh API compile errors, not a warning.
+#          moose-dev prints the exact version it wants on mismatch; match it here.
+#    - moose-libmesh-vtk isn't bundled into moose-dev — it's a separate
+#          dependency. Leave it at "*" and let the solver pick it — moose-dev
+#          pins its exact required VTK version transitively; pinning VTK
+#          yourself is what breaks the link step (learned the hard way).
+#    - macOS needs >=13.3 for moose-libmesh (see the osx-64-moose platform
+#          variant in [workspace] — that's why it exists).
+#    - Build/test targets live in .moose/test, not .moose/ itself — MOOSE's
+#          repo root has no top-level Makefile.
 #
 # Tasks:
-# - moose-clone: clone idaholab/moose (master) into .moose/, if not already
-#       present. No-op if .moose/framework already exists.
-# - moose-clean: remove git-ignored build artifacts from .moose/ (source is
-#       untouched). Reach for this manually when you suspect a stale build
-#       cache — e.g. after bumping moose-dev's version.
-# - moose-build: incremental build of the MOOSE framework test binary. Fast
-#       on repeat runs; can miss issues a stale build cache masks.
-# - moose-verify: run MOOSE's own test harness against the current build —
-#       the real proof the toolchain (compilers, moose-dev's PETSc/libMesh)
-#       works end to end.
-# - moose-fresh-build: same as moose-build, but wipes build artifacts
-#       first. Slower — use when you don't trust the existing build cache.
-# - moose-fresh-build-and-verify: fresh build + verify in one call. The
-#       safest option when the environment itself changed (moose-dev/VTK
-#       version bump) — incremental build/verify can silently pass against
-#       stale artifacts otherwise.
+#    - moose-clone: clone idaholab/moose (master) into .moose/, if not already
+#          present. No-op if .moose/framework already exists.
+#    - moose-clean: remove git-ignored build artifacts from .moose/ (source is
+#          untouched). Reach for this manually when you suspect a stale build
+#          cache — e.g. after bumping moose-dev's version.
+#    - moose-build: incremental build of the MOOSE framework test binary. Fast
+#          on repeat runs; can miss issues a stale build cache masks.
+#    - moose-verify: run MOOSE's own test harness against the current build —
+#          the real proof the toolchain (compilers, moose-dev's PETSc/libMesh)
+#          works end to end.
+#    - moose-fresh-build: same as moose-build, but wipes build artifacts
+#          first. Slower — use when you don't trust the existing build cache.
+#    - moose-fresh-build-and-verify: fresh build + verify in one call. The
+#          safest option when the environment itself changed (moose-dev/VTK
+#          version bump) — incremental build/verify can silently pass against
+#          stale artifacts otherwise.
 #
 # First time fresh build (outside of shell):
 #   pixi run -e full-phys-dev moose-fresh-build-and-verify
@@ -192,14 +192,14 @@ rust = "*"
 # consistent toolchain rather than full-phys-dev drifting from the rest.
 #
 # Environments:
-# - no-phys-dev: service/API work only — no OpenMC, no MOOSE. Native
-#       osx-arm64 (or osx-64/linux-64) — the only environment that runs
-#       natively on Apple Silicon rather than under Rosetta emulation.
-# - py-phys-dev: OpenMC-dependent work, src-py only — no C++/Rust build
-#       tooling, no MOOSE. osx-64 (emulated on Apple Silicon) / linux-64 only.
-# - full-phys-dev: everything — OpenMC + MOOSE + C++/Rust build tooling —
-#       the Cardinal build target. osx-64 (emulated) / linux-64 only. The
-#       only environment with the moose-* tasks available.
+#    - no-phys-dev: service/API work only — no OpenMC, no MOOSE. Native
+#          osx-arm64 (or osx-64/linux-64) — the only environment that runs
+#          natively on Apple Silicon rather than under Rosetta emulation.
+#    - py-phys-dev: OpenMC-dependent work, src-py only — no C++/Rust build
+#          tooling, no MOOSE. osx-64 (emulated on Apple Silicon) / linux-64 only.
+#    - full-phys-dev: everything — OpenMC + MOOSE + C++/Rust build tooling —
+#          the Cardinal build target. osx-64 (emulated) / linux-64 only. The
+#          only environment with the moose-* tasks available.
 #
 # Shelling into an env:
 #   pixi shell -e <environment>
