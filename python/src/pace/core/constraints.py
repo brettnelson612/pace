@@ -1,4 +1,6 @@
 """
+pace/core/constraints.py
+
 Declarative field-level validation: the Constraint enum (POSITIVE,
 NON_NEGATIVE) and validate_fields(), which walks a dataclass's fields
 and checks each against its "constraint"/"range" metadata generically.
@@ -22,6 +24,10 @@ def validate_fields(obj) -> None:
     # validate each field based on it's established constraints
     for f in fields(obj):
         value = getattr(obj, f.name)
+
+        # skip if value is None as None-type validation not handled here
+        if value is None:
+            continue
 
         # specific constraints
         constraint = f.metadata.get("constraint")

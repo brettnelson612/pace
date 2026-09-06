@@ -236,6 +236,7 @@ class MaterialVersion(PaceObject):
     @abstractmethod
     def to_open_mc(self, temperature_k: float | None = None):
         """Temperature is passed at call time, never stored on the version."""
+        pass
 
     @abstractmethod
     def to_moose(self, temperature_k: float | None = None):
@@ -307,11 +308,11 @@ class MIsotopic(MaterialVersion):
     density_value: float = field(metadata={"constraint": Constraint.POSITIVE})
     density_unit: DensityUnit
 
-    def __eq__(self, other: object) -> bool:
-        return self is other
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, MIsotopic) and self.id == value.id
 
     def __hash__(self) -> int:
-        return id(self)
+        return hash(self.id)
 
     def _validate_composition(self) -> None:
         """Enforce the two composition-level physical rules:
@@ -434,11 +435,11 @@ class MMixture(MaterialVersion):
     components: list[tuple[MaterialVersionID, float]]
     percent_type: PercentType
 
-    def __eq__(self, other: object) -> bool:
-        return self is other
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, MMixture) and self.id == value.id
 
     def __hash__(self) -> int:
-        return id(self)
+        return hash(self.id)
 
     def _validate_composition(self) -> None:
         """Enforce the mixture-fraction physical rules:

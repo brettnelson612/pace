@@ -1,4 +1,6 @@
 """
+pace/core/pace_object.py
+
 PaceObject: the shared ABC for PACE's modeling-domain objects
 (geometries, materials, versions, components, blueprints) — to_dict()
 and from_dict() only. Deliberately minimal: no display/rendering logic

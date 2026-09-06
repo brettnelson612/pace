@@ -1,4 +1,6 @@
 """
+pace/core/component.py
+
 Reactor structure objects: LComponent (geometry version + material
 version, no position), PComponent (a position + one LComponent or
 CComponent; only ever a member of a CComponent), and CComponent (a
