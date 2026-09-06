@@ -25,6 +25,7 @@ MaterialVersionID = NewType("MaterialVersionID", str)
 # --- Components ---
 LComponentID = NewType("LComponentID", str)
 CComponentID = NewType("CComponentID", str)
+PComponentID = NewType("PComponentID", str)
 
 # RTBlueprint has no distinct ID type of its own,
 # an RTBlueprint's ID *is* the CComponent ID of the CComponent it wraps
