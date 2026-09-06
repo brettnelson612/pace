@@ -1,5 +1,5 @@
 """
-core/material.py
+pace/core/material.py
 
 Material modeling objects for PACE, mirroring the Geometry/GeometryVersion
 split: Material is bare identity (registry "materials"); MaterialVersion is
@@ -101,10 +101,10 @@ class MaterialComponentEntry(PaceObject):
     1. Exact nuclide, no enrichment fields —
        e.g. {"percent": 3.2} under the key "U235". This states exactly
        how much of a specific isotope is present. No ambiguity, no
-       expansion needed. This is the ONLY form a GT-run-derived (v2+)
-       composition can take — depletion output is always exact
-       per-isotope densities (see MaterialVersion and
-       MIsotopic._validate_composition).
+       expansion needed. This is the ONLY form a
+       ground-truth-run-derived (v2+) composition can take — depletion
+       output is always exact per-isotope densities (see MaterialVersion
+       and MIsotopic._validate_composition).
 
     2. Element + all three enrichment fields set together —
        e.g. {"percent": 1.0, "enrichment": 3.2, "enrichment_target":
@@ -118,16 +118,10 @@ class MaterialComponentEntry(PaceObject):
        composed of exactly two naturally-occurring isotopes (e.g. U,
        Li, B) — OpenMC itself only supports it for that case.
 
-    Fields left as bare None (no enrichment) mean "add this element at
-    its natural isotopic abundance" — e.g. {"percent": 2.0} under "O"
-    means natural oxygen (~99.76% O16, ~0.04% O17, ~0.20% O18),
+    Having the enrichment fields left as None (i.e. no enrichment) means
+    "add this element at its natural isotopic abundance" — e.g. {"percent": 2.0}
+    under "O" means natural oxygen (~99.76% O16, ~0.04% O17, ~0.20% O18),
     expanded by OpenMC internally.
-
-    Note: this class inherits PaceObject (unlike GPos, which is a bare
-    value object with no validation hook) specifically so its
-    all-or-none enrichment-field invariant gets validated automatically
-    via PaceObject's __post_init__ -> self.validate() wiring, rather
-    than relying on every call site to remember to check it.
     """
 
     percent: float = field(metadata={"constraint": Constraint.POSITIVE})
@@ -217,17 +211,17 @@ class MaterialVersion(PaceObject):
     therefore passed as an argument to to_open_mc()/to_moose() at
     solver-translation time, never stored as a field here.
 
-    Versioning rule (identical to GeometryVersion): v1 is always
-    user-authored (derived_from and gt_run_id both None) — a
-    composition a person specified directly. v2+ can only be created
-    as the recorded output of a GT run (both fields set together) —
-    physically, this means composition change via depletion: OpenMC's
-    depletion module solves the Bateman equations to evolve a nuclide
-    inventory forward under a flux/power history, and that evolved
-    inventory becomes a new MaterialVersion linked back to the GT run
-    that produced it. One of derived_from/gt_run_id set without the
-    other is invalid — there's no physical mechanism that produces a
-    "half-derived" version.
+    Versioning rule (identical to GeometryVersion):
+        - v1: always user-authored (i.e. derived_from and gt_run_id are
+            both None); composition a person specified directly.
+        - v2+: can only be created as the recorded output of a GT run;
+            physically, this means composition changed via depletion: OpenMC's
+            depletion module solves the Bateman equations to evolve a nuclide
+            inventory forward under a flux/power history, and that evolved
+            inventory becomes a new MaterialVersion linked back to the GT run
+            that produced it. Note: Having one of derived_from/gt_run_id set without the
+            other is invalid — there's no physical mechanism that produces a
+            "half-derived" version.
     """
 
     id: MaterialVersionID
@@ -403,7 +397,7 @@ class MMixture(MaterialVersion):
     Answers the earlier "mix_materials()" design question: rather than
     a method on Material or a standalone helper function, mixing is
     its own MaterialVersion subclass storing references + fractions —
-    mirrors GAddition storing list[tuple[GeometryVersionID, GPos]]
+    mirrors GAddition storing list[tuple[GeometryVersionID, GPose]]
     rather than pre-flattening geometry at construction time. The
     actual nuclide-level combination happens in to_open_mc(), not
     here — this class only records the recipe.
