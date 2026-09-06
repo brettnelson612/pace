@@ -231,12 +231,11 @@ class MaterialVersion(PaceObject):
 
     @abstractmethod
     def _validate_composition(self) -> None:
-        pass
+        """Child-specific composition validation."""
 
     @abstractmethod
     def to_open_mc(self, temperature_k: float | None = None):
         """Temperature is passed at call time, never stored on the version."""
-        pass
 
     @abstractmethod
     def to_moose(self, temperature_k: float | None = None):
