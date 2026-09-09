@@ -23,7 +23,6 @@ from pace.core.geometry import (
     GAddition,
     GAnnulus,
     GCylinder,
-    Geometry,
     GeometryVersion,
     GHexPrism,
     GNull,
@@ -68,23 +67,6 @@ def make(cls, **overrides):
 
 
 # ---------------------------------------------------------------------------
-# Geometry (bare identity — no shape data)
-# ---------------------------------------------------------------------------
-
-
-class TestGeometry:
-    def test_construct_and_round_trip(self):
-        geo = Geometry(id=GeometryID("g-1"))
-        assert geo.to_dict() == {"id": GeometryID("g-1")}
-        assert Geometry.from_dict(geo.to_dict()) == geo
-
-    def test_frozen(self):
-        geo = Geometry(id=GeometryID("g-1"))
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            geo.id = GeometryID("g-2")  # type: ignore[misc]
-
-
-# ---------------------------------------------------------------------------
 # GeometryVersion — ABC enforcement + shared pairing invariant
 # ---------------------------------------------------------------------------
 
@@ -104,18 +86,42 @@ class TestGeometryVersionBase:
             Incomplete(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
     @pytest.mark.parametrize(
-        "derived_from,gt_run_id,should_raise",
+        "derived_from,gt_run_id,user_edit,should_raise",
         [
-            (None, None, False),  # version 1: both unset
-            (GeometryVersionID("gv-0"), GTRunID("run-1"), False),  # v2+: both set
-            (GeometryVersionID("gv-0"), None, True),  # derived_from w/o gt_run_id
-            (None, GTRunID("run-1"), True),  # gt_run_id w/o derived_from
+            (None, None, False, False),  # version 1: no source settings
+            (
+                GeometryVersionID("gv-0"),
+                GTRunID("run-1"),
+                False,
+                False,
+            ),  # v2+: only gt_run set
+            (
+                GeometryVersionID("gv-0"),
+                None,
+                True,
+                False,
+            ),  # v2+: only user_edit set
+            (
+                GeometryVersionID("gv-0"),
+                GTRunID("run-1"),
+                True,
+                True,
+            ),  # v2+: both version sources set, invalid
+            (
+                GeometryVersionID("gv-0"),
+                None,
+                False,
+                True,
+            ),  # derived_from w/o either version source set, invalid
+            (None, GTRunID("run-1"), False, True),  # gt_run_id w/o derived_from
         ],
     )
     def test_derived_from_gt_run_id_pairing(
-        self, derived_from, gt_run_id, should_raise
+        self, derived_from, gt_run_id, user_edit, should_raise
     ):
-        kwargs = _base_kwargs(derived_from=derived_from, gt_run_id=gt_run_id)
+        kwargs = _base_kwargs(
+            derived_from=derived_from, gt_run_id=gt_run_id, user_edit=user_edit
+        )
         kwargs.update(VALID_SHAPE_KWARGS[GCylinder])
         if should_raise:
             with pytest.raises(ValueError):

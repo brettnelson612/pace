@@ -27,7 +27,6 @@ import dataclasses
 import pytest
 from pace.core.ids import GTRunID, MaterialID, MaterialVersionID
 from pace.core.material import (
-    Material,
     MaterialComponentEntry,
     MaterialVersion,
     MIsotopic,
@@ -91,31 +90,6 @@ def make_mixture(**overrides) -> MMixture:
     kwargs.update(_valid_mixture_kwargs())
     kwargs.update(overrides)
     return MMixture(**kwargs)
-
-
-# ---------------------------------------------------------------------------
-# Material (bare identity — no composition data)
-# ---------------------------------------------------------------------------
-
-
-class TestMaterial:
-    def test_construct_and_round_trip(self):
-        mat = Material(id=MaterialID("m-1"))
-        assert mat.to_dict() == {"id": MaterialID("m-1"), "version_ids": []}
-        assert Material.from_dict(mat.to_dict()) == mat
-
-    def test_version_ids_round_trip(self):
-        mat = Material(
-            id=MaterialID("m-1"),
-            version_ids=[MaterialVersionID("mv-1"), MaterialVersionID("mv-2")],
-        )
-        rebuilt = Material.from_dict(mat.to_dict())
-        assert rebuilt.version_ids == mat.version_ids
-
-    def test_frozen(self):
-        mat = Material(id=MaterialID("m-1"))
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            mat.id = MaterialID("m-2")  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
@@ -235,23 +209,47 @@ class TestMaterialVersionBase:
             Incomplete(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
     @pytest.mark.parametrize(
-        "derived_from,gt_run_id,should_raise",
+        "derived_from,gt_run_id,user_edit,should_raise",
         [
-            (None, None, False),  # version 1: both unset
-            (MaterialVersionID("mv-0"), GTRunID("run-1"), False),  # v2+: both set
-            (MaterialVersionID("mv-0"), None, True),  # derived_from w/o gt_run_id
-            (None, GTRunID("run-1"), True),  # gt_run_id w/o derived_from
+            (None, None, False, False),  # version 1: no source settings
+            (
+                MaterialVersionID("mv-0"),
+                GTRunID("run-1"),
+                False,
+                False,
+            ),  # v2+: only gt_run set
+            (
+                MaterialVersionID("mv-0"),
+                None,
+                True,
+                False,
+            ),  # v2+: only user_edit set
+            (
+                MaterialVersionID("mv-0"),
+                GTRunID("run-1"),
+                True,
+                True,
+            ),  # v2+: both version sources set, invalid
+            (
+                MaterialVersionID("mv-0"),
+                None,
+                False,
+                True,
+            ),  # derived_from w/o either version source set, invalid
+            (None, GTRunID("run-1"), False, True),  # gt_run_id w/o derived_from
         ],
     )
     def test_derived_from_gt_run_id_pairing(
-        self, derived_from, gt_run_id, should_raise
+        self, derived_from, gt_run_id, user_edit, should_raise
     ):
         if should_raise:
             with pytest.raises(ValueError):
-                make_isotopic(derived_from=derived_from, gt_run_id=gt_run_id)
+                make_isotopic(
+                    derived_from=derived_from, gt_run_id=gt_run_id, user_edit=user_edit
+                )
         else:
             make_isotopic(
-                derived_from=derived_from, gt_run_id=gt_run_id
+                derived_from=derived_from, gt_run_id=gt_run_id, user_edit=user_edit
             )  # should not raise
 
 

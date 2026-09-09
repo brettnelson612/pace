@@ -15,11 +15,9 @@ more than one domain area at once.
 from typing import NewType
 
 # --- Geometry ---
-GeometryID = NewType("GeometryID", str)
 GeometryVersionID = NewType("GeometryVersionID", str)
 
 # --- Material ---
-MaterialID = NewType("MaterialID", str)
 MaterialVersionID = NewType("MaterialVersionID", str)
 
 # --- Components ---

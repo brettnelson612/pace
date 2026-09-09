@@ -1,44 +1,55 @@
 """
-pace/core/geometry.py
+core/geometry.py
 
-Geometry domain objects: Geometry (bare registry identity, no shape data)
-and GeometryVersion (the versioned, polymorphic interface holding actual
-shape data — GCylinder, GAnnulus, GHexPrism, GSphere, GRectanglePrism,
-GNull, GAddition, GSubtraction — plus validate()/to_open_mc()/to_moose()).
+Geometry domain objects: GeometryVersion (the versioned, polymorphic
+class holding actual shape data — GCylinder, GAnnulus, GHexPrism,
+GSphere, GRectanglePrism, GNull, GAddition, GSubtraction — plus
+validate()/to_open_mc()/to_moose()).
 
-What "geometry" means physically here: a geometry is a description of the
-SHAPE a region of space occupies — nothing about what substance fills it
-(that's Material) and nothing about its position within a larger assembly
-(positioning is handled where a geometry+material pairing gets placed,
-elsewhere in the model — GAddition/GSubtraction's internal unit positions
-are the one exception, needed to define the shape itself).
+No separate bare "Geometry" identity class/table — a version's family
+is just a `family_name` string carried on the version itself, not a
+separate row. A version's id is one opaque string built from
+family_name + version_label (e.g. "uranium3.2-1",
+"uranium3.2-6month_depletion" — see GeometryVersion.build_id()), which
+is what every reference elsewhere in the system (LComponent,
+GAddition.units, etc.) actually points at.
+
+family_name is NOT unique per row — every version in a family shares
+it. Rejecting a duplicate family_name is enforced only at "create a
+brand-new family" (v1, derived_from=None) time, and that's application
+logic (ComponentService), not a database constraint, since the column
+legitimately repeats across many rows.
+
+What "geometry" means physically here: a geometry is a description of
+the SHAPE a region of space occupies — nothing about what substance
+fills it (that's Material) and nothing about its position within a
+larger assembly (positioning is handled where a geometry+material
+pairing gets placed, elsewhere in the model — GAddition/GSubtraction's
+internal unit positions are the one exception, needed to define the
+shape itself).
 
 Several shapes here (GAddition, GSubtraction) are PACE's version of
-Constructive Solid Geometry (CSG) — building complex shapes out of boolean
-combinations of simpler ones. This mirrors how OpenMC represents
-geometry under the hood: surfaces divide space into two half-spaces, and
-cells are defined as boolean combinations (union, intersection,
-complement) of those half-spaces. GAddition/GSubtraction are PACE's
-higher-level equivalents of that union/complement machinery, expressed in
-terms of already-defined GeometryVersions rather than raw surfaces.
+Constructive Solid Geometry (CSG) — building complex shapes out of
+boolean combinations of simpler ones. This mirrors how OpenMC itself
+represents geometry under the hood: surfaces divide space into two
+half-spaces, and cells are defined as boolean combinations (union,
+intersection, complement) of those half-spaces. GAddition/GSubtraction
+are PACE's higher-level equivalents of that union/complement machinery,
+expressed in terms of already-defined GeometryVersions rather than raw
+surfaces.
 
-Mirrors material.py's Geometry/GeometryVersion <-> Material/MaterialVersion
-split intentionally — kept in sync by design, not by accident.
+Mirrors material.py's structure intentionally — kept in sync by
+design, not by accident.
 """
 
 from __future__ import annotations
 
-import math
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 
 from pace.core.constraints import Constraint, validate_fields
-from pace.core.ids import (
-    GeometryID,
-    GeometryVersionID,
-    GTRunID,
-)
+from pace.core.ids import GeometryVersionID, GTRunID
 from pace.core.pace_object import PaceObject
 
 # Bounds are practical sanity limits (catching typos/unit mistakes — e.g. a
@@ -52,12 +63,9 @@ MAX_LATTICE_DIMENSION_COUNT = 1000
 MIN_GEO_LENGTH_M = 0.0
 MAX_GEO_LENGTH_M = 1000.0
 
-MAX_ROTATION_RADIANS = math.pi * 2
-
 
 class GeometryType(Enum):
-    """Discriminator tag for GeometryVersion subclasses (not yet wired
-    into any dispatch/deserialization logic).
+    """Discriminator tag for GeometryVersion subclasses.
 
     Values:
         - cylinder: a basic solid cylinder — e.g. a fuel pellet or
@@ -90,84 +98,80 @@ class GeometryType(Enum):
 
 
 @dataclass(kw_only=True, frozen=True)
-class GPose(PaceObject):
-    """Class representation of a position-orientation in 3D space."""
-
-    x_m: float
-    y_m: float
-    z_m: float
-    z_rotation_rad: float = field(
-        default=0.0, metadata={"range": (0.0, MAX_ROTATION_RADIANS)}
-    )
-
-    def to_dict(self) -> dict:
-        return {
-            "x_m": self.x_m,
-            "y_m": self.y_m,
-            "z_m": self.z_m,
-            "z_rotation_rad": self.z_rotation_rad,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> GPose:
-        return cls(
-            x_m=data["x_m"],
-            y_m=data["y_m"],
-            z_m=data["z_m"],
-            z_rotation_rad=data["z_rotation_rad"],
-        )
-
-    def validate(self):
-        validate_fields(self)
-
-
-@dataclass(kw_only=True, frozen=True)
-class Geometry(PaceObject):
-    """A registry-level geometry identity — holds no shape
-    data itself; see GeometryVersion for shape data and
-    versioning.
-
-    Mirrors Material: a Geometry is just an ID, referenced stably
-    across however many GeometryVersions get recorded under it over
-    time (e.g. as a design iterates through revisions)."""
-
-    id: GeometryID
-
-    def to_dict(self) -> dict:
-        return {"id": self.id}
-
-    @classmethod
-    def from_dict(cls, data: dict) -> PaceObject:
-        return cls(id=data["id"])
-
-
-@dataclass(kw_only=True, frozen=True)
 class GeometryVersion(PaceObject):
     """General interface for a specific geometry version.
 
-    Versioning rule (identical to MaterialVersion): v1 is always
-    user-authored (derived_from and gt_run_id both None) — a shape a
-    person specified directly. v2+ can only be created as the
-    recorded output of a GT run (both fields set together) — e.g. a
-    component's geometry changing as a result of simulated thermal
-    expansion or mechanical deformation over the course of a run. One
-    of derived_from/gt_run_id set without the other is invalid.
+    Identity: id is a single opaque string built from family_name +
+    version_label via build_id() — e.g. family_name="fuel_pellet",
+    version_label="1" -> id="fuel_pellet-1". _validate_id() confirms
+    the two stay consistent, catching an accidentally mismatched/
+    copy-pasted id at construction time.
+
+    Versioning rule: a version is either v1 (user-authored from
+    scratch) or a derived version, and if derived, it has exactly one
+    recorded cause:
+        - derived_from is None: version 1. gt_run_id must be None and
+              user_edit must be False — a v1 has no derivation cause
+              because it has no predecessor.
+        - derived_from is set: a derived version. Exactly one of
+              gt_run_id (this version is the recorded output of a GT
+              run — e.g. thermal expansion or mechanical deformation
+              simulated over the course of a run) or user_edit (a
+              person directly edited a predecessor version, e.g. via
+              the workshop) must also be set — never neither, and
+              never both, since a single version bump can't
+              simultaneously be GT-run output and a manual edit.
     """
 
     id: GeometryVersionID
-    geometry_id: GeometryID
+    family_name: str
+    version_label: str
     derived_from: GeometryVersionID | None = None
     gt_run_id: GTRunID | None = None
+    user_edit: bool = False
+
+    @staticmethod
+    def build_id(family_name: str, version_label: str) -> GeometryVersionID:
+        """The one canonical way an id is constructed from a
+        family_name + version_label pair. Used both when constructing
+        a new version and by _validate_id() to confirm an existing
+        id actually matches its own family_name/version_label."""
+        return GeometryVersionID(f"{family_name}-{version_label}")
 
     def validate(self):
-        """Check the derived_from/gt_run_id lineage pairing, then
-        delegate to the concrete subclass's shape-specific checks."""
-        if (self.derived_from is None) != (self.gt_run_id is None):
-            raise ValueError(
-                "derived_from and gt_run_id must both be set, or both be None"
-            )
-        # perform shape-specific validation
+        """Check id/family_name/version_label consistency, then the
+        derived_from/gt_run_id/user_edit lineage rule, then delegate
+        to the concrete subclass's shape-specific checks."""
+        self._validate_id()
+        self._validate_lineage()
         self._validate_shape()
+
+    def _validate_id(self) -> None:
+        expected = self.build_id(self.family_name, self.version_label)
+        if self.id != expected:
+            raise ValueError(
+                f"id {self.id!r} does not match family_name/version_label "
+                f"(expected {expected!r})"
+            )
+
+    def _validate_lineage(self) -> None:
+        has_predecessor = self.derived_from is not None
+        has_gt_run = self.gt_run_id is not None
+
+        if not has_predecessor:
+            if has_gt_run or self.user_edit:
+                raise ValueError(
+                    "gt_run_id must be unset and user_edit must be False "
+                    "when derived_from is unset (version 1 has no "
+                    "derivation cause)"
+                )
+        elif has_gt_run == self.user_edit:
+            # both set, or both unset — either way, invalid
+            raise ValueError(
+                "when derived_from is set, exactly one of gt_run_id or "
+                "user_edit must also be set (got gt_run_id="
+                f"{self.gt_run_id!r}, user_edit={self.user_edit!r})"
+            )
 
     @abstractmethod
     def _validate_shape(self):
@@ -184,20 +188,32 @@ class GeometryVersion(PaceObject):
         raise NotImplementedError
 
     def to_dict(self) -> dict:
+        type_value = CLASS_TO_GEOMETRY_TYPE.get(type(self))
+        if type_value is None:
+            raise ValueError(
+                f"{type(self).__name__} is not registered in "
+                "GEOMETRY_TYPE_TO_CLASS — add it there before calling "
+                "to_dict() on this class"
+            )
         return {
+            "type": type_value,
             "id": self.id,
-            "geometry_id": self.geometry_id,
+            "family_name": self.family_name,
+            "version_label": self.version_label,
             "derived_from": self.derived_from,
             "gt_run_id": self.gt_run_id,
+            "user_edit": self.user_edit,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> GeometryVersion:
         return cls(
             id=data["id"],
-            geometry_id=data["geometry_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
         )
 
 
@@ -230,9 +246,11 @@ class GCylinder(GeometryVersion):
     def from_dict(cls, data: dict) -> GCylinder:
         return cls(
             id=data["id"],
-            geometry_id=data["geometry_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             radius_m=data["radius_m"],
             height_m=data["height_m"],
         )
@@ -286,9 +304,11 @@ class GAnnulus(GeometryVersion):
     def from_dict(cls, data: dict) -> GAnnulus:
         return cls(
             id=data["id"],
-            geometry_id=data["geometry_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             inner_radius_m=data["inner_radius_m"],
             outer_radius_m=data["outer_radius_m"],
             height_m=data["height_m"],
@@ -299,6 +319,8 @@ class GAnnulus(GeometryVersion):
 
         Rules enforced:
             - inner_radius_m must be strictly less than outer_radius_m
+                  — an annulus with inner >= outer describes a solid
+                  cylinder or a degenerate/inverted shape, not a ring.
         """
         validate_fields(self)
         # relational check — not expressible via field metadata alone
@@ -352,9 +374,11 @@ class GHexPrism(GeometryVersion):
     def from_dict(cls, data: dict) -> GHexPrism:
         return cls(
             id=data["id"],
-            geometry_id=data["geometry_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             circumradius_m=data["circumradius_m"],
             height_m=data["height_m"],
         )
@@ -393,9 +417,11 @@ class GSphere(GeometryVersion):
     def from_dict(cls, data: dict) -> GSphere:
         return cls(
             id=data["id"],
-            geometry_id=data["geometry_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             radius_m=data["radius_m"],
         )
 
@@ -447,9 +473,11 @@ class GRectanglePrism(GeometryVersion):
     def from_dict(cls, data: dict) -> GRectanglePrism:
         return cls(
             id=data["id"],
-            geometry_id=data["geometry_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             length_m=data["length_m"],
             width_m=data["width_m"],
             height_m=data["height_m"],
@@ -491,6 +519,48 @@ class GNull(GeometryVersion):
 
 
 @dataclass(kw_only=True, frozen=True)
+class GPose(PaceObject):
+    """A position (and z-axis orientation) in 3D space, used to place
+    one GeometryVersion relative to another (e.g. within a GAddition's
+    units or a GSubtraction's base/cuts).
+
+    Deliberately a plain value object, not a PaceModelObject-style
+    registered entity — a GPose has no independent identity or
+    lifecycle of its own; it only exists as an attribute of whatever
+    placement it describes.
+
+    z_rotation_rad defaults to 0.0 (no rotation) so existing call
+    sites that don't need rotation are unaffected. Only z-axis
+    rotation is modeled — sufficient for placing a non-rotationally-
+    symmetric geometry (e.g. an off-axis GHexPrism within a lattice)
+    without needing full 3D orientation machinery not yet needed
+    anywhere in the current design.
+    """
+
+    x_m: float
+    y_m: float
+    z_m: float
+    z_rotation_rad: float = 0.0
+
+    def to_dict(self) -> dict:
+        return {
+            "x_m": self.x_m,
+            "y_m": self.y_m,
+            "z_m": self.z_m,
+            "z_rotation_rad": self.z_rotation_rad,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> GPose:
+        return cls(
+            x_m=data["x_m"],
+            y_m=data["y_m"],
+            z_m=data["z_m"],
+            z_rotation_rad=data.get("z_rotation_rad", 0.0),
+        )
+
+
+@dataclass(kw_only=True, frozen=True)
 class GAddition(GeometryVersion):
     """An Addition Geometry; a union of geometries — PACE's CSG
     "union" operator.
@@ -503,13 +573,16 @@ class GAddition(GeometryVersion):
     Example — a fuel pin with a small spacer feature unioned onto its
     side, at a position offset from the pin's own center:
         GAddition(
-            id=...,
-            geometry_id=...,
+            id=GeometryVersion.build_id("pin_with_spacer", "1"),
+            family_name="pin_with_spacer",
+            version_label="1",
             units=[
                 (pin_geometry_version_id, GPose(x_m=0, y_m=0, z_m=0)),
                 (spacer_geometry_version_id, GPose(x_m=0.01, y_m=0, z_m=0)),
             ],
         )
+    Note: the ids inside `units` reference OTHER, already-existing
+    GeometryVersions — unaffected by this class's own identity scheme.
 
     __eq__/__hash__ are identity-based via self.id (rather than the
     dataclass-generated field-based default) since `units` is a list
@@ -539,9 +612,11 @@ class GAddition(GeometryVersion):
     def from_dict(cls, data: dict) -> GAddition:
         return cls(
             id=data["id"],
-            geometry_id=data["geometry_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             units=[
                 (unit["geometry_version_id"], GPose.from_dict(unit["position"]))
                 for unit in data["units"]
@@ -565,7 +640,7 @@ class GAddition(GeometryVersion):
         # check for duplicates
         seen = set()
         for geometry_id, pos in self.units:
-            key = (geometry_id, pos.x_m, pos.y_m, pos.z_m)
+            key = (geometry_id, pos.x_m, pos.y_m, pos.z_m, pos.z_rotation_rad)
             if key in seen:
                 raise ValueError(f"duplicate unit+position: {geometry_id} at {pos}")
             seen.add(key)
@@ -591,13 +666,16 @@ class GSubtraction(GeometryVersion):
     Example — a gas plenum, modeled as a cylinder with a smaller
     cylindrical void cut out of one end:
         GSubtraction(
-            id=...,
-            geometry_id=...,
+            id=GeometryVersion.build_id("gas_plenum", "1"),
+            family_name="gas_plenum",
+            version_label="1",
             base=(outer_cylinder_version_id, GPose(x_m=0, y_m=0, z_m=0)),
             cuts=[
                 (void_cylinder_version_id, GPose(x_m=0, y_m=0, z_m=0.1)),
             ],
         )
+    Note: the ids inside `base`/`cuts` reference OTHER, already-existing
+    GeometryVersions — unaffected by this class's own identity scheme.
 
     __eq__/__hash__ are identity-based via self.id, same reasoning as
     GAddition.
@@ -627,9 +705,11 @@ class GSubtraction(GeometryVersion):
     def from_dict(cls, data: dict) -> GSubtraction:
         return cls(
             id=data["id"],
-            geometry_id=data["geometry_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             base=(
                 data["base"]["geometry_version_id"],
                 GPose.from_dict(data["base"]["position"]),
@@ -656,7 +736,7 @@ class GSubtraction(GeometryVersion):
         # check for duplicates
         seen = set()
         for geometry_id, pos in self.cuts:
-            key = (geometry_id, pos.x_m, pos.y_m, pos.z_m)
+            key = (geometry_id, pos.x_m, pos.y_m, pos.z_m, pos.z_rotation_rad)
             if key in seen:
                 raise ValueError(f"duplicate cut: {geometry_id} at {pos}")
             seen.add(key)
@@ -668,3 +748,38 @@ class GSubtraction(GeometryVersion):
     def to_moose(self):
         # TODO: implement this
         raise NotImplementedError
+
+
+# =============================================================================
+# Type dispatch — maps GeometryType values to their concrete class, and
+# back. Lives here, not in the persistence layer, because it's a fact about
+# this module's own class hierarchy, not about how anything gets stored.
+#
+# GeometryVersion.to_dict() (defined earlier in this file) references
+# CLASS_TO_GEOMETRY_TYPE before it's defined here — fine, since Python
+# resolves names inside a method body at call time, not at
+# class-definition time, and by the time to_dict() is ever actually called
+# the whole module has finished loading.
+#
+# Also used by anything doing polymorphic reconstruction from a stored
+# `type` string (e.g. GeometryVersionRepository).
+#
+# Must be kept in sync by hand whenever a new GeometryVersion subclass is
+# added — nothing enforces that automatically.
+# =============================================================================
+GEOMETRY_TYPE_TO_CLASS: dict[str, type[GeometryVersion]] = {
+    GeometryType.CYLINDER.value: GCylinder,
+    GeometryType.ANNULUS.value: GAnnulus,
+    GeometryType.HEX_PRISM.value: GHexPrism,
+    GeometryType.SPHERE.value: GSphere,
+    GeometryType.RECT_PRISM.value: GRectanglePrism,
+    GeometryType.NULL.value: GNull,
+    GeometryType.ADDITION.value: GAddition,
+    GeometryType.SUBTRACTION.value: GSubtraction,
+}
+
+# Inverse lookup, keyed on exact type (not isinstance) — avoids any
+# ambiguity if the class hierarchy ever grows a subclass of a subclass.
+CLASS_TO_GEOMETRY_TYPE: dict[type[GeometryVersion], str] = {
+    cls: type_value for type_value, cls in GEOMETRY_TYPE_TO_CLASS.items()
+}

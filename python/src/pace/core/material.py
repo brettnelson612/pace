@@ -1,14 +1,23 @@
 """
-pace/core/material.py
+core/material.py
 
-Material modeling objects for PACE, mirroring the Geometry/GeometryVersion
-split: Material is bare identity (registry "materials"); MaterialVersion is
-the versioned, polymorphic class holding actual composition data.
+Material domain objects, mirroring geometry.py's structure: no separate
+bare "Material" identity class/table — a version's family is just a
+`family_name` string carried on the version itself. A version's id is
+one opaque string built from family_name + version_label (e.g.
+"uranium3.2-1", "uranium3.2-6month_depletion" — see
+MaterialVersion.build_id()).
 
-What "material" means physically here: a material is a description of what
-substance occupies a region of space — which isotopes are present, in what
-relative amounts, and at what density. It says nothing about shape (that's
-Geometry) or temperature (deliberately excluded — see MaterialVersion).
+family_name is NOT unique per row — every version in a family shares
+it. Rejecting a duplicate family_name is enforced only at "create a
+brand-new family" (v1, derived_from=None) time, and that's application
+logic (ComponentService), not a database constraint.
+
+What "material" means physically here: a material is a description of
+what substance occupies a region of space — which isotopes are
+present, in what relative amounts, and at what density. It says
+nothing about shape (that's Geometry) or temperature (deliberately
+excluded — see MaterialVersion).
 """
 
 from __future__ import annotations
@@ -20,7 +29,7 @@ from enum import Enum
 from typing import Literal
 
 from pace.core.constraints import Constraint, validate_fields
-from pace.core.ids import GTRunID, MaterialID, MaterialVersionID
+from pace.core.ids import GTRunID, MaterialVersionID
 from pace.core.pace_object import PaceObject
 
 """
@@ -69,9 +78,7 @@ DensityUnit = Literal["g/cm3", "kg/m3", "atom/b-cm"]
 
 
 class MaterialType(str, Enum):
-    """Discriminator tag for MaterialVersion subclasses (not yet wired
-    into any dispatch/deserialization logic — mirrors GeometryType's
-    current status).
+    """Discriminator tag for MaterialVersion subclasses.
 
     Values:
         - isotopic: a direct composition of nuclides/elements
@@ -101,10 +108,10 @@ class MaterialComponentEntry(PaceObject):
     1. Exact nuclide, no enrichment fields —
        e.g. {"percent": 3.2} under the key "U235". This states exactly
        how much of a specific isotope is present. No ambiguity, no
-       expansion needed. This is the ONLY form a
-       ground-truth-run-derived (v2+) composition can take — depletion
-       output is always exact per-isotope densities (see MaterialVersion
-       and MIsotopic._validate_composition).
+       expansion needed. This is the ONLY form a GT-run-derived (v2+)
+       composition can take — depletion output is always exact
+       per-isotope densities (see MaterialVersion and
+       MIsotopic._validate_composition).
 
     2. Element + all three enrichment fields set together —
        e.g. {"percent": 1.0, "enrichment": 3.2, "enrichment_target":
@@ -118,10 +125,16 @@ class MaterialComponentEntry(PaceObject):
        composed of exactly two naturally-occurring isotopes (e.g. U,
        Li, B) — OpenMC itself only supports it for that case.
 
-    Having the enrichment fields left as None (i.e. no enrichment) means
-    "add this element at its natural isotopic abundance" — e.g. {"percent": 2.0}
-    under "O" means natural oxygen (~99.76% O16, ~0.04% O17, ~0.20% O18),
+    Fields left as bare None (no enrichment) mean "add this element at
+    its natural isotopic abundance" — e.g. {"percent": 2.0} under "O"
+    means natural oxygen (~99.76% O16, ~0.04% O17, ~0.20% O18),
     expanded by OpenMC internally.
+
+    Note: this class inherits PaceObject (unlike GPose, which is a bare
+    value object with no validation hook) specifically so its
+    all-or-none enrichment-field invariant gets validated automatically
+    via PaceObject's __post_init__ -> self.validate() wiring, rather
+    than relying on every call site to remember to check it.
     """
 
     percent: float = field(metadata={"constraint": Constraint.POSITIVE})
@@ -176,32 +189,15 @@ class MaterialComponentEntry(PaceObject):
 
 
 @dataclass(frozen=True, kw_only=True)
-class Material(PaceObject):
-    """Bare identity for a material — no composition data.
-
-    Mirrors Geometry: a Material is just an ID plus the list of
-    MaterialVersions that have ever been recorded under it. What the
-    material actually consists of physically lives entirely on its
-    MaterialVersions (see MIsotopic, MMixture) — this class exists so
-    a material (e.g. "the fuel") can be referenced stably across many
-    versions of its composition over time (e.g. as it depletes).
-    """
-
-    id: MaterialID
-    version_ids: list[MaterialVersionID] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {"id": self.id, "version_ids": list(self.version_ids)}
-
-    @classmethod
-    def from_dict(cls, data: dict) -> Material:
-        return cls(id=data["id"], version_ids=list(data.get("version_ids", [])))
-
-
-@dataclass(frozen=True, kw_only=True)
 class MaterialVersion(PaceObject):
     """
     Shared base for concrete composition types (MIsotopic, MMixture).
+
+    Identity: id is a single opaque string built from family_name +
+    version_label via build_id() — e.g. family_name="uranium3.2",
+    version_label="1" -> id="uranium3.2-1". _validate_id() confirms
+    the two stay consistent, catching an accidentally mismatched/
+    copy-pasted id at construction time.
 
     Notably absent from this class: temperature. Composition and
     temperature are physically orthogonal in OpenMC's own model — the
@@ -211,27 +207,39 @@ class MaterialVersion(PaceObject):
     therefore passed as an argument to to_open_mc()/to_moose() at
     solver-translation time, never stored as a field here.
 
-    Versioning rule (identical to GeometryVersion):
-        - v1: always user-authored (i.e. derived_from and gt_run_id are
-            both None); composition a person specified directly.
-        - v2+: can only be created as the recorded output of a GT run;
-            physically, this means composition changed via depletion: OpenMC's
-            depletion module solves the Bateman equations to evolve a nuclide
-            inventory forward under a flux/power history, and that evolved
-            inventory becomes a new MaterialVersion linked back to the GT run
-            that produced it. Note: Having one of derived_from/gt_run_id set without the
-            other is invalid — there's no physical mechanism that produces a
-            "half-derived" version.
+    Versioning rule: a version is either v1 (user-authored from
+    scratch) or a derived version, and if derived, it has exactly one
+    recorded cause:
+        - derived_from is None: version 1. gt_run_id must be None and
+              user_edit must be False.
+        - derived_from is set: a derived version. Exactly one of
+              gt_run_id (this version is the recorded output of a GT
+              run — physically, depletion: OpenMC's depletion module
+              solving the Bateman equations to evolve a nuclide
+              inventory forward under a flux/power history) or
+              user_edit (a person directly edited a predecessor
+              version's composition) must also be set — never neither,
+              and never both.
     """
 
     id: MaterialVersionID
-    material_id: MaterialID
+    family_name: str
+    version_label: str
     derived_from: MaterialVersionID | None = None
     gt_run_id: GTRunID | None = None
+    user_edit: bool = False
+
+    @staticmethod
+    def build_id(family_name: str, version_label: str) -> MaterialVersionID:
+        """The one canonical way an id is constructed from a
+        family_name + version_label pair. Used both when constructing
+        a new version and by _validate_id() to confirm an existing
+        id actually matches its own family_name/version_label."""
+        return MaterialVersionID(f"{family_name}-{version_label}")
 
     @abstractmethod
     def _validate_composition(self) -> None:
-        """Child-specific composition validation."""
+        pass
 
     @abstractmethod
     def to_open_mc(self, temperature_k: float | None = None):
@@ -243,20 +251,39 @@ class MaterialVersion(PaceObject):
 
     def validate(self) -> None:
         validate_fields(self)
+        self._validate_id()
         self._validate_lineage()
         self._validate_composition()
 
+    def _validate_id(self) -> None:
+        expected = self.build_id(self.family_name, self.version_label)
+        if self.id != expected:
+            raise ValueError(
+                f"id {self.id!r} does not match family_name/version_label "
+                f"(expected {expected!r})"
+            )
+
     def _validate_lineage(self) -> None:
-        """Check that derived_from and gt_run_id are set together or
-        both None — see the versioning rule described in this class's
-        docstring for the physical reasoning."""
+        """Check that derived_from and exactly one of gt_run_id/user_edit
+        are set together, or all three are unset — see the versioning
+        rule described in this class's docstring for the physical
+        reasoning."""
         has_predecessor = self.derived_from is not None
         has_gt_run = self.gt_run_id is not None
-        if has_predecessor != has_gt_run:
+
+        if not has_predecessor:
+            if has_gt_run or self.user_edit:
+                raise ValueError(
+                    "gt_run_id must be unset and user_edit must be False "
+                    "when derived_from is unset (version 1 has no "
+                    "derivation cause)"
+                )
+        elif has_gt_run == self.user_edit:
+            # both set, or both unset — either way, invalid
             raise ValueError(
-                "derived_from and gt_run_id must be set together or both "
-                "None (got derived_from="
-                f"{self.derived_from!r}, gt_run_id={self.gt_run_id!r})"
+                "when derived_from is set, exactly one of gt_run_id or "
+                "user_edit must also be set (got gt_run_id="
+                f"{self.gt_run_id!r}, user_edit={self.user_edit!r})"
             )
 
 
@@ -274,8 +301,9 @@ class MIsotopic(MaterialVersion):
     Example — 3.2 wo% enriched UO2 fuel, atom-percent stoichiometry,
     density in g/cm3:
         MIsotopic(
-            id=...,
-            material_id=...,
+            id=MaterialVersion.build_id("uranium3.2_uo2", "1"),
+            family_name="uranium3.2_uo2",
+            version_label="1",
             components={
                 "U": MaterialComponentEntry(
                     percent=1.0,
@@ -294,12 +322,11 @@ class MIsotopic(MaterialVersion):
     U235 — i.e. standard reactor-grade fuel — at a total density of
     10.3 g/cm3.
 
-    eq=False / identity-based equality: `components` is a dict
-    (unhashable, and not meaningfully comparable by value for a
-    frozen-dataclass default __eq__ the way scalar-only
-    GeometryVersion subclasses are) — same reasoning as
-    GAddition/GSubtraction using identity-based __eq__/__hash__ rather
-    than the field-based default.
+    eq=False / id-based equality: `components` is a dict (unhashable,
+    and not meaningfully comparable by value for a frozen-dataclass
+    default __eq__ the way scalar-only GeometryVersion subclasses
+    are) — same reasoning, and same pattern (isinstance check +
+    self.id == other.id, hash(self.id)), as GAddition/GSubtraction.
     """
 
     components: dict[str, MaterialComponentEntry]
@@ -358,9 +385,11 @@ class MIsotopic(MaterialVersion):
         return {
             "type": MaterialType.ISOTOPIC.value,
             "id": self.id,
-            "material_id": self.material_id,
+            "family_name": self.family_name,
+            "version_label": self.version_label,
             "derived_from": self.derived_from,
             "gt_run_id": self.gt_run_id,
+            "user_edit": self.user_edit,
             "percent_type": self.percent_type,
             "density_value": self.density_value,
             "density_unit": self.density_unit,
@@ -373,9 +402,11 @@ class MIsotopic(MaterialVersion):
     def from_dict(cls, data: dict) -> MIsotopic:
         return cls(
             id=data["id"],
-            material_id=data["material_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             percent_type=data["percent_type"],
             density_value=data["density_value"],
             density_unit=data["density_unit"],
@@ -417,14 +448,17 @@ class MMixture(MaterialVersion):
     Example — a 70/30 atom-fraction mix of two previously-defined
     material versions:
         MMixture(
-            id=...,
-            material_id=...,
+            id=MaterialVersion.build_id("fuel_filler_blend", "1"),
+            family_name="fuel_filler_blend",
+            version_label="1",
             components=[
-                (MaterialVersionID("fuel_v1"), 0.7),
-                (MaterialVersionID("filler_v1"), 0.3),
+                (MaterialVersionID("fuel_v1-1"), 0.7),
+                (MaterialVersionID("filler_v1-1"), 0.3),
             ],
             percent_type="ao",
         )
+    Note: the ids inside `components` reference OTHER, already-existing
+    MaterialVersions — unaffected by this class's own identity scheme.
 
     eq=False for the same reason as MIsotopic: `components` holds a
     list, not meaningfully comparable via the frozen-dataclass
@@ -480,9 +514,11 @@ class MMixture(MaterialVersion):
         return {
             "type": MaterialType.MIXTURE.value,
             "id": self.id,
-            "material_id": self.material_id,
+            "family_name": self.family_name,
+            "version_label": self.version_label,
             "derived_from": self.derived_from,
             "gt_run_id": self.gt_run_id,
+            "user_edit": self.user_edit,
             "percent_type": self.percent_type,
             "components": [[mvid, fraction] for mvid, fraction in self.components],
         }
@@ -491,9 +527,33 @@ class MMixture(MaterialVersion):
     def from_dict(cls, data: dict) -> MMixture:
         return cls(
             id=data["id"],
-            material_id=data["material_id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
             derived_from=data["derived_from"],
             gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
             percent_type=data["percent_type"],
             components=[(mvid, fraction) for mvid, fraction in data["components"]],
         )
+
+
+# =============================================================================
+# Type dispatch — maps MaterialType values to their concrete class, and
+# back. Lives here, not in the persistence layer, for the same reason as
+# geometry.py's GEOMETRY_TYPE_TO_CLASS/CLASS_TO_GEOMETRY_TYPE: it's a fact
+# about this module's own class hierarchy, not about how anything gets
+# stored.
+#
+# Must be kept in sync by hand whenever a new MaterialVersion subclass is
+# added — nothing enforces that automatically.
+# =============================================================================
+MATERIAL_TYPE_TO_CLASS: dict[str, type[MaterialVersion]] = {
+    MaterialType.ISOTOPIC.value: MIsotopic,
+    MaterialType.MIXTURE.value: MMixture,
+}
+
+# Inverse lookup, keyed on exact type (not isinstance) — avoids any
+# ambiguity if the class hierarchy ever grows a subclass of a subclass.
+CLASS_TO_MATERIAL_TYPE: dict[type[MaterialVersion], str] = {
+    cls: type_value for type_value, cls in MATERIAL_TYPE_TO_CLASS.items()
+}

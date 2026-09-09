@@ -29,7 +29,6 @@
 authors = [
     "Brett Nelson <brettleenelson@gmail.com>",
     "Paul Varkey <paul.varkey@gmail.com>",
-    "Eeron Grant <eerongrant@gmail.com>",
 ]
 channels = ["conda-forge"]
 name = "pace"
