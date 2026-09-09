@@ -1,10 +1,12 @@
 """
 Unit tests for pace.core.material: MaterialVersion and its concrete
-composition types (MIsotopic, MMixture), MaterialComponentEntry, and the
-bare Material identity class.
+composition types (MIsotopic, MMixture), MaterialComponentEntry.
 
 Covers the invariants established during design, not just field coverage:
-- the derived_from/gt_run_id pairing rule (version 1 vs version 2+ via GT run)
+- identity: id must equal build_id(family_name, version_label)
+  (_validate_id)
+- the three-state lineage rule: v1 (derived_from/gt_run_id/user_edit all
+  unset) vs. a derived version with EXACTLY ONE of gt_run_id/user_edit set
 - MaterialVersion's ABC enforcement (can't instantiate directly, and a
   subclass missing an abstract method still can't instantiate)
 - MaterialComponentEntry's all-or-none enrichment-field invariant
@@ -14,19 +16,25 @@ Covers the invariants established during design, not just field coverage:
   enrichment-format entries restricted to bare-element keys
 - MMixture's composition-level rules: minimum constituent count,
   fraction bounds (0, 1), fractions summing to exactly 1
-- to_dict()/from_dict() round-trips
+- to_dict()/from_dict() round-trips, including the "type" key
 - frozen immutability
-- MIsotopic/MMixture's identity-based __eq__/__hash__ (self is other,
-  NOT id-field-based — see TestMIsotopicEquality/TestMMixtureEquality
-  for why this differs from GAddition/GSubtraction in geometry.py, and
-  why round-trip tests here compare fields rather than object equality)
+- MIsotopic/MMixture's id-based __eq__/__hash__ (matching hash(self.id),
+  not id(self.id) — see the regression guard)
+- the MATERIAL_TYPE_TO_CLASS/CLASS_TO_MATERIAL_TYPE dispatch tables stay
+  in sync with the actual set of concrete subclasses
+
+No bare Material identity class exists anymore — removed from the design
+in favor of family_name/version_label living directly on the version.
 """
 
 import dataclasses
+from typing import ClassVar
 
 import pytest
-from pace.core.ids import GTRunID, MaterialID, MaterialVersionID
+from pace.core.ids import GTRunID, MaterialVersionID
 from pace.core.material import (
+    CLASS_TO_MATERIAL_TYPE,
+    MATERIAL_TYPE_TO_CLASS,
     MaterialComponentEntry,
     MaterialVersion,
     MIsotopic,
@@ -38,13 +46,20 @@ from pace.core.material import (
 # ---------------------------------------------------------------------------
 
 
-def _base_kwargs(**overrides) -> dict:
-    """Common MaterialVersion base fields — valid version-1 (no lineage) by default."""
+def _base_kwargs(
+    family_name: str = "test_mat", version_label: str = "1", **overrides
+) -> dict:
+    """Common MaterialVersion base fields — valid version-1 (no lineage)
+    by default. id is computed from family_name/version_label via
+    build_id(), matching _validate_id()'s requirement — override id
+    directly only when deliberately testing a mismatch."""
     kwargs = {
-        "id": MaterialVersionID("mv-1"),
-        "material_id": MaterialID("m-1"),
+        "id": MaterialVersion.build_id(family_name, version_label),
+        "family_name": family_name,
+        "version_label": version_label,
         "derived_from": None,
         "gt_run_id": None,
+        "user_edit": False,
     }
     kwargs.update(overrides)
     return kwargs
@@ -78,18 +93,45 @@ def _valid_mixture_kwargs(**overrides) -> dict:
     return kwargs
 
 
-def make_isotopic(**overrides) -> MIsotopic:
-    kwargs = _base_kwargs()
+def make_isotopic(
+    family_name: str = "test_mat", version_label: str = "1", **overrides
+) -> MIsotopic:
+    kwargs = _base_kwargs(family_name=family_name, version_label=version_label)
     kwargs.update(_valid_isotopic_kwargs())
     kwargs.update(overrides)
     return MIsotopic(**kwargs)
 
 
-def make_mixture(**overrides) -> MMixture:
-    kwargs = _base_kwargs()
+def make_mixture(
+    family_name: str = "test_mat", version_label: str = "1", **overrides
+) -> MMixture:
+    kwargs = _base_kwargs(family_name=family_name, version_label=version_label)
     kwargs.update(_valid_mixture_kwargs())
     kwargs.update(overrides)
     return MMixture(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Identity: build_id() / _validate_id()
+# ---------------------------------------------------------------------------
+
+
+class TestMaterialVersionIdentity:
+    def test_build_id_format(self):
+        assert MaterialVersion.build_id("uranium3.2", "1") == "uranium3.2-1"
+
+    def test_build_id_with_string_version_label(self):
+        assert (
+            MaterialVersion.build_id("fuel", "6month_depletion")
+            == "fuel-6month_depletion"
+        )
+
+    def test_mismatched_id_rejected(self):
+        with pytest.raises(ValueError):
+            make_isotopic(id=MaterialVersionID("wrong_id"))
+
+    def test_matching_id_is_allowed(self):
+        make_isotopic()  # should not raise
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +232,7 @@ class TestMaterialComponentEntry:
 
 
 # ---------------------------------------------------------------------------
-# MaterialVersion — ABC enforcement + shared pairing invariant
+# MaterialVersion — ABC enforcement + shared lineage invariant
 # ---------------------------------------------------------------------------
 
 
@@ -211,37 +253,16 @@ class TestMaterialVersionBase:
     @pytest.mark.parametrize(
         "derived_from,gt_run_id,user_edit,should_raise",
         [
-            (None, None, False, False),  # version 1: no source settings
-            (
-                MaterialVersionID("mv-0"),
-                GTRunID("run-1"),
-                False,
-                False,
-            ),  # v2+: only gt_run set
-            (
-                MaterialVersionID("mv-0"),
-                None,
-                True,
-                False,
-            ),  # v2+: only user_edit set
-            (
-                MaterialVersionID("mv-0"),
-                GTRunID("run-1"),
-                True,
-                True,
-            ),  # v2+: both version sources set, invalid
-            (
-                MaterialVersionID("mv-0"),
-                None,
-                False,
-                True,
-            ),  # derived_from w/o either version source set, invalid
+            (None, None, False, False),  # v1: no derivation cause needed
+            (MaterialVersionID("mv-0"), GTRunID("run-1"), False, False),  # GT-derived
+            (MaterialVersionID("mv-0"), None, True, False),  # user-edited
+            (MaterialVersionID("mv-0"), None, False, True),  # derived but no cause
+            (MaterialVersionID("mv-0"), GTRunID("run-1"), True, True),  # both causes
             (None, GTRunID("run-1"), False, True),  # gt_run_id w/o derived_from
+            (None, None, True, True),  # user_edit w/o derived_from
         ],
     )
-    def test_derived_from_gt_run_id_pairing(
-        self, derived_from, gt_run_id, user_edit, should_raise
-    ):
+    def test_lineage_rule(self, derived_from, gt_run_id, user_edit, should_raise):
         if should_raise:
             with pytest.raises(ValueError):
                 make_isotopic(
@@ -308,6 +329,7 @@ class TestMIsotopic:
         make_isotopic(
             derived_from=None,
             gt_run_id=None,
+            user_edit=False,
             components={
                 "U": MaterialComponentEntry(
                     percent=1.0,
@@ -318,7 +340,25 @@ class TestMIsotopic:
             },
         )
 
-    def test_v2_plus_with_enrichment_rejected(self):
+    def test_user_edited_version_with_enrichment_is_allowed(self):
+        # a manual edit (user_edit=True) is not GT-run output, so it can
+        # still use enrichment shorthand — only gt_run_id restricts to
+        # bare nuclides
+        make_isotopic(
+            derived_from=MaterialVersionID("mv-0"),
+            gt_run_id=None,
+            user_edit=True,
+            components={
+                "U": MaterialComponentEntry(
+                    percent=1.0,
+                    enrichment=3.2,
+                    enrichment_target="U235",
+                    enrichment_type="wo",
+                ),
+            },
+        )
+
+    def test_v2_plus_gt_derived_with_enrichment_rejected(self):
         # depletion output must be exact nuclide fractions — enrichment
         # shorthand on a GT-run-derived version indicates an inconsistent
         # or incorrectly-constructed version
@@ -326,6 +366,7 @@ class TestMIsotopic:
             make_isotopic(
                 derived_from=MaterialVersionID("mv-0"),
                 gt_run_id=GTRunID("run-1"),
+                user_edit=False,
                 components={
                     "U": MaterialComponentEntry(
                         percent=1.0,
@@ -336,10 +377,11 @@ class TestMIsotopic:
                 },
             )
 
-    def test_v2_plus_with_bare_nuclides_is_allowed(self):
+    def test_v2_plus_gt_derived_with_bare_nuclides_is_allowed(self):
         make_isotopic(
             derived_from=MaterialVersionID("mv-0"),
             gt_run_id=GTRunID("run-1"),
+            user_edit=False,
             components={
                 "U235": MaterialComponentEntry(percent=3.0),
                 "U236": MaterialComponentEntry(percent=0.5),
@@ -358,17 +400,19 @@ class TestMIsotopic:
     def test_to_dict_from_dict_round_trip(self):
         original = make_isotopic()
         rebuilt = MIsotopic.from_dict(original.to_dict())
-        # id-field-based __eq__ (matching GAddition/GSubtraction) means
-        # this holds directly now, but field-by-field checks are kept
-        # too since they pin down exactly what round-trips correctly.
         assert rebuilt == original
-        assert rebuilt.material_id == original.material_id
+        assert rebuilt.family_name == original.family_name
+        assert rebuilt.version_label == original.version_label
         assert rebuilt.derived_from == original.derived_from
         assert rebuilt.gt_run_id == original.gt_run_id
+        assert rebuilt.user_edit == original.user_edit
         assert rebuilt.percent_type == original.percent_type
         assert rebuilt.density_value == original.density_value
         assert rebuilt.density_unit == original.density_unit
         assert rebuilt.components == original.components
+
+    def test_to_dict_includes_type(self):
+        assert make_isotopic().to_dict()["type"] == "isotopic"
 
     def test_frozen(self):
         instance = make_isotopic()
@@ -380,33 +424,32 @@ class TestMIsotopicEquality:
     """MIsotopic's __eq__/__hash__ are id-field-based (isinstance check +
     self.id == value.id), matching GAddition/GSubtraction in geometry.py —
     NOT pure object identity. Two separately-constructed instances with the
-    same id are equal and must hash identically, even with different
-    composition data."""
+    same id (same family_name/version_label) are equal and must hash
+    identically, even with different composition data."""
 
     def test_same_id_different_fields_are_equal(self):
         a = make_isotopic(
-            id=MaterialVersionID("mv-shared"),
+            family_name="shared",
+            version_label="1",
             components={"U235": MaterialComponentEntry(percent=1.0)},
         )
         b = make_isotopic(
-            id=MaterialVersionID("mv-shared"),
+            family_name="shared",
+            version_label="1",
             components={"O16": MaterialComponentEntry(percent=2.0)},
         )
-        # same id, different composition — still equal/same-hash by design
         assert a == b
         assert hash(a) == hash(b)
 
     def test_different_id_is_not_equal(self):
-        a = make_isotopic(id=MaterialVersionID("mv-a"))
-        b = make_isotopic(id=MaterialVersionID("mv-b"))
+        a = make_isotopic(family_name="fam-a", version_label="1")
+        b = make_isotopic(family_name="fam-b", version_label="1")
         assert a != b
 
     def test_hash_matches_hash_of_id(self):
         # regression guard: __hash__ must be hash(self.id), not id(self.id)
-        # (the latter hashes object identity/memory address, not the id's
-        # value — silently breaks the a == b => hash(a) == hash(b) contract)
-        instance = make_isotopic(id=MaterialVersionID("mv-1"))
-        assert hash(instance) == hash(MaterialVersionID("mv-1"))
+        instance = make_isotopic(family_name="shared", version_label="1")
+        assert hash(instance) == hash(MaterialVersion.build_id("shared", "1"))
 
 
 # ---------------------------------------------------------------------------
@@ -476,9 +519,13 @@ class TestMMixture:
         original = make_mixture()
         rebuilt = MMixture.from_dict(original.to_dict())
         assert rebuilt == original
-        assert rebuilt.material_id == original.material_id
+        assert rebuilt.family_name == original.family_name
+        assert rebuilt.version_label == original.version_label
         assert rebuilt.percent_type == original.percent_type
         assert rebuilt.components == original.components
+
+    def test_to_dict_includes_type(self):
+        assert make_mixture().to_dict()["type"] == "mixture"
 
     def test_frozen(self):
         instance = make_mixture()
@@ -492,29 +539,46 @@ class TestMMixtureEquality:
 
     def test_same_id_different_fields_are_equal(self):
         a = make_mixture(
-            id=MaterialVersionID("mv-shared"),
+            family_name="shared",
+            version_label="1",
             components=[
                 (MaterialVersionID("mv-a"), 0.7),
                 (MaterialVersionID("mv-b"), 0.3),
             ],
         )
         b = make_mixture(
-            id=MaterialVersionID("mv-shared"),
+            family_name="shared",
+            version_label="1",
             components=[
                 (MaterialVersionID("mv-c"), 0.5),
                 (MaterialVersionID("mv-d"), 0.5),
             ],
         )
-        # same id, different components — still equal/same-hash by design
         assert a == b
         assert hash(a) == hash(b)
 
     def test_different_id_is_not_equal(self):
-        a = make_mixture(id=MaterialVersionID("mv-a"))
-        b = make_mixture(id=MaterialVersionID("mv-b"))
+        a = make_mixture(family_name="fam-a", version_label="1")
+        b = make_mixture(family_name="fam-b", version_label="1")
         assert a != b
 
     def test_hash_matches_hash_of_id(self):
-        # regression guard: __hash__ must be hash(self.id), not id(self.id)
-        instance = make_mixture(id=MaterialVersionID("mv-1"))
-        assert hash(instance) == hash(MaterialVersionID("mv-1"))
+        instance = make_mixture(family_name="shared", version_label="1")
+        assert hash(instance) == hash(MaterialVersion.build_id("shared", "1"))
+
+
+# ---------------------------------------------------------------------------
+# Type dispatch tables — every concrete subclass must be registered
+# ---------------------------------------------------------------------------
+
+
+class TestMaterialTypeDispatch:
+    ALL_CONCRETE_MATERIALS: ClassVar[list[type]] = [MIsotopic, MMixture]
+
+    @pytest.mark.parametrize("cls", ALL_CONCRETE_MATERIALS)
+    def test_every_concrete_subclass_is_registered(self, cls):
+        assert cls in CLASS_TO_MATERIAL_TYPE
+
+    def test_dispatch_tables_are_inverses(self):
+        for type_value, cls in MATERIAL_TYPE_TO_CLASS.items():
+            assert CLASS_TO_MATERIAL_TYPE[cls] == type_value
