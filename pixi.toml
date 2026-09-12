@@ -93,6 +93,7 @@ pytest-cov = ">=7.1.0,<8"
 [feature.pace-py.dependencies]
 python = ">=3.10,<3.15"
 fastapi = "*"
+sqlalchemy = ">=2.0.52,<3"
 
 [feature.pace-py.pypi-dependencies]
 pace = { path = "python", editable = true }

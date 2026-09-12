@@ -6,7 +6,7 @@ bare "Material" identity class/table — a version's family is just a
 `family_name` string carried on the version itself. A version's id is
 one opaque string built from family_name + version_label (e.g.
 "uranium3.2-1", "uranium3.2-6month_depletion" — see
-MaterialVersion.build_id()).
+Material.build_id()).
 
 family_name is NOT unique per row — every version in a family shares
 it. Rejecting a duplicate family_name is enforced only at "create a
@@ -17,7 +17,7 @@ What "material" means physically here: a material is a description of
 what substance occupies a region of space — which isotopes are
 present, in what relative amounts, and at what density. It says
 nothing about shape (that's Geometry) or temperature (deliberately
-excluded — see MaterialVersion).
+excluded — see Material).
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from enum import Enum
 from typing import Literal
 
 from pace.core.constraints import Constraint, validate_fields
-from pace.core.ids import GTRunID, MaterialVersionID
+from pace.core.ids import GTRunID, MaterialID
 from pace.core.pace_object import PaceObject
 
 """
@@ -78,19 +78,24 @@ DensityUnit = Literal["g/cm3", "kg/m3", "atom/b-cm"]
 
 
 class MaterialType(str, Enum):
-    """Discriminator tag for MaterialVersion subclasses.
+    """Discriminator tag for Material subclasses.
 
     Values:
         - isotopic: a direct composition of nuclides/elements
               (MIsotopic) — "this material is made of these isotopes,
               in these amounts."
         - mixture: a weighted combination of other, already-defined
-              MaterialVersions (MMixture) — "this material is X% of
+              Materials (MMixture) — "this material is X% of
               material A plus Y% of material B."
+        - void: no material at all (MVoid) — physically distinct from
+              a sparse/low-density material: zero cross sections, not
+              small ones. See MVoid's docstring for why this can't be
+              approximated with MIsotopic instead.
     """
 
     ISOTOPIC = "isotopic"
     MIXTURE = "mixture"
+    VOID = "void"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -110,7 +115,7 @@ class MaterialComponentEntry(PaceObject):
        how much of a specific isotope is present. No ambiguity, no
        expansion needed. This is the ONLY form a GT-run-derived (v2+)
        composition can take — depletion output is always exact
-       per-isotope densities (see MaterialVersion and
+       per-isotope densities (see Material and
        MIsotopic._validate_composition).
 
     2. Element + all three enrichment fields set together —
@@ -189,7 +194,7 @@ class MaterialComponentEntry(PaceObject):
 
 
 @dataclass(frozen=True, kw_only=True)
-class MaterialVersion(PaceObject):
+class Material(PaceObject):
     """
     Shared base for concrete composition types (MIsotopic, MMixture).
 
@@ -222,20 +227,46 @@ class MaterialVersion(PaceObject):
               and never both.
     """
 
-    id: MaterialVersionID
+    id: MaterialID
     family_name: str
     version_label: str
-    derived_from: MaterialVersionID | None = None
+    derived_from: MaterialID | None = None
     gt_run_id: GTRunID | None = None
     user_edit: bool = False
 
     @staticmethod
-    def build_id(family_name: str, version_label: str) -> MaterialVersionID:
+    def build_id(family_name: str, version_label: str) -> MaterialID:
         """The one canonical way an id is constructed from a
         family_name + version_label pair. Used both when constructing
         a new version and by _validate_id() to confirm an existing
         id actually matches its own family_name/version_label."""
-        return MaterialVersionID(f"{family_name}-{version_label}")
+        return MaterialID(f"{family_name}-{version_label}")
+
+    @classmethod
+    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Material:
+        """Named-constructor convenience: derives id via build_id() so
+        callers never have to compute and pass it separately. Works
+        for any concrete subclass unchanged — **kwargs passes through
+        whatever composition-specific fields that subclass requires
+        (e.g. components/percent_type/density_value/density_unit for
+        MIsotopic).
+
+        Prefer this over calling a subclass's constructor directly
+        when constructing brand-new versions (hand-written examples,
+        ComponentService minting a new version). from_dict() should
+        keep calling cls(...) directly — it already has a trusted,
+        stored id and doesn't need one derived.
+        """
+        return cls(
+            id=cls.build_id(family_name, version_label),
+            family_name=family_name,
+            version_label=version_label,
+            **kwargs,
+        )
+
+    @classmethod
+    @abstractmethod
+    def from_dict(cls, data: dict) -> Material: ...
 
     @abstractmethod
     def _validate_composition(self) -> None:
@@ -288,7 +319,7 @@ class MaterialVersion(PaceObject):
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
-class MIsotopic(MaterialVersion):
+class MIsotopic(Material):
     """
     Direct nuclide/element composition — the common case, and the only
     form v2+ (depletion-derived) versions can take.
@@ -301,7 +332,7 @@ class MIsotopic(MaterialVersion):
     Example — 3.2 wo% enriched UO2 fuel, atom-percent stoichiometry,
     density in g/cm3:
         MIsotopic(
-            id=MaterialVersion.build_id("uranium3.2_uo2", "1"),
+            id=Material.build_id("uranium3.2_uo2", "1"),
             family_name="uranium3.2_uo2",
             version_label="1",
             components={
@@ -324,7 +355,7 @@ class MIsotopic(MaterialVersion):
 
     eq=False / id-based equality: `components` is a dict (unhashable,
     and not meaningfully comparable by value for a frozen-dataclass
-    default __eq__ the way scalar-only GeometryVersion subclasses
+    default __eq__ the way scalar-only Geometry subclasses
     are) — same reasoning, and same pattern (isinstance check +
     self.id == other.id, hash(self.id)), as GAddition/GSubtraction.
     """
@@ -363,7 +394,7 @@ class MIsotopic(MaterialVersion):
                 if self.gt_run_id is not None:
                     raise ValueError(
                         f"component '{name}' uses enrichment format, which "
-                        "is not valid on a GT-run-derived (v2+) MaterialVersion "
+                        "is not valid on a GT-run-derived (v2+) Material "
                         "— depletion output must be exact nuclide fractions"
                     )
                 if any(char.isdigit() for char in name):
@@ -418,17 +449,17 @@ class MIsotopic(MaterialVersion):
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
-class MMixture(MaterialVersion):
+class MMixture(Material):
     """
     A material defined as a weighted mix of other, already-defined
-    MaterialVersions — e.g. homogenizing several distinct materials
+    Materials — e.g. homogenizing several distinct materials
     (fuel, cladding, coolant, structural filler) into one effective
     material for a simplified/coarser model region.
 
     Answers the earlier "mix_materials()" design question: rather than
     a method on Material or a standalone helper function, mixing is
-    its own MaterialVersion subclass storing references + fractions —
-    mirrors GAddition storing list[tuple[GeometryVersionID, GPose]]
+    its own Material subclass storing references + fractions —
+    mirrors GAddition storing list[tuple[GeometryID, GPose]]
     rather than pre-flattening geometry at construction time. The
     actual nuclide-level combination happens in to_open_mc(), not
     here — this class only records the recipe.
@@ -448,24 +479,24 @@ class MMixture(MaterialVersion):
     Example — a 70/30 atom-fraction mix of two previously-defined
     material versions:
         MMixture(
-            id=MaterialVersion.build_id("fuel_filler_blend", "1"),
+            id=Material.build_id("fuel_filler_blend", "1"),
             family_name="fuel_filler_blend",
             version_label="1",
             components=[
-                (MaterialVersionID("fuel_v1-1"), 0.7),
-                (MaterialVersionID("filler_v1-1"), 0.3),
+                (MaterialID("fuel_v1-1"), 0.7),
+                (MaterialID("filler_v1-1"), 0.3),
             ],
             percent_type="ao",
         )
     Note: the ids inside `components` reference OTHER, already-existing
-    MaterialVersions — unaffected by this class's own identity scheme.
+    Materials — unaffected by this class's own identity scheme.
 
     eq=False for the same reason as MIsotopic: `components` holds a
     list, not meaningfully comparable via the frozen-dataclass
     default.
     """
 
-    components: list[tuple[MaterialVersionID, float]]
+    components: list[tuple[MaterialID, float]]
     percent_type: PercentType
 
     def __eq__(self, value: object) -> bool:
@@ -502,7 +533,7 @@ class MMixture(MaterialVersion):
             raise ValueError(f"mix fractions must sum to 1, got {total}")
 
     def to_open_mc(self, temperature_k: float | None = None):
-        # TODO: resolve each constituent MaterialVersion, build/mix the
+        # TODO: resolve each constituent Material, build/mix the
         # corresponding openmc.Material objects per self.percent_type, apply
         # temperature_k.
         raise NotImplementedError
@@ -537,6 +568,73 @@ class MMixture(MaterialVersion):
         )
 
 
+@dataclass(frozen=True, kw_only=True)
+class MVoid(Material):
+    """
+    No material at all — an empty region, e.g. a fuel rod's gas
+    plenum, a gap deliberately left unfilled, or any space a solver
+    should treat as having zero interaction probability.
+
+    Physically distinct from a sparse/low-density MIsotopic: void
+    means zero cross sections, not small ones — a particle passes
+    through completely unimpeded, which is a different physical
+    statement than "very unlikely to interact." This can't be
+    approximated by giving MIsotopic a near-zero density: its
+    components dict requires at least one entry and density_value is
+    constrained strictly positive (Constraint.POSITIVE), by design —
+    relaxing either to let a "fake void" through would corrupt the
+    guarantee every other consumer of MIsotopic currently relies on
+    (that a real MIsotopic always has genuine, physical mass density).
+
+    No fields — there is nothing to compose or configure. Uses the
+    plain frozen-dataclass default __eq__/__hash__ (unlike MIsotopic/
+    MMixture): with no dict/list fields, there's nothing unhashable to
+    work around.
+
+    Example:
+        MVoid(
+            id=Material.build_id("plenum_void", "1"),
+            family_name="plenum_void",
+            version_label="1",
+        )
+    """
+
+    def _validate_composition(self) -> None:
+        # nothing to validate — void has no composition
+        pass
+
+    def to_open_mc(self, temperature_k: float | None = None):
+        # TODO: implement this — conceptually, this should resolve to
+        # an OpenMC cell/region with fill=None (no material at all),
+        # not a Material object with near-zero density.
+        raise NotImplementedError
+
+    def to_moose(self, temperature_k: float | None = None):
+        raise NotImplementedError
+
+    def to_dict(self) -> dict:
+        return {
+            "type": MaterialType.VOID.value,
+            "id": self.id,
+            "family_name": self.family_name,
+            "version_label": self.version_label,
+            "derived_from": self.derived_from,
+            "gt_run_id": self.gt_run_id,
+            "user_edit": self.user_edit,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> MVoid:
+        return cls(
+            id=data["id"],
+            family_name=data["family_name"],
+            version_label=data["version_label"],
+            derived_from=data["derived_from"],
+            gt_run_id=data["gt_run_id"],
+            user_edit=data["user_edit"],
+        )
+
+
 # =============================================================================
 # Type dispatch — maps MaterialType values to their concrete class, and
 # back. Lives here, not in the persistence layer, for the same reason as
@@ -544,16 +642,16 @@ class MMixture(MaterialVersion):
 # about this module's own class hierarchy, not about how anything gets
 # stored.
 #
-# Must be kept in sync by hand whenever a new MaterialVersion subclass is
+# Must be kept in sync by hand whenever a new Material subclass is
 # added — nothing enforces that automatically.
 # =============================================================================
-MATERIAL_TYPE_TO_CLASS: dict[str, type[MaterialVersion]] = {
+MATERIAL_TYPE_TO_CLASS: dict[str, type[Material]] = {
     MaterialType.ISOTOPIC.value: MIsotopic,
     MaterialType.MIXTURE.value: MMixture,
+    MaterialType.VOID.value: MVoid,
 }
-
 # Inverse lookup, keyed on exact type (not isinstance) — avoids any
 # ambiguity if the class hierarchy ever grows a subclass of a subclass.
-CLASS_TO_MATERIAL_TYPE: dict[type[MaterialVersion], str] = {
+CLASS_TO_MATERIAL_TYPE: dict[type[Material], str] = {
     cls: type_value for type_value, cls in MATERIAL_TYPE_TO_CLASS.items()
 }

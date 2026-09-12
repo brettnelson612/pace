@@ -1,5 +1,5 @@
 """
-Unit tests for pace.core.material: MaterialVersion and its concrete
+Unit tests for pace.core.material: Material and its concrete
 composition types (MIsotopic, MMixture), MaterialComponentEntry.
 
 Covers the invariants established during design, not just field coverage:
@@ -7,7 +7,7 @@ Covers the invariants established during design, not just field coverage:
   (_validate_id)
 - the three-state lineage rule: v1 (derived_from/gt_run_id/user_edit all
   unset) vs. a derived version with EXACTLY ONE of gt_run_id/user_edit set
-- MaterialVersion's ABC enforcement (can't instantiate directly, and a
+- Material's ABC enforcement (can't instantiate directly, and a
   subclass missing an abstract method still can't instantiate)
 - MaterialComponentEntry's all-or-none enrichment-field invariant
 - field constraints (positive/range) via validate_fields()
@@ -16,6 +16,8 @@ Covers the invariants established during design, not just field coverage:
   enrichment-format entries restricted to bare-element keys
 - MMixture's composition-level rules: minimum constituent count,
   fraction bounds (0, 1), fractions summing to exactly 1
+- MVoid: no fields, trivially valid, uses default field-based equality
+  (unlike MIsotopic/MMixture) since it has nothing unhashable
 - to_dict()/from_dict() round-trips, including the "type" key
 - frozen immutability
 - MIsotopic/MMixture's id-based __eq__/__hash__ (matching hash(self.id),
@@ -31,14 +33,15 @@ import dataclasses
 from typing import ClassVar
 
 import pytest
-from pace.core.ids import GTRunID, MaterialVersionID
+from pace.core.ids import GTRunID, MaterialID
 from pace.core.material import (
     CLASS_TO_MATERIAL_TYPE,
     MATERIAL_TYPE_TO_CLASS,
+    Material,
     MaterialComponentEntry,
-    MaterialVersion,
     MIsotopic,
     MMixture,
+    MVoid,
 )
 
 # ---------------------------------------------------------------------------
@@ -49,12 +52,12 @@ from pace.core.material import (
 def _base_kwargs(
     family_name: str = "test_mat", version_label: str = "1", **overrides
 ) -> dict:
-    """Common MaterialVersion base fields — valid version-1 (no lineage)
+    """Common Material base fields — valid version-1 (no lineage)
     by default. id is computed from family_name/version_label via
     build_id(), matching _validate_id()'s requirement — override id
     directly only when deliberately testing a mismatch."""
     kwargs = {
-        "id": MaterialVersion.build_id(family_name, version_label),
+        "id": Material.build_id(family_name, version_label),
         "family_name": family_name,
         "version_label": version_label,
         "derived_from": None,
@@ -84,8 +87,8 @@ def _valid_mixture_kwargs(**overrides) -> dict:
     """A valid MMixture composition — 70/30 atom-fraction mix of two materials."""
     kwargs = {
         "components": [
-            (MaterialVersionID("mv-a"), 0.7),
-            (MaterialVersionID("mv-b"), 0.3),
+            (MaterialID("mv-a"), 0.7),
+            (MaterialID("mv-b"), 0.3),
         ],
         "percent_type": "ao",
     }
@@ -111,24 +114,29 @@ def make_mixture(
     return MMixture(**kwargs)
 
 
+def make_void(
+    family_name: str = "test_mat", version_label: str = "1", **overrides
+) -> MVoid:
+    kwargs = _base_kwargs(family_name=family_name, version_label=version_label)
+    kwargs.update(overrides)
+    return MVoid(**kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Identity: build_id() / _validate_id()
 # ---------------------------------------------------------------------------
 
 
-class TestMaterialVersionIdentity:
+class TestMaterialIdentity:
     def test_build_id_format(self):
-        assert MaterialVersion.build_id("uranium3.2", "1") == "uranium3.2-1"
+        assert Material.build_id("uranium3.2", "1") == "uranium3.2-1"
 
     def test_build_id_with_string_version_label(self):
-        assert (
-            MaterialVersion.build_id("fuel", "6month_depletion")
-            == "fuel-6month_depletion"
-        )
+        assert Material.build_id("fuel", "6month_depletion") == "fuel-6month_depletion"
 
     def test_mismatched_id_rejected(self):
         with pytest.raises(ValueError):
-            make_isotopic(id=MaterialVersionID("wrong_id"))
+            make_isotopic(id=MaterialID("wrong_id"))
 
     def test_matching_id_is_allowed(self):
         make_isotopic()  # should not raise
@@ -232,19 +240,19 @@ class TestMaterialComponentEntry:
 
 
 # ---------------------------------------------------------------------------
-# MaterialVersion — ABC enforcement + shared lineage invariant
+# Material — ABC enforcement + shared lineage invariant
 # ---------------------------------------------------------------------------
 
 
-class TestMaterialVersionBase:
+class TestMaterialBase:
     def test_cannot_instantiate_directly(self):
         with pytest.raises(TypeError):
-            MaterialVersion(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
+            Material(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
     def test_incomplete_subclass_cannot_instantiate(self):
         # a subclass missing _validate_composition/to_open_mc/to_moose should
         # still fail to instantiate, same as the base itself
-        class Incomplete(MaterialVersion):
+        class Incomplete(Material):
             pass
 
         with pytest.raises(TypeError):
@@ -254,10 +262,10 @@ class TestMaterialVersionBase:
         "derived_from,gt_run_id,user_edit,should_raise",
         [
             (None, None, False, False),  # v1: no derivation cause needed
-            (MaterialVersionID("mv-0"), GTRunID("run-1"), False, False),  # GT-derived
-            (MaterialVersionID("mv-0"), None, True, False),  # user-edited
-            (MaterialVersionID("mv-0"), None, False, True),  # derived but no cause
-            (MaterialVersionID("mv-0"), GTRunID("run-1"), True, True),  # both causes
+            (MaterialID("mv-0"), GTRunID("run-1"), False, False),  # GT-derived
+            (MaterialID("mv-0"), None, True, False),  # user-edited
+            (MaterialID("mv-0"), None, False, True),  # derived but no cause
+            (MaterialID("mv-0"), GTRunID("run-1"), True, True),  # both causes
             (None, GTRunID("run-1"), False, True),  # gt_run_id w/o derived_from
             (None, None, True, True),  # user_edit w/o derived_from
         ],
@@ -345,7 +353,7 @@ class TestMIsotopic:
         # still use enrichment shorthand — only gt_run_id restricts to
         # bare nuclides
         make_isotopic(
-            derived_from=MaterialVersionID("mv-0"),
+            derived_from=MaterialID("mv-0"),
             gt_run_id=None,
             user_edit=True,
             components={
@@ -364,7 +372,7 @@ class TestMIsotopic:
         # or incorrectly-constructed version
         with pytest.raises(ValueError):
             make_isotopic(
-                derived_from=MaterialVersionID("mv-0"),
+                derived_from=MaterialID("mv-0"),
                 gt_run_id=GTRunID("run-1"),
                 user_edit=False,
                 components={
@@ -379,7 +387,7 @@ class TestMIsotopic:
 
     def test_v2_plus_gt_derived_with_bare_nuclides_is_allowed(self):
         make_isotopic(
-            derived_from=MaterialVersionID("mv-0"),
+            derived_from=MaterialID("mv-0"),
             gt_run_id=GTRunID("run-1"),
             user_edit=False,
             components={
@@ -449,7 +457,7 @@ class TestMIsotopicEquality:
     def test_hash_matches_hash_of_id(self):
         # regression guard: __hash__ must be hash(self.id), not id(self.id)
         instance = make_isotopic(family_name="shared", version_label="1")
-        assert hash(instance) == hash(MaterialVersion.build_id("shared", "1"))
+        assert hash(instance) == hash(Material.build_id("shared", "1"))
 
 
 # ---------------------------------------------------------------------------
@@ -463,16 +471,16 @@ class TestMMixture:
 
     def test_requires_at_least_two_constituents(self):
         with pytest.raises(ValueError):
-            make_mixture(components=[(MaterialVersionID("mv-a"), 1.0)])
+            make_mixture(components=[(MaterialID("mv-a"), 1.0)])
 
     @pytest.mark.parametrize("bad_fraction", [0.0, 1.0, -0.1, 1.1])
     def test_fraction_out_of_range_rejected(self, bad_fraction):
         with pytest.raises(ValueError):
             make_mixture(
                 components=[
-                    (MaterialVersionID("mv-a"), bad_fraction),
+                    (MaterialID("mv-a"), bad_fraction),
                     (
-                        MaterialVersionID("mv-b"),
+                        MaterialID("mv-b"),
                         1.0 - bad_fraction if 0.0 < bad_fraction < 1.0 else 0.5,
                     ),
                 ]
@@ -482,25 +490,25 @@ class TestMMixture:
         with pytest.raises(ValueError):
             make_mixture(
                 components=[
-                    (MaterialVersionID("mv-a"), 0.5),
-                    (MaterialVersionID("mv-b"), 0.4),
+                    (MaterialID("mv-a"), 0.5),
+                    (MaterialID("mv-b"), 0.4),
                 ]
             )
 
     def test_fractions_summing_to_one_is_allowed(self):
         make_mixture(
             components=[
-                (MaterialVersionID("mv-a"), 0.7),
-                (MaterialVersionID("mv-b"), 0.3),
+                (MaterialID("mv-a"), 0.7),
+                (MaterialID("mv-b"), 0.3),
             ]
         )
 
     def test_fractions_summing_to_one_across_three_is_allowed(self):
         make_mixture(
             components=[
-                (MaterialVersionID("mv-a"), 0.2),
-                (MaterialVersionID("mv-b"), 0.3),
-                (MaterialVersionID("mv-c"), 0.5),
+                (MaterialID("mv-a"), 0.2),
+                (MaterialID("mv-b"), 0.3),
+                (MaterialID("mv-c"), 0.5),
             ]
         )
 
@@ -509,9 +517,9 @@ class TestMMixture:
         # math.isclose() should still accept this
         make_mixture(
             components=[
-                (MaterialVersionID("mv-a"), 0.1),
-                (MaterialVersionID("mv-b"), 0.2),
-                (MaterialVersionID("mv-c"), 0.7),
+                (MaterialID("mv-a"), 0.1),
+                (MaterialID("mv-b"), 0.2),
+                (MaterialID("mv-c"), 0.7),
             ]
         )
 
@@ -542,16 +550,16 @@ class TestMMixtureEquality:
             family_name="shared",
             version_label="1",
             components=[
-                (MaterialVersionID("mv-a"), 0.7),
-                (MaterialVersionID("mv-b"), 0.3),
+                (MaterialID("mv-a"), 0.7),
+                (MaterialID("mv-b"), 0.3),
             ],
         )
         b = make_mixture(
             family_name="shared",
             version_label="1",
             components=[
-                (MaterialVersionID("mv-c"), 0.5),
-                (MaterialVersionID("mv-d"), 0.5),
+                (MaterialID("mv-c"), 0.5),
+                (MaterialID("mv-d"), 0.5),
             ],
         )
         assert a == b
@@ -564,7 +572,51 @@ class TestMMixtureEquality:
 
     def test_hash_matches_hash_of_id(self):
         instance = make_mixture(family_name="shared", version_label="1")
-        assert hash(instance) == hash(MaterialVersion.build_id("shared", "1"))
+        assert hash(instance) == hash(Material.build_id("shared", "1"))
+
+
+# ---------------------------------------------------------------------------
+# MVoid — no composition, no fields
+# ---------------------------------------------------------------------------
+
+
+class TestMVoid:
+    def test_valid_construction(self):
+        make_void()  # sanity check — should not raise
+
+    def test_to_dict_from_dict_round_trip(self):
+        original = make_void()
+        rebuilt = MVoid.from_dict(original.to_dict())
+        # MVoid uses the plain frozen-dataclass default __eq__ (no
+        # dict/list fields, nothing unhashable to work around) — unlike
+        # MIsotopic/MMixture, direct == works here without needing a
+        # field-by-field comparison.
+        assert rebuilt == original
+
+    def test_to_dict_includes_type(self):
+        assert make_void().to_dict()["type"] == "void"
+
+    def test_lineage_rule_still_applies(self):
+        # MVoid inherits Material's lineage validation same as
+        # any other subclass — v1 (no derivation cause) is fine here
+        make_void(derived_from=None, gt_run_id=None, user_edit=False)
+        # derived with no cause is still rejected
+        with pytest.raises(ValueError):
+            make_void(derived_from=MaterialID("mv-0"), gt_run_id=None, user_edit=False)
+
+    def test_frozen(self):
+        instance = make_void()
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            instance.family_name = "other"  # type: ignore[misc]
+
+    def test_same_id_and_fields_are_equal(self):
+        # default field-based equality — same id AND same fields (there
+        # are no other fields), unlike MIsotopic/MMixture's id-only
+        # equality
+        a = make_void(family_name="shared", version_label="1")
+        b = make_void(family_name="shared", version_label="1")
+        assert a == b
+        assert hash(a) == hash(b)
 
 
 # ---------------------------------------------------------------------------
@@ -573,7 +625,7 @@ class TestMMixtureEquality:
 
 
 class TestMaterialTypeDispatch:
-    ALL_CONCRETE_MATERIALS: ClassVar[list[type]] = [MIsotopic, MMixture]
+    ALL_CONCRETE_MATERIALS: ClassVar[list[type]] = [MIsotopic, MMixture, MVoid]
 
     @pytest.mark.parametrize("cls", ALL_CONCRETE_MATERIALS)
     def test_every_concrete_subclass_is_registered(self, cls):

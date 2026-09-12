@@ -1,5 +1,5 @@
 """
-Unit tests for pace.core.geometry: GeometryVersion and its concrete
+Unit tests for pace.core.geometry: Geometry and its concrete
 shape types (GCylinder, GAnnulus, GHexPrism, GSphere, GRectanglePrism,
 GNull, GAddition, GSubtraction).
 
@@ -8,7 +8,7 @@ Covers the invariants established during design, not just field coverage:
   (_validate_id)
 - the three-state lineage rule: v1 (derived_from/gt_run_id/user_edit all
   unset) vs. a derived version with EXACTLY ONE of gt_run_id/user_edit set
-- GeometryVersion's ABC enforcement (can't instantiate directly, and a
+- Geometry's ABC enforcement (can't instantiate directly, and a
   subclass missing an abstract method still can't instantiate)
 - per-shape field constraints (positive/range) via validate_fields()
 - relational checks not expressible via field metadata (GAnnulus)
@@ -37,7 +37,7 @@ from pace.core.geometry import (
     GAddition,
     GAnnulus,
     GCylinder,
-    GeometryVersion,
+    Geometry,
     GHexPrism,
     GNull,
     GPose,
@@ -45,7 +45,7 @@ from pace.core.geometry import (
     GSphere,
     GSubtraction,
 )
-from pace.core.ids import GeometryVersionID, GTRunID
+from pace.core.ids import GeometryID, GTRunID
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -55,12 +55,12 @@ from pace.core.ids import GeometryVersionID, GTRunID
 def _base_kwargs(
     family_name: str = "test_geo", version_label: str = "1", **overrides
 ) -> dict:
-    """Common GeometryVersion base fields — valid version-1 (no lineage)
+    """Common Geometry base fields — valid version-1 (no lineage)
     by default. id is computed from family_name/version_label via
     build_id(), matching _validate_id()'s requirement — override id
     directly only when deliberately testing a mismatch."""
     kwargs = {
-        "id": GeometryVersion.build_id(family_name, version_label),
+        "id": Geometry.build_id(family_name, version_label),
         "family_name": family_name,
         "version_label": version_label,
         "derived_from": None,
@@ -92,13 +92,13 @@ def make(cls, family_name: str = "test_geo", version_label: str = "1", **overrid
 # ---------------------------------------------------------------------------
 
 
-class TestGeometryVersionIdentity:
+class TestGeometryIdentity:
     def test_build_id_format(self):
-        assert GeometryVersion.build_id("uranium3.2", "1") == "uranium3.2-1"
+        assert Geometry.build_id("uranium3.2", "1") == "uranium3.2-1"
 
     def test_build_id_with_string_version_label(self):
         assert (
-            GeometryVersion.build_id("fuel_pellet", "6month_depletion")
+            Geometry.build_id("fuel_pellet", "6month_depletion")
             == "fuel_pellet-6month_depletion"
         )
 
@@ -106,7 +106,7 @@ class TestGeometryVersionIdentity:
         with pytest.raises(ValueError):
             make(
                 GCylinder,
-                id=GeometryVersionID("wrong_id"),
+                id=GeometryID("wrong_id"),
                 family_name="test_geo",
                 version_label="1",
             )
@@ -116,19 +116,19 @@ class TestGeometryVersionIdentity:
 
 
 # ---------------------------------------------------------------------------
-# GeometryVersion — ABC enforcement + shared lineage invariant
+# Geometry — ABC enforcement + shared lineage invariant
 # ---------------------------------------------------------------------------
 
 
-class TestGeometryVersionBase:
+class TestGeometryBase:
     def test_cannot_instantiate_directly(self):
         with pytest.raises(TypeError):
-            GeometryVersion(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
+            Geometry(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
     def test_incomplete_subclass_cannot_instantiate(self):
         # a subclass missing _validate_shape/to_open_mc/to_moose should
         # still fail to instantiate, same as the base itself
-        class Incomplete(GeometryVersion):
+        class Incomplete(Geometry):
             pass
 
         with pytest.raises(TypeError):
@@ -138,10 +138,10 @@ class TestGeometryVersionBase:
         "derived_from,gt_run_id,user_edit,should_raise",
         [
             (None, None, False, False),  # v1: no derivation cause needed
-            (GeometryVersionID("gv-0"), GTRunID("run-1"), False, False),  # GT-derived
-            (GeometryVersionID("gv-0"), None, True, False),  # user-edited
-            (GeometryVersionID("gv-0"), None, False, True),  # derived but no cause
-            (GeometryVersionID("gv-0"), GTRunID("run-1"), True, True),  # both causes
+            (GeometryID("gv-0"), GTRunID("run-1"), False, False),  # GT-derived
+            (GeometryID("gv-0"), None, True, False),  # user-edited
+            (GeometryID("gv-0"), None, False, True),  # derived but no cause
+            (GeometryID("gv-0"), GTRunID("run-1"), True, True),  # both causes
             (None, GTRunID("run-1"), False, True),  # gt_run_id w/o derived_from
             (None, None, True, True),  # user_edit w/o derived_from
         ],
@@ -183,22 +183,22 @@ class TestShapeConstraints:
     def test_zero_is_rejected(self, cls, field_name):
         # Constraint.POSITIVE — zero is degenerate, must be rejected
         with pytest.raises(ValueError):
-            make(cls, **{field_name: 0.0})
+            make(cls, **{field_name: 0.0})  # type: ignore[misc]
 
     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
     def test_negative_is_rejected(self, cls, field_name):
         with pytest.raises(ValueError):
-            make(cls, **{field_name: -1.0})
+            make(cls, **{field_name: -1.0})  # type: ignore[misc]
 
     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
     def test_above_max_is_rejected(self, cls, field_name):
         with pytest.raises(ValueError):
-            make(cls, **{field_name: MAX_GEO_LENGTH_M + 1})
+            make(cls, **{field_name: MAX_GEO_LENGTH_M + 1})  # type: ignore[misc]
 
     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
     def test_at_max_is_allowed(self, cls, field_name):
         # upper bound is inclusive per validate_fields()
-        make(cls, **{field_name: MAX_GEO_LENGTH_M})
+        make(cls, **{field_name: MAX_GEO_LENGTH_M})  # type: ignore[misc]
 
 
 class TestGAnnulus:
@@ -237,7 +237,7 @@ class TestGAddition:
     @staticmethod
     def _unit(geo_id: str, x: float = 0.0, z_rotation_rad: float = 0.0):
         return (
-            GeometryVersionID(geo_id),
+            GeometryID(geo_id),
             GPose(x_m=x, y_m=0.0, z_m=0.0, z_rotation_rad=z_rotation_rad),
         )
 
@@ -293,7 +293,7 @@ class TestGAddition:
             version_label="1",
             units=[self._unit("g-a", 0.0), self._unit("g-b", 1.0)],
         )
-        assert hash(instance) == hash(GeometryVersion.build_id("shared", "1"))
+        assert hash(instance) == hash(Geometry.build_id("shared", "1"))
 
     def test_different_family_is_not_equal(self):
         a = make(
@@ -331,7 +331,7 @@ class TestGSubtraction:
     @staticmethod
     def _pair(geo_id: str, x: float = 0.0, z_rotation_rad: float = 0.0):
         return (
-            GeometryVersionID(geo_id),
+            GeometryID(geo_id),
             GPose(x_m=x, y_m=0.0, z_m=0.0, z_rotation_rad=z_rotation_rad),
         )
 
@@ -378,7 +378,7 @@ class TestGSubtraction:
             base=self._pair("g-base"),
             cuts=[self._pair("g-cut", 0.5)],
         )
-        assert hash(instance) == hash(GeometryVersion.build_id("shared", "1"))
+        assert hash(instance) == hash(Geometry.build_id("shared", "1"))
 
     def test_to_dict_from_dict_round_trip(self):
         sub = make(
@@ -454,7 +454,7 @@ class TestGeometryTypeDispatch:
 
     @pytest.mark.parametrize("cls", ALL_CONCRETE_SHAPES)
     def test_every_concrete_subclass_is_registered(self, cls):
-        # regression guard: a new GeometryVersion subclass that forgets
+        # regression guard: a new Geometry subclass that forgets
         # to register itself here would otherwise fail with a confusing
         # error only at to_dict()/persistence time, not at test time
         assert cls in CLASS_TO_GEOMETRY_TYPE

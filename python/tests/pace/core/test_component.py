@@ -1,203 +1,393 @@
 """
-Unit tests for pace.core.component: LComponent, PComponent, and
-CComponent.
+tests/pace/core/test_component.py
 
-Covers:
-- to_dict()/from_dict() round-trips, including PComponent's nested
-  GPose serialization
-- CComponent's minimum-member-count rule (>=2)
-- frozen immutability
-- CComponent's id-based __eq__/__hash__ (matching GAddition/GSubtraction
-  and MIsotopic/MMixture's pattern), including a regression guard for
-  the hash(self.id) vs id(self.id) bug caught earlier in material.py
-- PComponent referencing either an LComponentID or a CComponentID
+Covers: LComponent identity (build_id/_validate_id) and the three-state
+lineage rule now that LComponent is versioned; PComponent round-trips
+and frozen immutability; CComponent identity, lineage, composition
+(min-member and duplicate-detection, including the z_rotation_rad
+differentiation fix), id-based equality + the hash(self.id) regression
+guard, and round-trips.
 """
 
-import dataclasses
+from dataclasses import FrozenInstanceError
 
 import pytest
 from pace.core.component import CComponent, LComponent, PComponent
 from pace.core.geometry import GPose
 from pace.core.ids import (
     CComponentID,
-    GeometryVersionID,
+    GeometryID,
+    GTRunID,
     LComponentID,
-    MaterialVersionID,
+    MaterialID,
     PComponentID,
 )
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# =============================================================================
+# LComponent — identity
+# =============================================================================
 
 
-def make_lcomponent(**overrides) -> LComponent:
-    kwargs = {
-        "id": LComponentID("lc-1"),
-        "geometry_version": GeometryVersionID("gv-1"),
-        "material_version": MaterialVersionID("mv-1"),
-    }
-    kwargs.update(overrides)
-    return LComponent(**kwargs)
+def test_lcomponent_build_id():
+    assert LComponent.build_id("fuel_pellet", "1") == "fuel_pellet-1"
 
 
-def make_pcomponent(**overrides) -> PComponent:
-    kwargs = {
-        "id": PComponentID("pc-1"),
-        "pose": GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-        "component": LComponentID("lc-1"),
-    }
-    kwargs.update(overrides)
-    return PComponent(**kwargs)
+def test_lcomponent_create_derives_id():
+    lc = LComponent.create(
+        family_name="fuel_pellet",
+        version_label="1",
+        geometry=GeometryID("fuel_pellet_cyl-1"),
+        material=MaterialID("uranium3.2_uo2-1"),
+    )
+    assert lc.id == "fuel_pellet-1"
 
 
-def make_ccomponent(**overrides) -> CComponent:
-    kwargs = {
-        "id": CComponentID("cc-1"),
-        "components": [
-            make_pcomponent(id=PComponentID("pc-1")),
-            make_pcomponent(
-                id=PComponentID("pc-2"),
-                pose=GPose(x_m=0.0, y_m=0.0, z_m=0.01, z_rotation_rad=0.0),
-            ),
-        ],
-    }
-    kwargs.update(overrides)
-    return CComponent(**kwargs)
+def test_lcomponent_validate_id_mismatch_raises():
+    with pytest.raises(ValueError):
+        LComponent(
+            id=LComponentID("mismatched_id"),
+            family_name="fuel_pellet",
+            version_label="1",
+            geometry=GeometryID("fuel_pellet_cyl-1"),
+            material=MaterialID("uranium3.2_uo2-1"),
+        )
 
 
-# ---------------------------------------------------------------------------
-# LComponent
-# ---------------------------------------------------------------------------
+# =============================================================================
+# LComponent — three-state lineage rule
+# =============================================================================
+
+LINEAGE_CASES = [
+    # (derived_from, gt_run_id, user_edit, should_raise)
+    pytest.param(None, None, False, False, id="v1_valid"),
+    pytest.param(None, GTRunID("gt-1"), False, True, id="v1_with_gt_run_id"),
+    pytest.param(None, None, True, True, id="v1_with_user_edit"),
+    pytest.param(None, GTRunID("gt-1"), True, True, id="v1_with_both"),
+    pytest.param(
+        "fuel_pellet-1", GTRunID("gt-1"), False, False, id="derived_gt_run_only"
+    ),
+    pytest.param("fuel_pellet-1", None, True, False, id="derived_user_edit_only"),
+    pytest.param("fuel_pellet-1", None, False, True, id="derived_with_neither"),
+    pytest.param("fuel_pellet-1", GTRunID("gt-1"), True, True, id="derived_with_both"),
+]
 
 
-class TestLComponent:
-    def test_round_trip(self):
-        original = make_lcomponent()
-        rebuilt = LComponent.from_dict(original.to_dict())
-        assert rebuilt == original
+@pytest.mark.parametrize("derived_from,gt_run_id,user_edit,should_raise", LINEAGE_CASES)
+def test_lcomponent_lineage_rule(derived_from, gt_run_id, user_edit, should_raise):
+    version_label = "2" if derived_from else "1"
+    derived_from_id = LComponentID(derived_from) if derived_from else None
 
-    def test_frozen(self):
-        instance = make_lcomponent()
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            instance.geometry_version = GeometryVersionID("gv-2")  # type: ignore[misc]
+    def build() -> LComponent:
+        return LComponent.create(
+            family_name="fuel_pellet",
+            version_label=version_label,
+            geometry=GeometryID("fuel_pellet_cyl-1"),
+            material=MaterialID("uranium3.2_uo2-1"),
+            derived_from=derived_from_id,
+            gt_run_id=gt_run_id,
+            user_edit=user_edit,
+        )
+
+    if should_raise:
+        with pytest.raises(ValueError):
+            build()
+    else:
+        assert build().derived_from == derived_from_id
 
 
-# ---------------------------------------------------------------------------
+# =============================================================================
+# LComponent — round-trip, immutability, equality
+# =============================================================================
+
+
+def test_lcomponent_round_trip():
+    lc = LComponent.create(
+        family_name="fuel_pellet",
+        version_label="1",
+        geometry=GeometryID("fuel_pellet_cyl-1"),
+        material=MaterialID("uranium3.2_uo2-1"),
+    )
+    assert LComponent.from_dict(lc.to_dict()) == lc
+
+
+def test_lcomponent_derived_round_trip():
+    lc = LComponent.create(
+        family_name="fuel_pellet",
+        version_label="2",
+        geometry=GeometryID("fuel_pellet_cyl-1"),
+        material=MaterialID("uranium3.2_uo2-1"),
+        derived_from=LComponentID("fuel_pellet-1"),
+        user_edit=True,
+    )
+    round_tripped = LComponent.from_dict(lc.to_dict())
+    assert round_tripped == lc
+    assert round_tripped.derived_from == "fuel_pellet-1"
+    assert round_tripped.user_edit is True
+
+
+def test_lcomponent_is_frozen():
+    lc = LComponent.create(
+        family_name="fuel_pellet",
+        version_label="1",
+        geometry=GeometryID("fuel_pellet_cyl-1"),
+        material=MaterialID("uranium3.2_uo2-1"),
+    )
+    with pytest.raises(FrozenInstanceError):
+        lc.family_name = "other"  # type: ignore[misc]
+
+
+def test_lcomponent_default_equality_is_value_based():
+    """LComponent has no dict/list fields, so it keeps the plain
+    frozen-dataclass default equality — unlike CComponent, it does NOT
+    override __eq__/__hash__ to be id-based."""
+
+    def build() -> LComponent:
+        return LComponent.create(
+            family_name="fuel_pellet",
+            version_label="1",
+            geometry=GeometryID("fuel_pellet_cyl-1"),
+            material=MaterialID("uranium3.2_uo2-1"),
+        )
+
+    lc_a = build()
+    lc_b = build()
+    assert lc_a == lc_b
+
+    lc_c = LComponent.create(
+        family_name="fuel_pellet",
+        version_label="1",
+        geometry=GeometryID("different_geometry-1"),
+        material=MaterialID("uranium3.2_uo2-1"),
+    )
+    assert lc_a != lc_c
+
+
+# =============================================================================
 # PComponent
-# ---------------------------------------------------------------------------
+# =============================================================================
 
 
-class TestPComponent:
-    def test_round_trip_referencing_lcomponent(self):
-        original = make_pcomponent(component=LComponentID("lc-1"))
-        rebuilt = PComponent.from_dict(original.to_dict())
-        assert rebuilt == original
-        assert rebuilt.pose == original.pose
-
-    def test_round_trip_referencing_ccomponent(self):
-        original = make_pcomponent(component=CComponentID("cc-nested"))
-        rebuilt = PComponent.from_dict(original.to_dict())
-        assert rebuilt == original
-        assert rebuilt.component == CComponentID("cc-nested")
-
-    def test_pose_serialized_as_dict_not_object(self):
-        # regression guard: to_dict() must call pose.to_dict(), not embed
-        # the live GPose object directly (would break JSON-serializability)
-        instance = make_pcomponent()
-        assert instance.to_dict()["pose"] == {
-            "x_m": 0.0,
-            "y_m": 0.0,
-            "z_m": 0.0,
-            "z_rotation_rad": 0.0,
-        }
-
-    def test_frozen(self):
-        instance = make_pcomponent()
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            instance.pose = GPose(x_m=1.0, y_m=0.0, z_m=0.0)  # type: ignore[misc]
+def test_pcomponent_round_trip_lcomponent_ref():
+    pc = PComponent(
+        id=PComponentID("pc-1"),
+        pose=GPose(x_m=0.0, y_m=0.0, z_m=0.01, z_rotation_rad=0.0),
+        component=LComponentID("fuel_pellet-1"),
+    )
+    assert PComponent.from_dict(pc.to_dict()) == pc
 
 
-# ---------------------------------------------------------------------------
-# CComponent
-# ---------------------------------------------------------------------------
+def test_pcomponent_round_trip_ccomponent_ref():
+    pc = PComponent(
+        id=PComponentID("pc-1"),
+        pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+        component=CComponentID("fuel_pin-1"),
+    )
+    assert PComponent.from_dict(pc.to_dict()) == pc
 
 
-class TestCComponent:
-    def test_valid_construction(self):
-        make_ccomponent()  # sanity check — default valid kwargs should not raise
+def test_pcomponent_is_frozen():
+    pc = PComponent(
+        id=PComponentID("pc-1"),
+        pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+        component=LComponentID("fuel_pellet-1"),
+    )
+    with pytest.raises(FrozenInstanceError):
+        pc.pose = GPose(x_m=1.0, y_m=0.0, z_m=0.0)  # type: ignore[misc]
 
-    def test_requires_at_least_two_components(self):
+
+# =============================================================================
+# CComponent — identity
+# =============================================================================
+
+
+def _two_pcomponents(z_rotation_rad_second: float = 0.0) -> list[PComponent]:
+    return [
+        PComponent(
+            id=PComponentID("pc-1"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+            component=LComponentID("fuel_pellet-1"),
+        ),
+        PComponent(
+            id=PComponentID("pc-2"),
+            pose=GPose(
+                x_m=0.0, y_m=0.0, z_m=0.01, z_rotation_rad=z_rotation_rad_second
+            ),
+            component=LComponentID("fuel_pellet-1"),
+        ),
+    ]
+
+
+def test_ccomponent_build_id():
+    assert CComponent.build_id("fuel_pin", "1") == "fuel_pin-1"
+
+
+def test_ccomponent_create_derives_id():
+    cc = CComponent.create(
+        family_name="fuel_pin", version_label="1", components=_two_pcomponents()
+    )
+    assert cc.id == "fuel_pin-1"
+
+
+def test_ccomponent_validate_id_mismatch_raises():
+    with pytest.raises(ValueError):
+        CComponent(
+            id=CComponentID("mismatched_id"),
+            family_name="fuel_pin",
+            version_label="1",
+            components=_two_pcomponents(),
+        )
+
+
+# =============================================================================
+# CComponent — three-state lineage rule
+# =============================================================================
+
+
+@pytest.mark.parametrize("derived_from,gt_run_id,user_edit,should_raise", LINEAGE_CASES)
+def test_ccomponent_lineage_rule(derived_from, gt_run_id, user_edit, should_raise):
+    version_label = "2" if derived_from else "1"
+    derived_from_id = (
+        CComponentID(derived_from.replace("fuel_pellet", "fuel_pin"))
+        if derived_from
+        else None
+    )
+
+    def build() -> CComponent:
+        return CComponent.create(
+            family_name="fuel_pin",
+            version_label=version_label,
+            components=_two_pcomponents(),
+            derived_from=derived_from_id,
+            gt_run_id=gt_run_id,
+            user_edit=user_edit,
+        )
+
+    if should_raise:
         with pytest.raises(ValueError):
-            make_ccomponent(components=[make_pcomponent()])
+            build()
+    else:
+        assert build().derived_from == derived_from_id
 
-    def test_empty_components_rejected(self):
-        with pytest.raises(ValueError):
-            make_ccomponent(components=[])
 
-    def test_can_nest_a_ccomponent_via_pcomponent(self):
-        # a PComponent's `component` may itself be a CComponentID —
-        # this is what makes the structure recursive (pins of pellets,
-        # assemblies of pins, etc.)
-        nested = make_ccomponent(
-            id=CComponentID("cc-outer"),
+# =============================================================================
+# CComponent — composition (min-member, duplicate detection)
+# =============================================================================
+
+
+def test_ccomponent_requires_at_least_two_components():
+    with pytest.raises(ValueError):
+        CComponent.create(
+            family_name="fuel_pin",
+            version_label="1",
             components=[
-                make_pcomponent(
-                    id=PComponentID("pc-a"), component=CComponentID("cc-inner")
-                ),
-                make_pcomponent(
-                    id=PComponentID("pc-b"), component=LComponentID("lc-1")
-                ),
+                PComponent(
+                    id=PComponentID("pc-1"),
+                    pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+                    component=LComponentID("fuel_pellet-1"),
+                )
             ],
         )
-        assert nested.components[0].component == CComponentID("cc-inner")
-
-    def test_to_dict_from_dict_round_trip(self):
-        original = make_ccomponent()
-        rebuilt = CComponent.from_dict(original.to_dict())
-        assert rebuilt == original
-        assert rebuilt.components == original.components
-
-    def test_frozen(self):
-        instance = make_ccomponent()
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            instance.components = []  # type: ignore[misc]
 
 
-class TestCComponentEquality:
-    """CComponent's __eq__/__hash__ are id-based (isinstance check +
-    self.id == other.id), matching GAddition/GSubtraction and
-    MIsotopic/MMixture — NOT the frozen-dataclass field-based default
-    (which would fail outright, since `components` is an unhashable
-    list)."""
-
-    def test_same_id_different_members_are_equal(self):
-        a = make_ccomponent(id=CComponentID("cc-shared"))
-        b = make_ccomponent(
-            id=CComponentID("cc-shared"),
-            components=[
-                make_pcomponent(id=PComponentID("pc-x")),
-                make_pcomponent(id=PComponentID("pc-y")),
-            ],
+def test_ccomponent_rejects_duplicate_component_position():
+    duplicate = PComponent(
+        id=PComponentID("pc-1"),
+        pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+        component=LComponentID("fuel_pellet-1"),
+    )
+    same_again = PComponent(
+        id=PComponentID("pc-2"),
+        pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+        component=LComponentID("fuel_pellet-1"),
+    )
+    with pytest.raises(ValueError):
+        CComponent.create(
+            family_name="fuel_pin",
+            version_label="1",
+            components=[duplicate, same_again],
         )
-        # same id, different members — still equal/same-hash by design
-        assert a == b
-        assert hash(a) == hash(b)
 
-    def test_different_id_is_not_equal(self):
-        a = make_ccomponent(id=CComponentID("cc-a"))
-        b = make_ccomponent(id=CComponentID("cc-b"))
-        assert a != b
 
-    def test_hash_matches_hash_of_id(self):
-        # regression guard: __hash__ must be hash(self.id), not id(self.id)
-        # (see the same bug caught in MIsotopic/MMixture)
-        instance = make_ccomponent(id=CComponentID("cc-1"))
-        assert hash(instance) == hash(CComponentID("cc-1"))
+def test_ccomponent_same_position_different_rotation_is_not_a_duplicate():
+    """Regression guard: the duplicate-detection key must include
+    z_rotation_rad, or two placements at the same x/y/z but different
+    rotation would be wrongly flagged as duplicates."""
+    same_xyz_different_rotation = [
+        PComponent(
+            id=PComponentID("pc-1"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0, z_rotation_rad=0.0),
+            component=LComponentID("fuel_pellet-1"),
+        ),
+        PComponent(
+            id=PComponentID("pc-2"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0, z_rotation_rad=1.0),
+            component=LComponentID("fuel_pellet-1"),
+        ),
+    ]
+    cc = CComponent.create(
+        family_name="fuel_pin",
+        version_label="1",
+        components=same_xyz_different_rotation,
+    )
+    assert len(cc.components) == 2
 
-    def test_is_hashable_despite_list_field(self):
-        # the actual bug this whole pattern exists to avoid: a plain
-        # frozen-dataclass default __hash__ would try to hash the
-        # `components` list and raise TypeError
-        instance = make_ccomponent()
-        hash(instance)  # should not raise
+
+# =============================================================================
+# CComponent — round-trip, immutability, id-based equality
+# =============================================================================
+
+
+def test_ccomponent_round_trip():
+    cc = CComponent.create(
+        family_name="fuel_pin", version_label="1", components=_two_pcomponents()
+    )
+    assert CComponent.from_dict(cc.to_dict()) == cc
+
+
+def test_ccomponent_is_frozen():
+    cc = CComponent.create(
+        family_name="fuel_pin", version_label="1", components=_two_pcomponents()
+    )
+    with pytest.raises(FrozenInstanceError):
+        cc.family_name = "other"  # type: ignore[misc]
+
+
+def test_ccomponent_equality_is_id_based_not_field_based():
+    """Regression guard, same reasoning as GAddition/MIsotopic: two
+    CComponents with the same id but DIFFERENT underlying component
+    lists must still compare equal, since __eq__ is overridden to
+    check self.id == other.id only, not full field equality."""
+    cc_a = CComponent(
+        id=CComponentID("fuel_pin-1"),
+        family_name="fuel_pin",
+        version_label="1",
+        components=_two_pcomponents(z_rotation_rad_second=0.0),
+    )
+    cc_b = CComponent(
+        id=CComponentID("fuel_pin-1"),
+        family_name="fuel_pin",
+        version_label="1",
+        components=_two_pcomponents(z_rotation_rad_second=0.5),
+    )
+    assert cc_a == cc_b
+
+
+def test_ccomponent_hash_uses_hash_of_id_not_python_id():
+    """Regression guard for the hash(self.id) vs id(self.id) bug —
+    two equal-by-id CComponents must share a hash, which only holds if
+    __hash__ uses the built-in hash() on self.id, not the built-in
+    id() (memory address)."""
+    cc_a = CComponent(
+        id=CComponentID("fuel_pin-1"),
+        family_name="fuel_pin",
+        version_label="1",
+        components=_two_pcomponents(),
+    )
+    cc_b = CComponent(
+        id=CComponentID("fuel_pin-1"),
+        family_name="fuel_pin",
+        version_label="1",
+        components=_two_pcomponents(),
+    )
+    assert hash(cc_a) == hash(cc_b)
+    assert {cc_a, cc_b} == {cc_a}
