@@ -29,7 +29,6 @@
 authors = [
     "Brett Nelson <brettleenelson@gmail.com>",
     "Paul Varkey <paul.varkey@gmail.com>",
-    "Eeron Grant <eerongrant@gmail.com>",
 ]
 channels = ["conda-forge"]
 name = "pace"
@@ -46,12 +45,17 @@ version = "0.1.0"
 #       anything, doesn't rewrite files. What CI runs.
 # - black-fix: actually reformats files in place.
 # - typecheck: static type checking.
-# - test-py: full test suite with coverage, including which specific lines
-#       are missed.
+# - test-unit: unit test suite only (python/tests/unit/), with coverage,
+#       including which specific lines are missed. Fast — the everyday
+#       local loop.
+# - test-integration: integration test suite only
+#       (python/tests/integration/) — real DB/IO wiring, not isolated
+#       units. Slower than test-unit; not part of the fast local loop,
+#       but still part of `check`/CI.
 # - check: everything CI runs, in the same order. Run this before pushing.
 # - format: fast local autofix pass (lint-fix, then format — order
 #       matters, black gets final say over formatting). Does not run
-#       typecheck/test-py.
+#       typecheck/test-unit/test-integration.
 #
 # Common workflow:
 #   pixi run format
@@ -65,8 +69,9 @@ ruff-fix = "ruff check --fix ."
 black-check = "black --check ."
 black-fix = "black ."
 typecheck = "mypy python/src/pace"
-test-py = "pytest python/tests/ --cov=pace --cov-report=term-missing"
-check = { depends-on = ["ruff", "black-check", "typecheck", "test-py"] }
+test-unit = "pytest python/tests/unit/ --cov=pace --cov-report=term-missing"
+test-integration = "pytest python/tests/integration/"
+check = { depends-on = ["ruff", "black-check", "typecheck", "test-unit", "test-integration"] }
 format = { depends-on = ["ruff-fix", "black-fix"] }
 
 
@@ -94,6 +99,7 @@ pytest-cov = ">=7.1.0,<8"
 [feature.pace-py.dependencies]
 python = ">=3.10,<3.15"
 fastapi = "*"
+sqlalchemy = ">=2.0.52,<3"
 
 [feature.pace-py.pypi-dependencies]
 pace = { path = "python", editable = true }

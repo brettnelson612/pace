@@ -5,10 +5,10 @@ Distinct, mypy-checkable ID types for PACE's modeling-domain objects.
 
 Each is a typing.NewType wrapping str — zero runtime cost (a GeometryID
 *is* a str at runtime, no wrapping/unwrapping needed for serialization),
-but mypy will flag passing e.g. a MaterialVersionID where a
-GeometryVersionID is expected. Kept in one shared file (rather than
+but mypy will flag passing e.g. a MaterialID where a
+GeometryID is expected. Kept in one shared file (rather than
 colocated with each class) specifically to avoid circular imports, since
-several classes (LComponent, GeometryVersion, ...) need ID types from
+several classes (LComponent, Geometry, ...) need ID types from
 more than one domain area at once.
 """
 
@@ -16,16 +16,14 @@ from typing import NewType
 
 # --- Geometry ---
 GeometryID = NewType("GeometryID", str)
-GeometryVersionID = NewType("GeometryVersionID", str)
 
 # --- Material ---
 MaterialID = NewType("MaterialID", str)
-MaterialVersionID = NewType("MaterialVersionID", str)
 
 # --- Components ---
 LComponentID = NewType("LComponentID", str)
-CComponentID = NewType("CComponentID", str)
 PComponentID = NewType("PComponentID", str)
+CComponentID = NewType("CComponentID", str)
 
 # RTBlueprint has no distinct ID type of its own,
 # an RTBlueprint's ID *is* the CComponent ID of the CComponent it wraps

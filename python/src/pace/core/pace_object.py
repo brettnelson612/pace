@@ -5,7 +5,7 @@ PaceObject: the shared ABC for PACE's modeling-domain objects
 (geometries, materials, versions, components, blueprints) — to_dict()
 and from_dict() only. Deliberately minimal: no display/rendering logic
 (that's the registry's job, not the data's), no solver-translation
-methods (those live on GeometryVersion specifically, not this base).
+methods (those live on Geometry specifically, not this base).
 
 to_dict() always represents references to other PaceObjects as
 bare IDs, never embedded/hydrated content. from_dict() fails loudly on
