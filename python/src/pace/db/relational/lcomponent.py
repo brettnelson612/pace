@@ -36,10 +36,11 @@ from pace.core.ids import LComponentID
 from pace.db.relational.base import Base
 from pace.db.relational.mixins import VersionMixin
 from pace.db.relational.sql_db import SqlDB
+from pace.db.relational.table_names import LCOMPONENTS_TABLE_NAME
 
 
 class LComponentRow(VersionMixin, Base):
-    __tablename__ = "lcomponents"
+    __tablename__ = LCOMPONENTS_TABLE_NAME
     __table_args__ = (Index("ix_lcomponents_family_name", "family_name"),)
 
     derived_from: Mapped[str | None] = mapped_column(

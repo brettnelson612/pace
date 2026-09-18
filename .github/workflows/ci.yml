@@ -32,4 +32,7 @@ jobs:
         run: pixi run -e no-phys-dev typecheck
 
       - name: pytest (unit tests + coverage)
-        run: pixi run -e no-phys-dev test-py
+        run: pixi run -e no-phys-dev test-unit
+
+      - name: pytest (integration tests)
+        run: pixi run -e no-phys-dev test-integration

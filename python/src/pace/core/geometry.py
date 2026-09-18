@@ -47,6 +47,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Self
 
 from pace.core.constraints import Constraint, validate_fields
 from pace.core.ids import GeometryID, GTRunID
@@ -139,7 +140,7 @@ class Geometry(PaceObject):
         return GeometryID(f"{family_name}-{version_label}")
 
     @classmethod
-    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Geometry:
+    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Self:
         """Named-constructor convenience: derives id via build_id() so
         callers never have to compute and pass it separately. Works
         for any concrete subclass unchanged — **kwargs passes through

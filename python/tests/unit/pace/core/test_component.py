@@ -2,11 +2,12 @@
 tests/pace/core/test_component.py
 
 Covers: LComponent identity (build_id/_validate_id) and the three-state
-lineage rule now that LComponent is versioned; PComponent round-trips
-and frozen immutability; CComponent identity, lineage, composition
-(min-member and duplicate-detection, including the z_rotation_rad
-differentiation fix), id-based equality + the hash(self.id) regression
-guard, and round-trips.
+lineage rule now that LComponent is versioned; PComponent round-trips,
+frozen immutability, and component_type validation; CComponent
+identity, lineage, composition (min-member and duplicate-detection,
+including the z_rotation_rad and component_type differentiation
+fixes), id-based equality + the hash(self.id) regression guard, and
+round-trips.
 """
 
 from dataclasses import FrozenInstanceError
@@ -22,6 +23,7 @@ from pace.core.ids import (
     MaterialID,
     PComponentID,
 )
+from pace.core.reference_types import ReferenceableType
 
 # =============================================================================
 # LComponent — identity
@@ -172,6 +174,7 @@ def test_pcomponent_round_trip_lcomponent_ref():
         id=PComponentID("pc-1"),
         pose=GPose(x_m=0.0, y_m=0.0, z_m=0.01, z_rotation_rad=0.0),
         component=LComponentID("fuel_pellet-1"),
+        component_type=ReferenceableType.LCOMPONENT,
     )
     assert PComponent.from_dict(pc.to_dict()) == pc
 
@@ -181,6 +184,7 @@ def test_pcomponent_round_trip_ccomponent_ref():
         id=PComponentID("pc-1"),
         pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
         component=CComponentID("fuel_pin-1"),
+        component_type=ReferenceableType.CCOMPONENT,
     )
     assert PComponent.from_dict(pc.to_dict()) == pc
 
@@ -190,9 +194,27 @@ def test_pcomponent_is_frozen():
         id=PComponentID("pc-1"),
         pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
         component=LComponentID("fuel_pellet-1"),
+        component_type=ReferenceableType.LCOMPONENT,
     )
     with pytest.raises(FrozenInstanceError):
         pc.pose = GPose(x_m=1.0, y_m=0.0, z_m=0.0)  # type: ignore[misc]
+
+
+@pytest.mark.parametrize(
+    "component_type",
+    [ReferenceableType.GEOMETRY, ReferenceableType.MATERIAL],
+)
+def test_pcomponent_rejects_non_component_type(component_type):
+    """A PComponent can only reference an LComponent or a CComponent —
+    Geometry/Material are never valid here, since neither can be
+    placed directly as a member of a CComponent."""
+    with pytest.raises(ValueError):
+        PComponent(
+            id=PComponentID("pc-1"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+            component=LComponentID("fuel_pellet-1"),
+            component_type=component_type,
+        )
 
 
 # =============================================================================
@@ -206,6 +228,7 @@ def _two_pcomponents(z_rotation_rad_second: float = 0.0) -> list[PComponent]:
             id=PComponentID("pc-1"),
             pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
             component=LComponentID("fuel_pellet-1"),
+            component_type=ReferenceableType.LCOMPONENT,
         ),
         PComponent(
             id=PComponentID("pc-2"),
@@ -213,6 +236,7 @@ def _two_pcomponents(z_rotation_rad_second: float = 0.0) -> list[PComponent]:
                 x_m=0.0, y_m=0.0, z_m=0.01, z_rotation_rad=z_rotation_rad_second
             ),
             component=LComponentID("fuel_pellet-1"),
+            component_type=ReferenceableType.LCOMPONENT,
         ),
     ]
 
@@ -284,6 +308,7 @@ def test_ccomponent_requires_at_least_two_components():
                     id=PComponentID("pc-1"),
                     pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
                     component=LComponentID("fuel_pellet-1"),
+                    component_type=ReferenceableType.LCOMPONENT,
                 )
             ],
         )
@@ -294,11 +319,13 @@ def test_ccomponent_rejects_duplicate_component_position():
         id=PComponentID("pc-1"),
         pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
         component=LComponentID("fuel_pellet-1"),
+        component_type=ReferenceableType.LCOMPONENT,
     )
     same_again = PComponent(
         id=PComponentID("pc-2"),
         pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
         component=LComponentID("fuel_pellet-1"),
+        component_type=ReferenceableType.LCOMPONENT,
     )
     with pytest.raises(ValueError):
         CComponent.create(
@@ -317,17 +344,47 @@ def test_ccomponent_same_position_different_rotation_is_not_a_duplicate():
             id=PComponentID("pc-1"),
             pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0, z_rotation_rad=0.0),
             component=LComponentID("fuel_pellet-1"),
+            component_type=ReferenceableType.LCOMPONENT,
         ),
         PComponent(
             id=PComponentID("pc-2"),
             pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0, z_rotation_rad=1.0),
             component=LComponentID("fuel_pellet-1"),
+            component_type=ReferenceableType.LCOMPONENT,
         ),
     ]
     cc = CComponent.create(
         family_name="fuel_pin",
         version_label="1",
         components=same_xyz_different_rotation,
+    )
+    assert len(cc.components) == 2
+
+
+def test_ccomponent_same_id_string_different_component_type_is_not_a_duplicate():
+    """Regression guard: the duplicate-detection key must include
+    component_type, not just the bare component id string — an
+    LComponentID and a CComponentID live in separate registries and
+    could coincidentally share the same string, and must not be
+    conflated as the same reference."""
+    same_id_string_different_registry = [
+        PComponent(
+            id=PComponentID("pc-1"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+            component=LComponentID("fuel_pin-1"),
+            component_type=ReferenceableType.LCOMPONENT,
+        ),
+        PComponent(
+            id=PComponentID("pc-2"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+            component=CComponentID("fuel_pin-1"),
+            component_type=ReferenceableType.CCOMPONENT,
+        ),
+    ]
+    cc = CComponent.create(
+        family_name="assembly",
+        version_label="1",
+        components=same_id_string_different_registry,
     )
     assert len(cc.components) == 2
 

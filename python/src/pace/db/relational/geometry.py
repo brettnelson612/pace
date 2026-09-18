@@ -30,10 +30,11 @@ from pace.core.ids import GeometryID
 from pace.db.relational.base import Base
 from pace.db.relational.mixins import PolymorphicVersionMixin
 from pace.db.relational.sql_db import SqlDB
+from pace.db.relational.table_names import GEOMETRIES_TABLE_NAME
 
 
 class GeometryRow(PolymorphicVersionMixin, Base):
-    __tablename__ = "geometriess"
+    __tablename__ = GEOMETRIES_TABLE_NAME
     __table_args__ = (Index("ix_geometries_family_name", "family_name"),)
 
     derived_from: Mapped[str | None] = mapped_column(

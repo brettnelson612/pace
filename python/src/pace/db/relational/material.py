@@ -21,10 +21,11 @@ from pace.core.material import (
 from pace.db.relational.base import Base
 from pace.db.relational.mixins import PolymorphicVersionMixin
 from pace.db.relational.sql_db import SqlDB
+from pace.db.relational.table_names import MATERIALS_TABLE_NAME
 
 
 class MaterialRow(PolymorphicVersionMixin, Base):
-    __tablename__ = "materials"
+    __tablename__ = MATERIALS_TABLE_NAME
     __table_args__ = (Index("ix_materials_family_name", "family_name"),)
 
     derived_from: Mapped[str | None] = mapped_column(

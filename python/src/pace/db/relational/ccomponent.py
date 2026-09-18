@@ -1,21 +1,15 @@
 """
 pace/db/relational/ccomponent.py
 
-LComponentDAO and CComponentDAO — the persistence
-abstractions for pace.core.component's two registry-backed component
-types
+CComponentRow (the `ccomponents` table) and CComponentDAO, the
+persistence layer for CComponent.
 
-LComponentDAO is simpler than the *VersionDAO shape: an
-LComponent is content-addressable, not versioned (no family_name/
-version_label/derived_from), so there's no family_exists()/
-versions_of_family()/latest_version_of_family() here — just get/save/
-delete plus the reverse-reference lookups a refcount check needs.
-
-CComponentDAO is a structural mirror of
-GeometryDAO/MaterialDAO (same versioned
-method set), except CComponent has no polymorphic subclasses to
-dispatch on — every row is reconstructed via CComponent.from_dict()
-directly, so `type` is a constant rather than a lookup key.
+CComponentDAO is a structural mirror of GeometryDAO/MaterialDAO/
+LComponentDAO (same versioned method set), except CComponent has no
+polymorphic subclasses to dispatch on — every row is reconstructed via
+CComponent.from_dict() directly, with no `type` column needed (see
+mixins.py: CComponentRow uses VersionMixin, not
+PolymorphicVersionMixin).
 """
 
 from __future__ import annotations
@@ -30,10 +24,11 @@ from pace.core.ids import (
 from pace.db.relational.base import Base
 from pace.db.relational.mixins import VersionMixin
 from pace.db.relational.sql_db import SqlDB
+from pace.db.relational.table_names import CCOMPONENTS_TABLE_NAME
 
 
 class CComponentRow(VersionMixin, Base):
-    __tablename__ = "ccomponents"
+    __tablename__ = CCOMPONENTS_TABLE_NAME
     __table_args__ = (Index("ix_ccomponents_family_name", "family_name"),)
 
     derived_from: Mapped[str | None] = mapped_column(

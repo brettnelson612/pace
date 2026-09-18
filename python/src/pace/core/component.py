@@ -2,67 +2,48 @@
 pace/core/component.py
 
 Reactor structure objects:
-    - LComponent (a geometry + a material, versioned) — a leaf: a
-          specific shape paired with a specific composition, e.g. a
-          fuel pellet. Versioned exactly like Geometry/Material/
-          CComponent: family_name + version_label identity via
-          build_id(), and the same three-state derived_from/gt_run_id/
-          user_edit lineage rule. Previously content-addressable and
-          unversioned (a changed pairing just got a freely-assigned
-          new id) — that meant "why did this pairing change" was only
-          indirectly recoverable, by noticing which of the two
-          references differs and chasing THAT reference's own lineage
-          separately. Giving LComponent its own lineage makes it
-          queryable the same way as every other layer (children_of(),
-          refcounting, reverse-index) and lets ComponentService's
-          cascading edit() treat every layer uniformly instead of
-          special-casing the leaf.
-    - PComponent (a position + one LComponent or CComponent; only
-          ever a member of a CComponent) — a leaf or composite placed
-          somewhere in space. Deliberately NOT versioned: it has no
-          content beyond {pose, component ref}, and because it's
-          embedded directly inside CComponent.to_dict()["components"]
-          rather than referenced by id, any change to a PComponent
-          (a moved pose, a repointed component) is already a change
-          to its parent CComponent's own serialized data — that
-          already mints a new CComponent version through the existing
-          mechanism. Versioning PComponent independently would track
-          the same fact twice and would force it to have its own
-          registry, contradicting its "no independent registry/
-          lifecycle" design.
-    - CComponent (a collection of >=2 PComponents, versioned) — a
-          composite assembled from multiple positioned components,
-          e.g. a fuel pin (a stack of positioned pellets), or a full
-          fuel assembly. Renamed from CComponentVersion: the "Version"
-          suffix on GeometryVersion/MaterialVersion/CComponentVersion
-          was originally there to distinguish the versioned class from
-          a bare, unversioned identity class (Geometry/Material/
-          CComponent) — but those bare identity classes were removed
-          from the design entirely, so there's nothing left for the
-          suffix to disambiguate against. Versioning isn't a special
-          mode a minority of objects are in here; it's the default
-          shape of every non-PComponent object in this module, so the
-          name doesn't need to keep announcing it.
+    - LComponent — a leaf: one geometry paired with one material, no
+          position of its own. Versioned like Geometry/Material/
+          CComponent: family_name + version_label identity, and the
+          same three-state derived_from/gt_run_id/user_edit lineage
+          rule.
+    - PComponent — a position plus a reference to one LComponent or
+          CComponent. Only ever a member of a CComponent's
+          `components` list; has no independent registry, lifecycle,
+          or lineage of its own. Any change to a PComponent (a moved
+          pose, a repointed component) is a change to its parent
+          CComponent's own serialized data, since PComponent is
+          embedded rather than referenced by id — that alone is
+          enough to mint a new CComponent version through the
+          existing mechanism, so PComponent needs no lineage
+          machinery of its own.
+    - CComponent — a composite: a collection of >=2 positioned
+          (PComponent) members, no position of its own. Versioned the
+          same way as Geometry/Material/LComponent.
 
 PComponent.component being LComponentID | CComponentID (rather than
 embedding either directly) is what makes structures recursive: a
 CComponent's members can themselves be positioned CComponents, so an
 arbitrarily deep hierarchy — pellets -> pins -> assemblies -> a full
 core — is built the same way at every level, just nesting one more
-PComponent/CComponent layer each time.
+PComponent/CComponent layer each time. LComponentID and CComponentID
+are both opaque strings with no runtime type information (see
+core/ids.py), so PComponent also carries an explicit component_type
+field — there is no way to tell which registry `component` should be
+looked up in from the bare id string alone.
 
 Reference direction follows PACE's existing bare-IDs-always rule:
 LComponent and CComponent each have their own registry ("lcomponents",
 "ccomponents" — see Registry), so PComponent references them by ID.
-PComponent itself has no registry ("only ever a member of a
-CComponent" — no independent lifecycle), so CComponent embeds
-PComponent objects directly rather than referencing them by ID, since
-there's nowhere for such an ID to be looked up from.
+PComponent itself has no registry, so CComponent embeds PComponent
+objects directly rather than referencing them by ID, since there's
+nowhere for such an ID to be looked up from.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Self
 
 from pace.core.geometry import GPose
 from pace.core.ids import (
@@ -74,6 +55,7 @@ from pace.core.ids import (
     PComponentID,
 )
 from pace.core.pace_object import PaceObject
+from pace.core.reference_types import ReferenceableType
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -99,15 +81,14 @@ class LComponent(PaceObject):
         - derived_from is set: a derived version. Exactly one of
               gt_run_id or user_edit must also be set — never neither,
               never both.
-    A version minted here as part of a cascading edit (ComponentService
-    propagating a change up through every reference path — see
-    component.py's design notes) should carry the SAME cause as the
-    root edit that triggered the cascade: if a human hand-edited the
-    referenced geometry, the new LComponent version this produces is
-    also user_edit=True; if a GT run produced the root change, the new
-    LComponent version carries that same gt_run_id. The human or the
-    GT run is the root cause of the whole chain, not just the one
-    object they directly touched.
+    A version minted as part of a cascading edit (ComponentService
+    propagating a change up through every reference path) carries the
+    SAME cause as the root edit that triggered the cascade: if a human
+    hand-edited the referenced geometry, the new LComponent version
+    this produces is also user_edit=True; if a GT run produced the
+    root change, the new LComponent version carries that same
+    gt_run_id. The human or the GT run is the root cause of the whole
+    chain, not just the one object they directly touched.
 
     Example — a UO2 fuel pellet, referencing an already-defined
     cylinder geometry and enriched-UO2 material:
@@ -137,7 +118,7 @@ class LComponent(PaceObject):
         return LComponentID(f"{family_name}-{version_label}")
 
     @classmethod
-    def create(cls, *, family_name: str, version_label: str, **kwargs) -> LComponent:
+    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Self:
         """Named-constructor convenience: derives id via build_id() so
         callers never have to compute and pass it separately.
 
@@ -228,10 +209,17 @@ class LComponent(PaceObject):
 @dataclass(frozen=True, kw_only=True)
 class PComponent(PaceObject):
     """A positioned component — a GPose plus a reference to the one
-    LComponent or CComponent placed at that position. Only ever
-    appears as a member of a CComponent's `components` list — has no
-    independent registry/lifecycle of its own, and deliberately has no
-    lineage of its own (see this module's docstring for why).
+    LComponent or CComponent placed at that position, and an explicit
+    tag for which of the two it is. Only ever appears as a member of a
+    CComponent's `components` list — has no independent registry,
+    lifecycle, or lineage of its own.
+
+    component_type records which registry `component` should be
+    looked up in (lcomponents or ccomponents). This can't be inferred
+    from the id string alone — LComponentID and CComponentID are both
+    opaque strings with no runtime type distinction — so it's carried
+    explicitly, the same reason to_dict() tags a Geometry/Material
+    subclass with its own "type" key.
 
     id must be unique WITHIN its own parent's `components` list, not
     globally — the same underlying LComponent/CComponent legitimately
@@ -244,12 +232,28 @@ class PComponent(PaceObject):
     id: PComponentID
     pose: GPose
     component: LComponentID | CComponentID
+    component_type: ReferenceableType
+
+    def validate(self) -> None:
+        """component_type must actually be one of the two kinds
+        PComponent can reference — Geometry/Material are never valid
+        here, since neither can be placed directly as a member of a
+        CComponent."""
+        if self.component_type not in (
+            ReferenceableType.LCOMPONENT,
+            ReferenceableType.CCOMPONENT,
+        ):
+            raise ValueError(
+                "component_type must be LCOMPONENT or CCOMPONENT, got "
+                f"{self.component_type!r}"
+            )
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "pose": self.pose.to_dict(),
             "component": self.component,
+            "component_type": self.component_type.value,
         }
 
     @classmethod
@@ -258,6 +262,7 @@ class PComponent(PaceObject):
             id=data["id"],
             pose=GPose.from_dict(data["pose"]),
             component=data["component"],
+            component_type=ReferenceableType(data["component_type"]),
         )
 
     def to_open_mc(self):
@@ -288,11 +293,13 @@ class CComponent(PaceObject):
                     id=PComponentID("pc-1"),
                     pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
                     component=LComponentID("fuel_pellet-1"),
+                    component_type=ReferenceableType.LCOMPONENT,
                 ),
                 PComponent(
                     id=PComponentID("pc-2"),
                     pose=GPose(x_m=0.0, y_m=0.0, z_m=0.01),
                     component=LComponentID("fuel_pellet-1"),
+                    component_type=ReferenceableType.LCOMPONENT,
                 ),
             ],
         )
@@ -325,7 +332,7 @@ class CComponent(PaceObject):
         return CComponentID(f"{family_name}-{version_label}")
 
     @classmethod
-    def create(cls, *, family_name: str, version_label: str, **kwargs) -> CComponent:
+    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Self:
         """Named-constructor convenience: derives id via build_id() so
         callers never have to compute and pass it separately.
 
@@ -392,11 +399,23 @@ class CComponent(PaceObject):
         Rules enforced:
             - at least 2 members — a composite of fewer than 2 isn't a
                   composite.
-            - no duplicate (component, position) pairs — the same
-                  LComponent/CComponent placed twice at the exact same
-                  GPose contributes nothing physically and indicates a
-                  construction mistake, same reasoning as GAddition/
-                  GSubtraction's own duplicate checks.
+            - no duplicate (component_type, component, position)
+                  triples — the same LComponent/CComponent placed
+                  twice at the exact same GPose contributes nothing
+                  physically and indicates a construction mistake,
+                  same reasoning as GAddition/GSubtraction's own
+                  duplicate checks. component_type is part of the key
+                  because an LComponentID and a CComponentID could
+                  coincidentally share the same string across their
+                  two separate registries — comparing the bare id
+                  alone could misidentify two different objects as one
+                  duplicate.
+            - no direct self-reference — a PComponent whose
+                  component_type is CCOMPONENT and whose component id
+                  equals this CComponent's own id. This needs no
+                  registry access (unlike a multi-hop cycle, which
+                  does, and is ComponentService's job), so it's
+                  enforced here rather than at the service layer.
         """
         if len(self.components) < 2:
             raise ValueError(
@@ -405,8 +424,17 @@ class CComponent(PaceObject):
 
         seen = set()
         for pcomponent in self.components:
+            if (
+                pcomponent.component_type == ReferenceableType.CCOMPONENT
+                and pcomponent.component == self.id
+            ):
+                raise ValueError(
+                    f"CComponent {self.id!r} cannot reference itself directly"
+                )
+
             pose = pcomponent.pose
             key = (
+                pcomponent.component_type,
                 pcomponent.component,
                 pose.x_m,
                 pose.y_m,

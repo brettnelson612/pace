@@ -26,7 +26,7 @@ import math
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal
+from typing import Literal, Self
 
 from pace.core.constraints import Constraint, validate_fields
 from pace.core.ids import GTRunID, MaterialID
@@ -243,7 +243,7 @@ class Material(PaceObject):
         return MaterialID(f"{family_name}-{version_label}")
 
     @classmethod
-    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Material:
+    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Self:
         """Named-constructor convenience: derives id via build_id() so
         callers never have to compute and pass it separately. Works
         for any concrete subclass unchanged — **kwargs passes through
