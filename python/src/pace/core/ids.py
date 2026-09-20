@@ -10,6 +10,11 @@ GeometryID is expected. Kept in one shared file (rather than
 colocated with each class) specifically to avoid circular imports, since
 several classes (LComponent, Geometry, ...) need ID types from
 more than one domain area at once.
+
+NOTE: NewType wrappers are purely static; calling one on None returns
+None unchanged, so from_dict() never needs to guard an Optional field
+before wrapping it.
+
 """
 
 from typing import NewType

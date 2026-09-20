@@ -45,7 +45,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Self
 
-from pace.core.geometry import GPose
+from pace.core.geometry import (
+    GAddition,
+    Geometry,
+    GPose,
+    GSubtraction,
+    geometry_from_dict,
+)
 from pace.core.ids import (
     CComponentID,
     GeometryID,
@@ -54,6 +60,7 @@ from pace.core.ids import (
     MaterialID,
     PComponentID,
 )
+from pace.core.material import Material, MMixture, material_from_dict
 from pace.core.pace_object import PaceObject
 from pace.core.reference_types import ReferenceableType
 
@@ -189,14 +196,14 @@ class LComponent(PaceObject):
     @classmethod
     def from_dict(cls, data: dict) -> LComponent:
         return cls(
-            id=data["id"],
+            id=LComponentID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=LComponentID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
-            geometry=data["geometry"],
-            material=data["material"],
+            geometry=GeometryID(data["geometry"]),
+            material=MaterialID(data["material"]),
         )
 
     def to_open_mc(self):
@@ -259,9 +266,13 @@ class PComponent(PaceObject):
     @classmethod
     def from_dict(cls, data: dict) -> PComponent:
         return cls(
-            id=data["id"],
+            id=PComponentID(data["id"]),
             pose=GPose.from_dict(data["pose"]),
-            component=data["component"],
+            component=(
+                LComponentID(data["component"])
+                if data["component_type"] == ReferenceableType.LCOMPONENT
+                else CComponentID(data["component"])
+            ),
             component_type=ReferenceableType(data["component_type"]),
         )
 
@@ -461,11 +472,11 @@ class CComponent(PaceObject):
     @classmethod
     def from_dict(cls, data: dict) -> CComponent:
         return cls(
-            id=data["id"],
+            id=CComponentID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=CComponentID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
             components=[
                 PComponent.from_dict(component) for component in data["components"]
@@ -477,3 +488,183 @@ class CComponent(PaceObject):
 
     def to_moose(self):
         raise NotImplementedError
+
+
+@dataclass(frozen=True, kw_only=True, eq=False)
+class ResolvedCComponent(PaceObject):
+    """A fully hydrated CComponent tree: the root CComponent plus
+    every Geometry/Material/LComponent/CComponent it transitively
+    references, as flat id-keyed maps rather than a nested object
+    graph with embedded content. A component reused at several
+    positions (e.g. one pellet LComponent placed six times in a pin)
+    appears once in its map, referenced by id from wherever it's
+    used — never duplicated.
+
+    Not itself a registered/versioned object — has no id, family_name,
+    or lineage of its own, since it's a derived, transient view over
+    already-persisted data, not something anyone creates or edits
+    directly.
+    """
+
+    root: CComponentID
+    ccomponents: dict[CComponentID, CComponent]
+    lcomponents: dict[LComponentID, LComponent]
+    geometries: dict[GeometryID, Geometry]
+    materials: dict[MaterialID, Material]
+
+    def to_dict(self) -> dict:
+        return {
+            "root": self.root,
+            "ccomponents": {
+                key: ccomponent.to_dict()
+                for key, ccomponent in self.ccomponents.items()
+            },
+            "lcomponents": {
+                key: lcomponent.to_dict()
+                for key, lcomponent in self.lcomponents.items()
+            },
+            "geometries": {
+                key: geometry.to_dict() for key, geometry in self.geometries.items()
+            },
+            "materials": {
+                key: material.to_dict() for key, material in self.materials.items()
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ResolvedCComponent:
+        ccomponents = {
+            CComponentID(key): CComponent.from_dict(ccomponent_dict)
+            for key, ccomponent_dict in data["ccomponents"].items()
+        }
+        lcomponents = {
+            LComponentID(key): LComponent.from_dict(lcomponent_dict)
+            for key, lcomponent_dict in data["lcomponents"].items()
+        }
+        geometries = {
+            GeometryID(key): geometry_from_dict(geometry_dict)
+            for key, geometry_dict in data["geometries"].items()
+        }
+        materials = {
+            MaterialID(key): material_from_dict(material_dict)
+            for key, material_dict in data["materials"].items()
+        }
+        return cls(
+            root=CComponentID(data["root"]),
+            ccomponents=ccomponents,
+            lcomponents=lcomponents,
+            geometries=geometries,
+            materials=materials,
+        )
+
+    def validate(self) -> None:
+        self._validate_id_mapping()
+        self._validate_root_provided()
+        self._validate_completeness()
+
+    def _validate_root_provided(self) -> None:
+        """Check that the root component is provided."""
+        if self.root not in self.ccomponents:
+            raise ValueError(
+                f"root CComponent {self.root!r} not present in ccomponents"
+            )
+
+    def _validate_id_mapping(self) -> None:
+        """Every dict key must match the id of the object stored under
+        it — catches a bundle assembled with a mismatched key/value
+        pair (e.g. a bug in whatever hydration walk built this)."""
+        for ccomponent_id, ccomponent in self.ccomponents.items():
+            if ccomponent.id != ccomponent_id:
+                raise ValueError(
+                    f"CComponent {ccomponent.id!r} stored under mismatched "
+                    f"key {ccomponent_id!r}"
+                )
+        for lcomponent_id, lcomponent in self.lcomponents.items():
+            if lcomponent.id != lcomponent_id:
+                raise ValueError(
+                    f"LComponent {lcomponent.id!r} stored under mismatched "
+                    f"key {lcomponent_id!r}"
+                )
+        for geometry_id, geometry in self.geometries.items():
+            if geometry.id != geometry_id:
+                raise ValueError(
+                    f"Geometry {geometry.id!r} stored under mismatched key "
+                    f"{geometry_id!r}"
+                )
+        for material_id, material in self.materials.items():
+            if material.id != material_id:
+                raise ValueError(
+                    f"Material {material.id!r} stored under mismatched key "
+                    f"{material_id!r}"
+                )
+
+    def _validate_completeness(self) -> None:
+        """Every reference embedded in this bundle's own CComponents,
+        LComponents, and CSG-composite geometries/mixtures must resolve to
+        something also present in this bundle — a bundle missing an entry
+        is only partially hydrated, which defeats the whole point of
+        ResolvedCComponent. No registry access needed, since this only
+        checks the bundle's own internal consistency.
+        """
+        for ccomponent in self.ccomponents.values():
+            for pcomponent in ccomponent.components:
+                target_map = (
+                    self.lcomponents
+                    if pcomponent.component_type == ReferenceableType.LCOMPONENT
+                    else self.ccomponents
+                )
+                if pcomponent.component not in target_map:
+                    raise ValueError(
+                        f"CComponent {ccomponent.id!r} references "
+                        f"{pcomponent.component!r}, which is not present in "
+                        "this bundle."
+                    )
+
+        for lcomponent in self.lcomponents.values():
+            if lcomponent.geometry not in self.geometries:
+                raise ValueError(
+                    f"LComponent {lcomponent.id!r} references geometry "
+                    f"{lcomponent.geometry!r}, which is not present in this "
+                    "bundle."
+                )
+            if lcomponent.material not in self.materials:
+                raise ValueError(
+                    f"LComponent {lcomponent.id!r} references material "
+                    f"{lcomponent.material!r}, which is not present in this "
+                    "bundle."
+                )
+
+        for geometry in self.geometries.values():
+            if isinstance(geometry, GAddition):
+                referenced_geometry_ids = {unit_id for unit_id, _ in geometry.units}
+            elif isinstance(geometry, GSubtraction):
+                base_id, _ = geometry.base
+                referenced_geometry_ids = {base_id} | {
+                    cut_id for cut_id, _ in geometry.cuts
+                }
+            else:
+                referenced_geometry_ids = set()
+
+            for geo_ref_id in referenced_geometry_ids:
+                if geo_ref_id not in self.geometries:
+                    raise ValueError(
+                        f"Geometry {geometry.id!r} references geometry "
+                        f"{geo_ref_id!r}, which is not present in this "
+                        "bundle."
+                    )
+
+        for material in self.materials.values():
+            if isinstance(material, MMixture):
+                referenced_material_ids = {
+                    material_id for material_id, _ in material.components
+                }
+            else:
+                referenced_material_ids = set()
+
+            for mat_ref_id in referenced_material_ids:
+                if mat_ref_id not in self.materials:
+                    raise ValueError(
+                        f"Material {material.id!r} references material "
+                        f"{mat_ref_id!r}, which is not present in this "
+                        "bundle."
+                    )

@@ -22,9 +22,9 @@ concrete table, so each row model declares its own.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, String, func
+from sqlalchemy import JSON, Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -35,7 +35,9 @@ class VersionMixin:
     gt_run_id: Mapped[str | None] = mapped_column(String, nullable=True)
     user_edit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     data: Mapped[dict] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
 
 class PolymorphicVersionMixin(VersionMixin):

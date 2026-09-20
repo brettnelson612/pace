@@ -47,7 +47,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Self
+from typing import ClassVar, Self
 
 from pace.core.constraints import Constraint, validate_fields
 from pace.core.ids import GeometryID, GTRunID
@@ -98,6 +98,11 @@ class GeometryType(Enum):
     SUBTRACTION = "subtraction"
 
 
+# geometry types registered here upon definition — see
+# Geometry.__init_subclass__
+GEOMETRY_TYPE_TO_CLASS: dict[str, type[Geometry]] = {}
+
+
 @dataclass(kw_only=True, frozen=True)
 class Geometry(PaceObject):
     """General interface for a specific geometry version.
@@ -124,12 +129,18 @@ class Geometry(PaceObject):
               simultaneously be GT-run output and a manual edit.
     """
 
+    geometry_type: ClassVar[GeometryType]
     id: GeometryID
     family_name: str
     version_label: str
     derived_from: GeometryID | None = None
     gt_run_id: GTRunID | None = None
     user_edit: bool = False
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        if "geometry_type" in cls.__dict__:
+            GEOMETRY_TYPE_TO_CLASS[cls.geometry_type.value] = cls
 
     @staticmethod
     def build_id(family_name: str, version_label: str) -> GeometryID:
@@ -161,9 +172,11 @@ class Geometry(PaceObject):
         )
 
     def validate(self):
-        """Check id/family_name/version_label consistency, then the
-        derived_from/gt_run_id/user_edit lineage rule, then delegate
-        to the concrete subclass's shape-specific checks."""
+        """Check field-level constraints, then id/family_name/
+        version_label consistency, then the derived_from/gt_run_id/
+        user_edit lineage rule, then delegate to the concrete
+        subclass's shape-specific (relational) checks."""
+        validate_fields(self)
         self._validate_id()
         self._validate_lineage()
         self._validate_shape()
@@ -197,11 +210,15 @@ class Geometry(PaceObject):
 
     @classmethod
     @abstractmethod
-    def from_dict(cls, data: dict) -> Geometry: ...
+    def from_dict(cls, data: dict) -> Self: ...
 
     @abstractmethod
     def _validate_shape(self):
-        """Shape-specific validation, implemented per concrete geometry type."""
+        """Shape-specific relational validation, implemented per
+        concrete geometry type — field-level constraints are already
+        handled by validate() before this runs. Most concrete shapes
+        have no relational rule beyond that and leave this as a
+        no-op; GAnnulus/GAddition/GSubtraction are the exceptions."""
 
     @abstractmethod
     def to_open_mc(self):
@@ -214,13 +231,13 @@ class Geometry(PaceObject):
         raise NotImplementedError
 
     def to_dict(self) -> dict:
-        type_value = CLASS_TO_GEOMETRY_TYPE.get(type(self))
-        if type_value is None:
+        try:
+            type_value = self.geometry_type.value
+        except AttributeError:
             raise ValueError(
-                f"{type(self).__name__} is not registered in "
-                "GEOMETRY_TYPE_TO_CLASS — add it there before calling "
-                "to_dict() on this class"
-            )
+                f"{type(self).__name__} does not define geometry_type — "
+                "set it as a ClassVar on the subclass"
+            ) from None
         return {
             "type": type_value,
             "id": self.id,
@@ -237,6 +254,7 @@ class GCylinder(Geometry):
     """A basic solid cylinder — e.g. a fuel pellet, a fuel pin
     (without cladding), or a simple control-rod slug."""
 
+    geometry_type: ClassVar[GeometryType] = GeometryType.CYLINDER
     radius_m: float = field(
         metadata={
             "constraint": Constraint.POSITIVE,
@@ -260,18 +278,18 @@ class GCylinder(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GCylinder:
         return cls(
-            id=data["id"],
+            id=GeometryID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=GeometryID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
             radius_m=data["radius_m"],
             height_m=data["height_m"],
         )
 
     def _validate_shape(self):
-        validate_fields(self)
+        pass
 
     def to_open_mc(self):
         # TODO: implement this
@@ -288,6 +306,7 @@ class GAnnulus(Geometry):
     gap, or the cladding tube itself (inner_radius_m = fuel outer
     surface, outer_radius_m = cladding outer surface)."""
 
+    geometry_type: ClassVar[GeometryType] = GeometryType.ANNULUS
     inner_radius_m: float = field(
         metadata={
             "constraint": Constraint.POSITIVE,
@@ -318,11 +337,11 @@ class GAnnulus(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GAnnulus:
         return cls(
-            id=data["id"],
+            id=GeometryID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=GeometryID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
             inner_radius_m=data["inner_radius_m"],
             outer_radius_m=data["outer_radius_m"],
@@ -337,8 +356,6 @@ class GAnnulus(Geometry):
                   — an annulus with inner >= outer describes a solid
                   cylinder or a degenerate/inverted shape, not a ring.
         """
-        validate_fields(self)
-        # relational check — not expressible via field metadata alone
         if not (self.inner_radius_m < self.outer_radius_m):
             raise ValueError(
                 f"inner_radius_m ({self.inner_radius_m}) must be less than "
@@ -365,6 +382,7 @@ class GHexPrism(Geometry):
     specified, since it fully determines the hexagon's dimensions
     including its flat-to-flat width."""
 
+    geometry_type: ClassVar[GeometryType] = GeometryType.HEX_PRISM
     circumradius_m: float = field(
         metadata={
             "constraint": Constraint.POSITIVE,
@@ -388,18 +406,18 @@ class GHexPrism(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GHexPrism:
         return cls(
-            id=data["id"],
+            id=GeometryID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=GeometryID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
             circumradius_m=data["circumradius_m"],
             height_m=data["height_m"],
         )
 
     def _validate_shape(self):
-        validate_fields(self)
+        pass
 
     def to_open_mc(self):
         # TODO: implement this
@@ -415,6 +433,7 @@ class GSphere(Geometry):
     """A sphere shape — e.g. a pebble in a pebble-bed reactor design,
     or a spherical fuel/absorber element."""
 
+    geometry_type: ClassVar[GeometryType] = GeometryType.SPHERE
     radius_m: float = field(
         metadata={
             "constraint": Constraint.POSITIVE,
@@ -431,17 +450,17 @@ class GSphere(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GSphere:
         return cls(
-            id=data["id"],
+            id=GeometryID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=GeometryID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
             radius_m=data["radius_m"],
         )
 
     def _validate_shape(self):
-        validate_fields(self)
+        pass
 
     def to_open_mc(self):
         # TODO: implement this
@@ -457,6 +476,7 @@ class GRectanglePrism(Geometry):
     """A basic rectangular prism shape — e.g. a square/rectangular
     assembly duct, a structural block, or a plate-type fuel element."""
 
+    geometry_type: ClassVar[GeometryType] = GeometryType.RECT_PRISM
     length_m: float = field(
         metadata={
             "constraint": Constraint.POSITIVE,
@@ -487,11 +507,11 @@ class GRectanglePrism(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GRectanglePrism:
         return cls(
-            id=data["id"],
+            id=GeometryID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=GeometryID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
             length_m=data["length_m"],
             width_m=data["width_m"],
@@ -499,7 +519,7 @@ class GRectanglePrism(Geometry):
         )
 
     def _validate_shape(self):
-        validate_fields(self)
+        pass
 
     def to_open_mc(self):
         # TODO: implement this
@@ -516,12 +536,14 @@ class GNull(Geometry):
     lattice (e.g. a vacant fuel-pin slot, a coolant-only channel with
     no solid component placed in it)."""
 
+    geometry_type: ClassVar[GeometryType] = GeometryType.NULL
+
     def to_dict(self) -> dict:
         return super().to_dict()
 
     def _validate_shape(self):
-        # no shape-specific fields — nothing beyond the base pairing
-        # invariant (already enforced by Geometry.validate())
+        # no shape-specific fields or relational checks beyond
+        # field-level constraints, already handled by Geometry.validate()
         pass
 
     def to_open_mc(self):
@@ -535,11 +557,11 @@ class GNull(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GNull:
         return cls(
-            id=data["id"],
+            id=GeometryID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=GeometryID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
         )
 
@@ -608,8 +630,8 @@ class GAddition(Geometry):
             family_name="pin_with_spacer",
             version_label="1",
             units=[
-                (pin_geometry_version_id, GPose(x_m=0, y_m=0, z_m=0)),
-                (spacer_geometry_version_id, GPose(x_m=0.01, y_m=0, z_m=0)),
+                (pin_geometry_id, GPose(x_m=0, y_m=0, z_m=0)),
+                (spacer_geometry_id, GPose(x_m=0.01, y_m=0, z_m=0)),
             ],
         )
     Note: the ids inside `units` reference OTHER, already-existing
@@ -622,6 +644,7 @@ class GAddition(Geometry):
     subclass (e.g. GSphere) is.
     """
 
+    geometry_type: ClassVar[GeometryType] = GeometryType.ADDITION
     units: list[tuple[GeometryID, GPose]]
 
     def __eq__(self, value: object) -> bool:
@@ -634,7 +657,7 @@ class GAddition(Geometry):
         return {
             **super().to_dict(),
             "units": [
-                {"geometry_version_id": unit_id, "position": pos.to_dict()}
+                {"geometry_id": unit_id, "position": pos.to_dict()}
                 for unit_id, pos in self.units
             ],
         }
@@ -642,14 +665,14 @@ class GAddition(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GAddition:
         return cls(
-            id=data["id"],
+            id=GeometryID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=GeometryID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
             units=[
-                (unit["geometry_version_id"], GPose.from_dict(unit["position"]))
+                (GeometryID(unit["geometry_id"]), GPose.from_dict(unit["position"]))
                 for unit in data["units"]
             ],
         )
@@ -703,9 +726,9 @@ class GSubtraction(Geometry):
             id=Geometry.build_id("gas_plenum", "1"),
             family_name="gas_plenum",
             version_label="1",
-            base=(outer_cylinder_version_id, GPose(x_m=0, y_m=0, z_m=0)),
+            base=(outer_cylinder_id, GPose(x_m=0, y_m=0, z_m=0)),
             cuts=[
-                (void_cylinder_version_id, GPose(x_m=0, y_m=0, z_m=0.1)),
+                (void_cylinder_id, GPose(x_m=0, y_m=0, z_m=0.1)),
             ],
         )
     Note: the ids inside `base`/`cuts` reference OTHER, already-existing
@@ -715,6 +738,7 @@ class GSubtraction(Geometry):
     GAddition.
     """
 
+    geometry_type: ClassVar[GeometryType] = GeometryType.SUBTRACTION
     base: tuple[GeometryID, GPose]
     cuts: list[tuple[GeometryID, GPose]]
 
@@ -728,9 +752,9 @@ class GSubtraction(Geometry):
         base_id, base_pos = self.base
         return {
             **super().to_dict(),
-            "base": {"geometry_version_id": base_id, "position": base_pos.to_dict()},
+            "base": {"geometry_id": base_id, "position": base_pos.to_dict()},
             "cuts": [
-                {"geometry_version_id": cut_id, "position": pos.to_dict()}
+                {"geometry_id": cut_id, "position": pos.to_dict()}
                 for cut_id, pos in self.cuts
             ],
         }
@@ -738,18 +762,18 @@ class GSubtraction(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GSubtraction:
         return cls(
-            id=data["id"],
+            id=GeometryID(data["id"]),
             family_name=data["family_name"],
             version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
+            derived_from=GeometryID(data["derived_from"]),
+            gt_run_id=GTRunID(data["gt_run_id"]),
             user_edit=data["user_edit"],
             base=(
-                data["base"]["geometry_version_id"],
+                GeometryID(data["base"]["geometry_id"]),
                 GPose.from_dict(data["base"]["position"]),
             ),
             cuts=[
-                (cut["geometry_version_id"], GPose.from_dict(cut["position"]))
+                (GeometryID(cut["geometry_id"]), GPose.from_dict(cut["position"]))
                 for cut in data["cuts"]
             ],
         )
@@ -784,35 +808,15 @@ class GSubtraction(Geometry):
         raise NotImplementedError
 
 
-# =============================================================================
-# Type dispatch — maps GeometryType values to their concrete class, and
-# back. Lives here, not in the persistence layer, because it's a fact about
-# this module's own class hierarchy, not about how anything gets stored.
-#
-# Geometry.to_dict() (defined earlier in this file) references
-# CLASS_TO_GEOMETRY_TYPE before it's defined here — fine, since Python
-# resolves names inside a method body at call time, not at
-# class-definition time, and by the time to_dict() is ever actually called
-# the whole module has finished loading.
-#
-# Also used by anything doing polymorphic reconstruction from a stored
-# `type` string (e.g. GeometryRepository).
-#
-# Must be kept in sync by hand whenever a new Geometry subclass is
-# added — nothing enforces that automatically.
-# =============================================================================
-GEOMETRY_TYPE_TO_CLASS: dict[str, type[Geometry]] = {
-    GeometryType.CYLINDER.value: GCylinder,
-    GeometryType.ANNULUS.value: GAnnulus,
-    GeometryType.HEX_PRISM.value: GHexPrism,
-    GeometryType.SPHERE.value: GSphere,
-    GeometryType.RECT_PRISM.value: GRectanglePrism,
-    GeometryType.NULL.value: GNull,
-    GeometryType.ADDITION.value: GAddition,
-    GeometryType.SUBTRACTION.value: GSubtraction,
-}
-# Inverse lookup, keyed on exact type (not isinstance) — avoids any
-# ambiguity if the class hierarchy ever grows a subclass of a subclass.
-CLASS_TO_GEOMETRY_TYPE: dict[type[Geometry], str] = {
-    cls: type_value for type_value, cls in GEOMETRY_TYPE_TO_CLASS.items()
-}
+def geometry_from_dict(data: dict) -> Geometry:
+    """Reconstruct the correct concrete Geometry subclass from a dict
+    produced by any subclass's to_dict() — dispatches on the "type"
+    key rather than requiring the caller to already know which
+    concrete class they're deserializing. Geometry.from_dict() is
+    abstract, so it can never be called directly on the base class;
+    this is the supported way to deserialize a Geometry of unknown
+    concrete type."""
+    cls = GEOMETRY_TYPE_TO_CLASS.get(data["type"])
+    if cls is None:
+        raise ValueError(f"unknown geometry type: {data['type']!r}")
+    return cls.from_dict(data)

@@ -7,14 +7,15 @@ frozen immutability, and component_type validation; CComponent
 identity, lineage, composition (min-member and duplicate-detection,
 including the z_rotation_rad and component_type differentiation
 fixes), id-based equality + the hash(self.id) regression guard, and
-round-trips.
+round-trips; ResolvedCComponent's internal-consistency validation
+(id-mapping, root presence, dangling-reference completeness).
 """
 
 from dataclasses import FrozenInstanceError
 
 import pytest
-from pace.core.component import CComponent, LComponent, PComponent
-from pace.core.geometry import GPose
+from pace.core.component import CComponent, LComponent, PComponent, ResolvedCComponent
+from pace.core.geometry import GAddition, GCylinder, GPose
 from pace.core.ids import (
     CComponentID,
     GeometryID,
@@ -23,6 +24,7 @@ from pace.core.ids import (
     MaterialID,
     PComponentID,
 )
+from pace.core.material import MMixture, MVoid
 from pace.core.reference_types import ReferenceableType
 
 # =============================================================================
@@ -361,6 +363,30 @@ def test_ccomponent_same_position_different_rotation_is_not_a_duplicate():
     assert len(cc.components) == 2
 
 
+def test_ccomponent_rejects_direct_self_reference():
+    """A PComponent whose component_type is CCOMPONENT and whose
+    component id equals the parent CComponent's own id is a direct
+    cycle — caught here without any registry access."""
+    self_ref = [
+        PComponent(
+            id=PComponentID("pc-1"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+            component=CComponentID("fuel_pin-1"),
+            component_type=ReferenceableType.CCOMPONENT,
+        ),
+        PComponent(
+            id=PComponentID("pc-2"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.01),
+            component=LComponentID("fuel_pellet-1"),
+            component_type=ReferenceableType.LCOMPONENT,
+        ),
+    ]
+    with pytest.raises(ValueError):
+        CComponent.create(
+            family_name="fuel_pin", version_label="1", components=self_ref
+        )
+
+
 def test_ccomponent_same_id_string_different_component_type_is_not_a_duplicate():
     """Regression guard: the duplicate-detection key must include
     component_type, not just the bare component id string — an
@@ -448,3 +474,199 @@ def test_ccomponent_hash_uses_hash_of_id_not_python_id():
     )
     assert hash(cc_a) == hash(cc_b)
     assert {cc_a, cc_b} == {cc_a}
+
+
+# =============================================================================
+# ResolvedCComponent — bundle internal-consistency validation
+# =============================================================================
+
+
+def _resolved_bundle():
+    """A minimal, fully-consistent 2-pellet fuel-pin bundle: one
+    geometry, one void material, one LComponent, one CComponent."""
+    geometry = GCylinder.create(
+        family_name="pellet_cyl", version_label="1", radius_m=0.5, height_m=1.0
+    )
+    material = MVoid.create(family_name="pellet_mat", version_label="1")
+    lcomponent = LComponent.create(
+        family_name="fuel_pellet",
+        version_label="1",
+        geometry=geometry.id,
+        material=material.id,
+    )
+    ccomponent = CComponent.create(
+        family_name="fuel_pin",
+        version_label="1",
+        components=[
+            PComponent(
+                id=PComponentID("pc-1"),
+                pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+                component=lcomponent.id,
+                component_type=ReferenceableType.LCOMPONENT,
+            ),
+            PComponent(
+                id=PComponentID("pc-2"),
+                pose=GPose(x_m=0.0, y_m=0.0, z_m=0.01),
+                component=lcomponent.id,
+                component_type=ReferenceableType.LCOMPONENT,
+            ),
+        ],
+    )
+    return ResolvedCComponent(
+        root=ccomponent.id,
+        ccomponents={ccomponent.id: ccomponent},
+        lcomponents={lcomponent.id: lcomponent},
+        geometries={geometry.id: geometry},
+        materials={material.id: material},
+    )
+
+
+def test_resolved_ccomponent_valid_bundle_round_trips():
+    # ResolvedCComponent is eq=False with no __eq__ override (it has no
+    # id of its own to key equality on, unlike CComponent/GAddition) —
+    # compare via to_dict() rather than == on the instances themselves.
+    bundle = _resolved_bundle()
+    assert ResolvedCComponent.from_dict(bundle.to_dict()).to_dict() == bundle.to_dict()
+
+
+def test_resolved_ccomponent_root_not_in_ccomponents_raises():
+    bundle = _resolved_bundle()
+    with pytest.raises(ValueError):
+        ResolvedCComponent(
+            root=CComponentID("not_the_root-1"),
+            ccomponents=bundle.ccomponents,
+            lcomponents=bundle.lcomponents,
+            geometries=bundle.geometries,
+            materials=bundle.materials,
+        )
+
+
+def test_resolved_ccomponent_mismatched_dict_key_raises():
+    bundle = _resolved_bundle()
+    (ccomponent,) = bundle.ccomponents.values()
+    with pytest.raises(ValueError):
+        ResolvedCComponent(
+            root=bundle.root,
+            ccomponents={CComponentID("wrong_key-1"): ccomponent},
+            lcomponents=bundle.lcomponents,
+            geometries=bundle.geometries,
+            materials=bundle.materials,
+        )
+
+
+def test_resolved_ccomponent_dangling_lcomponent_reference_raises():
+    bundle = _resolved_bundle()
+    with pytest.raises(ValueError):
+        ResolvedCComponent(
+            root=bundle.root,
+            ccomponents=bundle.ccomponents,
+            lcomponents={},  # the CComponent references an LComponent not here
+            geometries=bundle.geometries,
+            materials=bundle.materials,
+        )
+
+
+def test_resolved_ccomponent_dangling_geometry_reference_raises():
+    bundle = _resolved_bundle()
+    with pytest.raises(ValueError):
+        ResolvedCComponent(
+            root=bundle.root,
+            ccomponents=bundle.ccomponents,
+            lcomponents=bundle.lcomponents,
+            geometries={},  # the LComponent references a geometry not here
+            materials=bundle.materials,
+        )
+
+
+def test_resolved_ccomponent_dangling_material_reference_raises():
+    bundle = _resolved_bundle()
+    with pytest.raises(ValueError):
+        ResolvedCComponent(
+            root=bundle.root,
+            ccomponents=bundle.ccomponents,
+            lcomponents=bundle.lcomponents,
+            geometries=bundle.geometries,
+            materials={},  # the LComponent references a material not here
+        )
+
+
+def test_resolved_ccomponent_dangling_ccomponent_to_ccomponent_reference_raises():
+    """A CComponent member referencing another CComponent (not just an
+    LComponent) must also resolve within the bundle."""
+    bundle = _resolved_bundle()
+    (inner_ccomponent,) = bundle.ccomponents.values()
+    outer = CComponent.create(
+        family_name="assembly",
+        version_label="1",
+        components=[
+            PComponent(
+                id=PComponentID("pc-1"),
+                pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+                component=CComponentID("missing_pin-1"),
+                component_type=ReferenceableType.CCOMPONENT,
+            ),
+            PComponent(
+                id=PComponentID("pc-2"),
+                pose=GPose(x_m=0.0, y_m=0.0, z_m=1.0),
+                component=inner_ccomponent.id,
+                component_type=ReferenceableType.CCOMPONENT,
+            ),
+        ],
+    )
+    with pytest.raises(ValueError):
+        ResolvedCComponent(
+            root=outer.id,
+            ccomponents={outer.id: outer, inner_ccomponent.id: inner_ccomponent},
+            lcomponents=bundle.lcomponents,
+            geometries=bundle.geometries,
+            materials=bundle.materials,
+        )
+
+
+def test_resolved_ccomponent_gaddition_dangling_unit_reference_raises():
+    """A CSG-composite geometry (GAddition) referencing a unit
+    geometry not present in the bundle fails completeness, same as a
+    direct LComponent/CComponent dangling reference."""
+    bundle = _resolved_bundle()
+    (base_geometry,) = bundle.geometries.values()
+    addition = GAddition.create(
+        family_name="union_shape",
+        version_label="1",
+        units=[
+            (base_geometry.id, GPose(x_m=0.0, y_m=0.0, z_m=0.0)),
+            (GeometryID("missing_geo-1"), GPose(x_m=1.0, y_m=0.0, z_m=0.0)),
+        ],
+    )
+    with pytest.raises(ValueError):
+        ResolvedCComponent(
+            root=bundle.root,
+            ccomponents=bundle.ccomponents,
+            lcomponents=bundle.lcomponents,
+            geometries={**bundle.geometries, addition.id: addition},
+            materials=bundle.materials,
+        )
+
+
+def test_resolved_ccomponent_mmixture_dangling_component_reference_raises():
+    """An MMixture referencing a constituent Material not present in
+    the bundle fails completeness, mirroring GAddition/GSubtraction's
+    geometry-reference completeness check."""
+    bundle = _resolved_bundle()
+    (existing_material,) = bundle.materials.values()
+    mixture = MMixture.create(
+        family_name="blend",
+        version_label="1",
+        components=[
+            (existing_material.id, 0.5),
+            (MaterialID("missing_mat-1"), 0.5),
+        ],
+        percent_type="ao",
+    )
+    with pytest.raises(ValueError):
+        ResolvedCComponent(
+            root=bundle.root,
+            ccomponents=bundle.ccomponents,
+            lcomponents=bundle.lcomponents,
+            geometries=bundle.geometries,
+            materials={**bundle.materials, mixture.id: mixture},
+        )
