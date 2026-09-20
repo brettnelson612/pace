@@ -1,32 +1,16 @@
 """
-Unit tests for pace.core.material: Material and its concrete
-composition types (MIsotopic, MMixture), MaterialComponentEntry.
+tests/pace/core/test_material.py
 
-Covers the invariants established during design, not just field coverage:
-- identity: id must equal build_id(family_name, version_label)
-  (_validate_id)
-- the three-state lineage rule: v1 (derived_from/gt_run_id/user_edit all
-  unset) vs. a derived version with EXACTLY ONE of gt_run_id/user_edit set
-- Material's ABC enforcement (can't instantiate directly, and a
-  subclass missing an abstract method still can't instantiate)
-- MaterialComponentEntry's all-or-none enrichment-field invariant
-- field constraints (positive/range) via validate_fields()
-- MIsotopic's composition-level rules: non-empty components, v2+
-  (GT-run-derived) versions restricted to exact-nuclide entries only,
-  enrichment-format entries restricted to bare-element keys
-- MMixture's composition-level rules: minimum constituent count,
-  fraction bounds (0, 1), fractions summing to exactly 1
-- MVoid: no fields, trivially valid, uses default field-based equality
-  (unlike MIsotopic/MMixture) since it has nothing unhashable
-- to_dict()/from_dict() round-trips, including the "type" key
-- frozen immutability
-- MIsotopic/MMixture's id-based __eq__/__hash__ (matching hash(self.id),
-  not id(self.id) — see the regression guard)
-- the MATERIAL_TYPE_TO_CLASS/CLASS_TO_MATERIAL_TYPE dispatch tables stay
-  in sync with the actual set of concrete subclasses
-
-No bare Material identity class exists anymore — removed from the design
-in favor of family_name/version_label living directly on the version.
+Covers: Material identity (build_id/_validate_id), the three-state
+lineage rule, ABC enforcement, MaterialComponentEntry's all-or-none
+enrichment invariant, field constraints, MIsotopic's composition-level
+rules (non-empty, GT-run-derived restricted to exact nuclides,
+enrichment-format keys restricted to bare elements), MMixture's
+composition-level rules (min constituents, fraction bounds, fractions
+summing to 1), MVoid's default field-based equality, round-trips,
+frozen immutability, MIsotopic/MMixture's id-based equality + the
+hash(self.id) regression guard, and material_from_dict()'s type-based
+dispatch.
 """
 
 import dataclasses
@@ -35,13 +19,12 @@ from typing import ClassVar
 import pytest
 from pace.core.ids import GTRunID, MaterialID
 from pace.core.material import (
-    CLASS_TO_MATERIAL_TYPE,
-    MATERIAL_TYPE_TO_CLASS,
     Material,
     MaterialComponentEntry,
     MIsotopic,
     MMixture,
     MVoid,
+    material_from_dict,
 )
 
 # ---------------------------------------------------------------------------
@@ -123,7 +106,7 @@ def make_void(
 
 
 # ---------------------------------------------------------------------------
-# Identity: build_id() / _validate_id()
+# Identity: build_id() / _validate_id() / create()
 # ---------------------------------------------------------------------------
 
 
@@ -140,6 +123,12 @@ class TestMaterialIdentity:
 
     def test_matching_id_is_allowed(self):
         make_isotopic()  # should not raise
+
+    def test_create_derives_same_id_as_build_id(self):
+        mat = MIsotopic.create(
+            family_name="test_mat", version_label="1", **_valid_isotopic_kwargs()
+        )
+        assert mat.id == Material.build_id("test_mat", "1")
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +177,12 @@ class TestMaterialComponentEntry:
     def test_percent_negative_rejected(self):
         with pytest.raises(ValueError):
             MaterialComponentEntry(percent=-1.0)
+
+    def test_enrichment_unset_does_not_raise(self):
+        # enrichment carries Constraint.POSITIVE + a range, but is
+        # Optional — validate_fields() must skip a None value rather
+        # than treating it as failing those checks
+        MaterialComponentEntry(percent=1.0)  # should not raise
 
     def test_enrichment_zero_rejected(self):
         # Constraint.POSITIVE — zero enrichment is degenerate, must be rejected
@@ -258,17 +253,27 @@ class TestMaterialBase:
         with pytest.raises(TypeError):
             Incomplete(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
+    # (derived_from, gt_run_id, user_edit, should_raise), parametrized over
+    # all 8 lineage-rule cases
+    LINEAGE_CASES: ClassVar[list] = [
+        pytest.param(None, None, False, False, id="v1_valid"),
+        pytest.param(None, GTRunID("run-1"), False, True, id="v1_with_gt_run_id"),
+        pytest.param(None, None, True, True, id="v1_with_user_edit"),
+        pytest.param(None, GTRunID("run-1"), True, True, id="v1_with_both"),
+        pytest.param(
+            MaterialID("mv-0"), GTRunID("run-1"), False, False, id="derived_gt_run_only"
+        ),
+        pytest.param(
+            MaterialID("mv-0"), None, True, False, id="derived_user_edit_only"
+        ),
+        pytest.param(MaterialID("mv-0"), None, False, True, id="derived_with_neither"),
+        pytest.param(
+            MaterialID("mv-0"), GTRunID("run-1"), True, True, id="derived_with_both"
+        ),
+    ]
+
     @pytest.mark.parametrize(
-        "derived_from,gt_run_id,user_edit,should_raise",
-        [
-            (None, None, False, False),  # v1: no derivation cause needed
-            (MaterialID("mv-0"), GTRunID("run-1"), False, False),  # GT-derived
-            (MaterialID("mv-0"), None, True, False),  # user-edited
-            (MaterialID("mv-0"), None, False, True),  # derived but no cause
-            (MaterialID("mv-0"), GTRunID("run-1"), True, True),  # both causes
-            (None, GTRunID("run-1"), False, True),  # gt_run_id w/o derived_from
-            (None, None, True, True),  # user_edit w/o derived_from
-        ],
+        "derived_from,gt_run_id,user_edit,should_raise", LINEAGE_CASES
     )
     def test_lineage_rule(self, derived_from, gt_run_id, user_edit, should_raise):
         if should_raise:
@@ -320,7 +325,8 @@ class TestMIsotopic:
 
     def test_enrichment_on_nuclide_key_rejected(self):
         # a specific isotope ("U235") can't itself carry enrichment fields —
-        # only a bare element ("U") can
+        # only a bare element ("U") can; the check is key-format based
+        # (digits present), not a lookup against a periodic table
         with pytest.raises(ValueError):
             make_isotopic(
                 components={
@@ -429,7 +435,7 @@ class TestMIsotopic:
 
 
 class TestMIsotopicEquality:
-    """MIsotopic's __eq__/__hash__ are id-field-based (isinstance check +
+    """MIsotopic's __eq__/__hash__ are id-based (isinstance check +
     self.id == value.id), matching GAddition/GSubtraction in geometry.py —
     NOT pure object identity. Two separately-constructed instances with the
     same id (same family_name/version_label) are equal and must hash
@@ -542,7 +548,7 @@ class TestMMixture:
 
 
 class TestMMixtureEquality:
-    """Same id-field-based __eq__/__hash__ as MIsotopic — see
+    """Same id-based __eq__/__hash__ as MIsotopic — see
     TestMIsotopicEquality."""
 
     def test_same_id_different_fields_are_equal(self):
@@ -609,10 +615,15 @@ class TestMVoid:
         with pytest.raises(dataclasses.FrozenInstanceError):
             instance.family_name = "other"  # type: ignore[misc]
 
+    def test_default_equality_is_field_based_not_only_id_based(self):
+        # default (not overridden) equality — two MVoid instances that
+        # differ only in id must NOT compare equal, unlike MIsotopic/
+        # MMixture's id-only __eq__
+        a = make_void(family_name="fam-a", version_label="1")
+        b = make_void(family_name="fam-b", version_label="1")
+        assert a != b
+
     def test_same_id_and_fields_are_equal(self):
-        # default field-based equality — same id AND same fields (there
-        # are no other fields), unlike MIsotopic/MMixture's id-only
-        # equality
         a = make_void(family_name="shared", version_label="1")
         b = make_void(family_name="shared", version_label="1")
         assert a == b
@@ -620,17 +631,29 @@ class TestMVoid:
 
 
 # ---------------------------------------------------------------------------
-# Type dispatch tables — every concrete subclass must be registered
+# material_from_dict() — type-based dispatch
 # ---------------------------------------------------------------------------
 
 
-class TestMaterialTypeDispatch:
-    ALL_CONCRETE_MATERIALS: ClassVar[list[type]] = [MIsotopic, MMixture, MVoid]
+class TestMaterialFromDict:
+    def test_dispatches_isotopic(self):
+        original = make_isotopic()
+        rebuilt = material_from_dict(original.to_dict())
+        assert type(rebuilt) is MIsotopic
+        assert rebuilt == original
 
-    @pytest.mark.parametrize("cls", ALL_CONCRETE_MATERIALS)
-    def test_every_concrete_subclass_is_registered(self, cls):
-        assert cls in CLASS_TO_MATERIAL_TYPE
+    def test_dispatches_mixture(self):
+        original = make_mixture()
+        rebuilt = material_from_dict(original.to_dict())
+        assert type(rebuilt) is MMixture
+        assert rebuilt == original
 
-    def test_dispatch_tables_are_inverses(self):
-        for type_value, cls in MATERIAL_TYPE_TO_CLASS.items():
-            assert CLASS_TO_MATERIAL_TYPE[cls] == type_value
+    def test_dispatches_void(self):
+        original = make_void()
+        rebuilt = material_from_dict(original.to_dict())
+        assert type(rebuilt) is MVoid
+        assert rebuilt == original
+
+    def test_unknown_type_raises_value_error_not_key_error(self):
+        with pytest.raises(ValueError):
+            material_from_dict({"type": "not_a_real_material"})

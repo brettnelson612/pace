@@ -13,7 +13,7 @@ here answers the question, but the decision to reject based on it
 belongs one layer up.
 
 Structural mirror of MaterialDAO — same method set, same shape,
-differing only in which domain module/row/dispatch-table it's wired to.
+differing only in which domain module/row it's wired to.
 """
 
 from __future__ import annotations
@@ -21,11 +21,7 @@ from __future__ import annotations
 from sqlalchemy import ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
-from pace.core.geometry import (
-    CLASS_TO_GEOMETRY_TYPE,
-    GEOMETRY_TYPE_TO_CLASS,
-    Geometry,
-)
+from pace.core.geometry import Geometry, geometry_from_dict
 from pace.core.ids import GeometryID
 from pace.db.relational.base import Base
 from pace.db.relational.mixins import PolymorphicVersionMixin
@@ -38,7 +34,7 @@ class GeometryRow(PolymorphicVersionMixin, Base):
     __table_args__ = (Index("ix_geometries_family_name", "family_name"),)
 
     derived_from: Mapped[str | None] = mapped_column(
-        ForeignKey("geometries.id"), nullable=True
+        ForeignKey(f"{GEOMETRIES_TABLE_NAME}.id"), nullable=True
     )
 
 
@@ -86,7 +82,14 @@ class GeometryDAO:
             row = session.get(GeometryRow, geometry_id)
             if row is None:
                 return None
-            return self._row_to_domain(row)
+            return geometry_from_dict(row.data)
+
+    def get_many(self, ids: list[GeometryID]) -> dict[GeometryID, Geometry]:
+        if not ids:
+            return {}
+        with self._db.session() as session:
+            rows = session.query(GeometryRow).filter(GeometryRow.id.in_(ids)).all()
+            return {GeometryID(row.id): geometry_from_dict(row.data) for row in rows}
 
     def versions_of_family(self, family_name: str) -> list[Geometry]:
         """Every version ever recorded under this family_name — the
@@ -97,7 +100,7 @@ class GeometryDAO:
                 .filter(GeometryRow.family_name == family_name)
                 .all()
             )
-            return [self._row_to_domain(row) for row in rows]
+            return [geometry_from_dict(row.data) for row in rows]
 
     def latest_version_of_family(self, family_name: str) -> Geometry | None:
         """The most recently created version in this family, by
@@ -115,12 +118,12 @@ class GeometryDAO:
             )
             if row is None:
                 return None
-            return self._row_to_domain(row)
+            return geometry_from_dict(row.data)
 
-    def save(self, version: Geometry) -> None:
+    def save(self, geometry: Geometry) -> None:
         """Validates, then upserts (merge).
 
-        version.validate() already ran once, automatically, at
+        geometry.validate() already ran once, automatically, at
         construction via PaceObject's __post_init__ wiring — calling it
         again here is a deliberate defensive re-check at the
         persistence boundary, not redundant: it catches anything built
@@ -128,17 +131,18 @@ class GeometryDAO:
         object.__setattr__ bypassing __init__ (frozen dataclasses can
         still be bypassed that way).
         """
-        version.validate()
+        geometry.validate()
 
+        data = geometry.to_dict()
         row = GeometryRow(
-            id=version.id,
-            family_name=version.family_name,
-            version_label=version.version_label,
-            derived_from=version.derived_from,
-            gt_run_id=version.gt_run_id,
-            user_edit=version.user_edit,
-            type=self._domain_type_name(version),
-            data=version.to_dict(),
+            id=geometry.id,
+            family_name=geometry.family_name,
+            version_label=geometry.version_label,
+            derived_from=geometry.derived_from,
+            gt_run_id=geometry.gt_run_id,
+            user_edit=geometry.user_edit,
+            type=data["type"],
+            data=data,
         )
         with self._db.session() as session:
             session.merge(row)
@@ -164,18 +168,4 @@ class GeometryDAO:
                 .filter(GeometryRow.derived_from == geometry_id)
                 .all()
             )
-            return [self._row_to_domain(row) for row in rows]
-
-    @staticmethod
-    def _domain_type_name(version: Geometry) -> str:
-        type_value = CLASS_TO_GEOMETRY_TYPE.get(type(version))
-        if type_value is None:
-            raise ValueError(f"unknown Geometry subclass: {type(version)!r}")
-        return type_value
-
-    @staticmethod
-    def _row_to_domain(row: GeometryRow) -> Geometry:
-        cls = GEOMETRY_TYPE_TO_CLASS.get(row.type)
-        if cls is None:
-            raise ValueError(f"unknown geometry version type in row: {row.type!r}")
-        return cls.from_dict(row.data)
+            return [geometry_from_dict(row.data) for row in rows]

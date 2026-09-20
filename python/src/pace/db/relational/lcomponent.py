@@ -96,6 +96,15 @@ class LComponentDAO:
                 return None
             return LComponent.from_dict(row.data)
 
+    def get_many(self, ids: list[LComponentID]) -> dict[LComponentID, LComponent]:
+        if not ids:
+            return {}
+        with self._db.session() as session:
+            rows = session.query(LComponentRow).filter(LComponentRow.id.in_(ids)).all()
+            return {
+                LComponentID(row.id): LComponent.from_dict(row.data) for row in rows
+            }
+
     def versions_of_family(self, family_name: str) -> list[LComponent]:
         """Every version ever recorded under this family_name — the
         query the version-tree UI / version dropdown is built on."""

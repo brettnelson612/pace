@@ -1,29 +1,14 @@
 """
-Unit tests for pace.core.geometry: Geometry and its concrete
-shape types (GCylinder, GAnnulus, GHexPrism, GSphere, GRectanglePrism,
-GNull, GAddition, GSubtraction).
+tests/pace/core/test_geometry.py
 
-Covers the invariants established during design, not just field coverage:
-- identity: id must equal build_id(family_name, version_label)
-  (_validate_id)
-- the three-state lineage rule: v1 (derived_from/gt_run_id/user_edit all
-  unset) vs. a derived version with EXACTLY ONE of gt_run_id/user_edit set
-- Geometry's ABC enforcement (can't instantiate directly, and a
-  subclass missing an abstract method still can't instantiate)
-- per-shape field constraints (positive/range) via validate_fields()
-- relational checks not expressible via field metadata (GAnnulus)
-- structural checks for GAddition/GSubtraction (min count, no duplicates —
-  including z_rotation_rad as part of the duplicate-detection key)
-- to_dict()/from_dict() round-trips, including the "type" key
-- frozen immutability
-- GAddition/GSubtraction id-based __eq__/__hash__ (matching hash(self.id),
-  not id(self.id) — see the regression guard)
-- the GEOMETRY_TYPE_TO_CLASS/CLASS_TO_GEOMETRY_TYPE dispatch tables stay
-  in sync with the actual set of concrete subclasses
-- GPose's z_rotation_rad field (default, round-trip)
-
-No bare Geometry identity class exists anymore — removed from the design
-in favor of family_name/version_label living directly on the version.
+Covers: Geometry identity (build_id/_validate_id), the three-state
+lineage rule, ABC enforcement, per-shape field constraints via
+validate_fields(), GAnnulus's inner<outer relational check,
+GAddition/GSubtraction structural checks (min count, duplicate
+(geometry, pose) detection including the z_rotation_rad
+differentiation), round-trips, frozen immutability, GAddition/
+GSubtraction id-based equality + the hash(self.id) regression guard,
+and geometry_from_dict()'s type-based dispatch.
 """
 
 import dataclasses
@@ -31,8 +16,6 @@ from typing import ClassVar
 
 import pytest
 from pace.core.geometry import (
-    CLASS_TO_GEOMETRY_TYPE,
-    GEOMETRY_TYPE_TO_CLASS,
     MAX_GEO_LENGTH_M,
     GAddition,
     GAnnulus,
@@ -44,6 +27,7 @@ from pace.core.geometry import (
     GRectanglePrism,
     GSphere,
     GSubtraction,
+    geometry_from_dict,
 )
 from pace.core.ids import GeometryID, GTRunID
 
@@ -55,10 +39,6 @@ from pace.core.ids import GeometryID, GTRunID
 def _base_kwargs(
     family_name: str = "test_geo", version_label: str = "1", **overrides
 ) -> dict:
-    """Common Geometry base fields — valid version-1 (no lineage)
-    by default. id is computed from family_name/version_label via
-    build_id(), matching _validate_id()'s requirement — override id
-    directly only when deliberately testing a mismatch."""
     kwargs = {
         "id": Geometry.build_id(family_name, version_label),
         "family_name": family_name,
@@ -87,8 +67,15 @@ def make(cls, family_name: str = "test_geo", version_label: str = "1", **overrid
     return cls(**kwargs)
 
 
+def make_with_field_override(cls, field_name: str, value: float):
+    kwargs = _base_kwargs()
+    kwargs.update(VALID_SHAPE_KWARGS.get(cls, {}))
+    kwargs[field_name] = value
+    return cls(**kwargs)
+
+
 # ---------------------------------------------------------------------------
-# Identity: build_id() / _validate_id()
+# Identity: build_id() / _validate_id() / create()
 # ---------------------------------------------------------------------------
 
 
@@ -114,6 +101,12 @@ class TestGeometryIdentity:
     def test_matching_id_is_allowed(self):
         make(GCylinder, family_name="test_geo", version_label="1")  # should not raise
 
+    def test_create_derives_same_id_as_build_id(self):
+        geo = GCylinder.create(
+            family_name="test_geo", version_label="1", radius_m=0.5, height_m=2.0
+        )
+        assert geo.id == Geometry.build_id("test_geo", "1")
+
 
 # ---------------------------------------------------------------------------
 # Geometry — ABC enforcement + shared lineage invariant
@@ -134,17 +127,27 @@ class TestGeometryBase:
         with pytest.raises(TypeError):
             Incomplete(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
+    # (derived_from, gt_run_id, user_edit, should_raise), parametrized over
+    # all 8 lineage-rule cases
+    LINEAGE_CASES: ClassVar[list] = [
+        pytest.param(None, None, False, False, id="v1_valid"),
+        pytest.param(None, GTRunID("run-1"), False, True, id="v1_with_gt_run_id"),
+        pytest.param(None, None, True, True, id="v1_with_user_edit"),
+        pytest.param(None, GTRunID("run-1"), True, True, id="v1_with_both"),
+        pytest.param(
+            GeometryID("gv-0"), GTRunID("run-1"), False, False, id="derived_gt_run_only"
+        ),
+        pytest.param(
+            GeometryID("gv-0"), None, True, False, id="derived_user_edit_only"
+        ),
+        pytest.param(GeometryID("gv-0"), None, False, True, id="derived_with_neither"),
+        pytest.param(
+            GeometryID("gv-0"), GTRunID("run-1"), True, True, id="derived_with_both"
+        ),
+    ]
+
     @pytest.mark.parametrize(
-        "derived_from,gt_run_id,user_edit,should_raise",
-        [
-            (None, None, False, False),  # v1: no derivation cause needed
-            (GeometryID("gv-0"), GTRunID("run-1"), False, False),  # GT-derived
-            (GeometryID("gv-0"), None, True, False),  # user-edited
-            (GeometryID("gv-0"), None, False, True),  # derived but no cause
-            (GeometryID("gv-0"), GTRunID("run-1"), True, True),  # both causes
-            (None, GTRunID("run-1"), False, True),  # gt_run_id w/o derived_from
-            (None, None, True, True),  # user_edit w/o derived_from
-        ],
+        "derived_from,gt_run_id,user_edit,should_raise", LINEAGE_CASES
     )
     def test_lineage_rule(self, derived_from, gt_run_id, user_edit, should_raise):
         kwargs = _base_kwargs(
@@ -181,24 +184,22 @@ class TestShapeConstraints:
 
     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
     def test_zero_is_rejected(self, cls, field_name):
-        # Constraint.POSITIVE — zero is degenerate, must be rejected
         with pytest.raises(ValueError):
-            make(cls, **{field_name: 0.0})  # type: ignore[misc]
+            make_with_field_override(cls, field_name, 0.0)
 
     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
     def test_negative_is_rejected(self, cls, field_name):
         with pytest.raises(ValueError):
-            make(cls, **{field_name: -1.0})  # type: ignore[misc]
+            make_with_field_override(cls, field_name, -1.0)
 
     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
     def test_above_max_is_rejected(self, cls, field_name):
         with pytest.raises(ValueError):
-            make(cls, **{field_name: MAX_GEO_LENGTH_M + 1})  # type: ignore[misc]
+            make_with_field_override(cls, field_name, MAX_GEO_LENGTH_M + 1)
 
     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
     def test_at_max_is_allowed(self, cls, field_name):
-        # upper bound is inclusive per validate_fields()
-        make(cls, **{field_name: MAX_GEO_LENGTH_M})  # type: ignore[misc]
+        make_with_field_override(cls, field_name, MAX_GEO_LENGTH_M)
 
 
 class TestGAnnulus:
@@ -326,6 +327,13 @@ class TestGAddition:
         )
         assert addition.to_dict()["type"] == "addition"
 
+    def test_frozen(self):
+        addition = make(
+            GAddition, units=[self._unit("g-a", 0.0), self._unit("g-b", 1.0)]
+        )
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            addition.units = []  # type: ignore[misc]
+
 
 class TestGSubtraction:
     @staticmethod
@@ -364,8 +372,8 @@ class TestGSubtraction:
             GSubtraction,
             family_name="shared",
             version_label="1",
-            base=self._pair("g-base"),
-            cuts=[self._pair("g-cut", 0.5)],
+            base=self._pair("g-other-base"),
+            cuts=[self._pair("g-other-cut", 0.7)],
         )
         assert a == b
         assert hash(a) == hash(b)
@@ -393,6 +401,13 @@ class TestGSubtraction:
             GSubtraction, base=self._pair("g-base"), cuts=[self._pair("g-cut", 0.5)]
         )
         assert sub.to_dict()["type"] == "subtraction"
+
+    def test_frozen(self):
+        sub = make(
+            GSubtraction, base=self._pair("g-base"), cuts=[self._pair("g-cut", 0.5)]
+        )
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            sub.cuts = []  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
@@ -436,44 +451,23 @@ class TestGPose:
 
 
 # ---------------------------------------------------------------------------
-# Type dispatch tables — every concrete subclass must be registered
+# geometry_from_dict() — type-based dispatch
 # ---------------------------------------------------------------------------
 
 
-class TestGeometryTypeDispatch:
-    ALL_CONCRETE_SHAPES: ClassVar[list[type]] = [
-        GCylinder,
-        GAnnulus,
-        GHexPrism,
-        GSphere,
-        GRectanglePrism,
-        GNull,
-        GAddition,
-        GSubtraction,
-    ]
+class TestGeometryFromDict:
+    def test_dispatches_addition(self):
+        addition = make(
+            GAddition,
+            units=[
+                (GeometryID("g-a"), GPose(x_m=0.0, y_m=0.0, z_m=0.0)),
+                (GeometryID("g-b"), GPose(x_m=1.0, y_m=0.0, z_m=0.0)),
+            ],
+        )
+        rebuilt = geometry_from_dict(addition.to_dict())
+        assert type(rebuilt) is GAddition
+        assert rebuilt.id == addition.id
 
-    @pytest.mark.parametrize("cls", ALL_CONCRETE_SHAPES)
-    def test_every_concrete_subclass_is_registered(self, cls):
-        # regression guard: a new Geometry subclass that forgets
-        # to register itself here would otherwise fail with a confusing
-        # error only at to_dict()/persistence time, not at test time
-        assert cls in CLASS_TO_GEOMETRY_TYPE
-
-    def test_dispatch_tables_are_inverses(self):
-        for type_value, cls in GEOMETRY_TYPE_TO_CLASS.items():
-            assert CLASS_TO_GEOMETRY_TYPE[cls] == type_value
-
-    def test_to_dict_raises_clearly_for_unregistered_subclass(self):
-        # a subclass that exists but was never added to
-        # GEOMETRY_TYPE_TO_CLASS should fail with a clear ValueError
-        # from to_dict(), not a bare KeyError
-        @dataclasses.dataclass(kw_only=True, frozen=True)
-        class _UnregisteredShape(GCylinder):
-            pass
-
-        # VALID_SHAPE_KWARGS doesn't know this class — supply the
-        # inherited GCylinder fields explicitly rather than relying on
-        # make()'s lookup.
-        instance = make(_UnregisteredShape, radius_m=0.5, height_m=2.0)
-        with pytest.raises(ValueError, match="not registered"):
-            instance.to_dict()
+    def test_unknown_type_raises_value_error_not_key_error(self):
+        with pytest.raises(ValueError):
+            geometry_from_dict({"type": "not_a_real_shape"})

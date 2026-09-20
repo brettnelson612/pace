@@ -1,40 +1,32 @@
 """
 pace/services/component_service.py
 
-ComponentService — the layer above the registry that couples
-persistence to business rules a DAO can't enforce on its own:
-family_name uniqueness for a v1, dangling-reference validation, and
-keeping the reference index (ReferenceDAO) in sync with every create.
+ComponentService: business logic over RegistryDB — persistence rules
+a DAO can't enforce on its own.
 
-register_*() enforces validate_*() internally before every save() —
-persistence always goes through the check. The matching validate_*()
-methods are also exposed standalone for the Workshop's in-memory draft
-mode, so a "check without saving" call is available before a user
-commits an edit.
+- register_*(): validates (family uniqueness, dangling refs) then
+  persists and updates the reference index. Always runs the checks —
+  there's no unvalidated save path.
+- validate_*(): the same checks, standalone, for a check-before-save
+  flow (e.g. a draft UI that shouldn't persist on every keystroke).
+- get_*(): fetch one row, unhydrated (embedded refs stay as bare ids).
+- get_resolved_ccomponent(): fetch the full hydrated tree. Walks
+  RegistryDB.references (cheap — just edges) to find everything
+  needed, then does one batched fetch per type. The resulting
+  ResolvedCComponent self-validates on construction (PaceObject), so
+  a mismatch between the reference index and what's actually in the
+  DB fails loudly here rather than returning a partial tree.
 
-Direct CComponent self-reference is NOT checked here — it needs no
-registry access, so it's enforced at construction time by CComponent's
-own validate() instead (see component.py). Multi-hop cycle detection
-(A contains B contains C contains A) is a real gap, deliberately
+Not handled here: CComponent self-reference (checked at construction,
+see component.py), multi-hop cycles, edit/delete, batch mode — all
 deferred for now.
-
-Also deferred to a later pass: refcount-gated edit/delete and
-cascading propagation (needs ReferenceDAO's reverse-index queries
-plumbed through), radial-fit/axial-fit validation, and batch mode.
-
-Takes the real RegistryDB directly, not a structural stand-in —
-ComponentService is always built against RegistryDB in practice, and
-RegistryDB's own DAOs already grow in lockstep as new methods are
-added, so there's nothing to keep in sync by hand. If ComponentService
-ever needs a test double, an in-memory SQLite-backed RegistryDB
-(SqlDB("sqlite:///:memory:")) is cheap and exercises real behavior.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from pace.core.component import CComponent, LComponent
+from pace.core.component import CComponent, LComponent, ResolvedCComponent
 from pace.core.geometry import Geometry
 from pace.core.ids import CComponentID, GeometryID, LComponentID, MaterialID
 from pace.core.material import Material
@@ -62,6 +54,10 @@ class DanglingReferenceError(ValueError):
 class ComponentService:
     def __init__(self, registry: RegistryDB):
         self._registry = registry
+
+    # -------------------------------------------------------------
+    # Creation
+    # -------------------------------------------------------------
 
     def register_geometry(self, geometry: Geometry) -> Geometry:
         self._reject_duplicate_family(
@@ -113,6 +109,84 @@ class ComponentService:
         self._registry.references.add_many(list(references))
         return component
 
+    # -------------------------------------------------------------
+    # Retrieval — single row, unhydrated
+    # -------------------------------------------------------------
+
+    def get_geometry(self, geometry_id: GeometryID) -> Geometry | None:
+        return self._registry.geometries.get(geometry_id)
+
+    def get_material(self, material_id: MaterialID) -> Material | None:
+        return self._registry.materials.get(material_id)
+
+    def get_lcomponent(self, lcomponent_id: LComponentID) -> LComponent | None:
+        return self._registry.lcomponents.get(lcomponent_id)
+
+    def get_ccomponent(self, ccomponent_id: CComponentID) -> CComponent | None:
+        return self._registry.ccomponents.get(ccomponent_id)
+
+    # -------------------------------------------------------------
+    # Retrieval — fully hydrated
+    # -------------------------------------------------------------
+
+    def get_resolved_ccomponent(self, root_id: CComponentID) -> ResolvedCComponent:
+        """Hydrate the full transitive tree a root CComponent depends on.
+
+        1. Walk RegistryDB.references to find every id needed (cheap —
+           edges only, no object reconstruction).
+        2. Batch-fetch the real objects, one query per aggregate type.
+
+        Returns a ResolvedCComponent, which self-validates on construction.
+        """
+        needed: dict[ReferenceableType, set[str]] = {
+            ReferenceableType.CCOMPONENT: {root_id},
+            ReferenceableType.LCOMPONENT: set(),
+            ReferenceableType.GEOMETRY: set(),
+            ReferenceableType.MATERIAL: set(),
+        }
+        frontier: list[tuple[ReferenceableType, str]] = [
+            (ReferenceableType.CCOMPONENT, root_id)
+        ]
+
+        while frontier:
+            edges = self._registry.references.outgoing_many(frontier)
+            frontier = []
+            for edge_type, edge_id in edges:
+                if edge_id not in needed[edge_type]:
+                    needed[edge_type].add(edge_id)
+                    frontier.append((edge_type, edge_id))
+
+        ccomponents = self._registry.ccomponents.get_many(
+            [CComponentID(i) for i in needed[ReferenceableType.CCOMPONENT]]
+        )
+        lcomponents = self._registry.lcomponents.get_many(
+            [LComponentID(i) for i in needed[ReferenceableType.LCOMPONENT]]
+        )
+        geometries = self._registry.geometries.get_many(
+            [GeometryID(i) for i in needed[ReferenceableType.GEOMETRY]]
+        )
+        materials = self._registry.materials.get_many(
+            [MaterialID(i) for i in needed[ReferenceableType.MATERIAL]]
+        )
+
+        # ResolvedCComponent.validate() runs automatically at
+        # construction (PaceObject.__post_init__) — it's the actual
+        # completeness check. If the reference index and the fetched
+        # objects ever disagree (e.g. something was deleted between
+        # the graph walk above and this fetch), construction fails
+        # loudly here rather than returning a silently partial tree.
+        return ResolvedCComponent(
+            root=root_id,
+            ccomponents=ccomponents,
+            lcomponents=lcomponents,
+            geometries=geometries,
+            materials=materials,
+        )
+
+    # -------------------------------------------------------------
+    # Validation
+    # -------------------------------------------------------------
+
     def validate_geometry(self, geometry: Geometry) -> None:
         """Confirm every id a Geometry references (GAddition.units /
         GSubtraction.base+cuts) resolves to an existing Geometry."""
@@ -139,7 +213,7 @@ class ComponentService:
         """Check that every reference in `references` resolves to an
         existing record in the registry it targets."""
         dangling = [
-            reference.referenced_id
+            reference.target_id
             for reference in references
             if not self._reference_resolves(reference)
         ]
@@ -151,21 +225,17 @@ class ComponentService:
     def _reference_resolves(self, reference: Reference) -> bool:
         """Whether a single reference resolves to an existing record
         in its respective table."""
-        if reference.referenced_type == ReferenceableType.GEOMETRY:
-            return self._registry.geometries.exists(GeometryID(reference.referenced_id))
-        elif reference.referenced_type == ReferenceableType.MATERIAL:
-            return self._registry.materials.exists(MaterialID(reference.referenced_id))
-        elif reference.referenced_type == ReferenceableType.LCOMPONENT:
-            return self._registry.lcomponents.exists(
-                LComponentID(reference.referenced_id)
-            )
-        elif reference.referenced_type == ReferenceableType.CCOMPONENT:
-            return self._registry.ccomponents.exists(
-                CComponentID(reference.referenced_id)
-            )
+        if reference.target_type == ReferenceableType.GEOMETRY:
+            return self._registry.geometries.exists(GeometryID(reference.target_id))
+        elif reference.target_type == ReferenceableType.MATERIAL:
+            return self._registry.materials.exists(MaterialID(reference.target_id))
+        elif reference.target_type == ReferenceableType.LCOMPONENT:
+            return self._registry.lcomponents.exists(LComponentID(reference.target_id))
+        elif reference.target_type == ReferenceableType.CCOMPONENT:
+            return self._registry.ccomponents.exists(CComponentID(reference.target_id))
         else:
             raise ValueError(
-                f"unrecognized ReferenceableType: {reference.referenced_type!r}"
+                f"unrecognized ReferenceableType: {reference.target_type!r}"
             )
 
     @staticmethod

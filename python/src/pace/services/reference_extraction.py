@@ -29,42 +29,42 @@ def extract_geometry_references(geometry: Geometry) -> set[Reference]:
     """GAddition/GSubtraction reference other Geometries via units/
     base/cuts; every other concrete Geometry subclass has no embedded
     references at all."""
-    referenced_ids: set[str] = set()
+    target_ids: set[str] = set()
 
     if isinstance(geometry, GAddition):
-        referenced_ids.update(unit_id for unit_id, _ in geometry.units)
+        target_ids.update(unit_id for unit_id, _ in geometry.units)
     elif isinstance(geometry, GSubtraction):
         base_id, _ = geometry.base
-        referenced_ids.add(base_id)
-        referenced_ids.update(cut_id for cut_id, _ in geometry.cuts)
+        target_ids.add(base_id)
+        target_ids.update(cut_id for cut_id, _ in geometry.cuts)
 
     return {
         Reference(
-            referencing_type=ReferenceableType.GEOMETRY,
-            referencing_id=geometry.id,
-            referenced_type=ReferenceableType.GEOMETRY,
-            referenced_id=referenced_id,
+            source_type=ReferenceableType.GEOMETRY,
+            source_id=geometry.id,
+            target_type=ReferenceableType.GEOMETRY,
+            target_id=target_id,
         )
-        for referenced_id in referenced_ids
+        for target_id in target_ids
     }
 
 
 def extract_material_references(material: Material) -> set[Reference]:
     """MMixture references other Materials via components; MIsotopic/
     MVoid have no embedded references."""
-    referenced_ids: set[str] = set()
+    target_ids: set[str] = set()
 
     if isinstance(material, MMixture):
-        referenced_ids.update(material_id for material_id, _ in material.components)
+        target_ids.update(material_id for material_id, _ in material.components)
 
     return {
         Reference(
-            referencing_type=ReferenceableType.MATERIAL,
-            referencing_id=material.id,
-            referenced_type=ReferenceableType.MATERIAL,
-            referenced_id=referenced_id,
+            source_type=ReferenceableType.MATERIAL,
+            source_id=material.id,
+            target_type=ReferenceableType.MATERIAL,
+            target_id=target_id,
         )
-        for referenced_id in referenced_ids
+        for target_id in target_ids
     }
 
 
@@ -73,16 +73,16 @@ def extract_lcomponent_references(component: LComponent) -> set[Reference]:
     Material — never zero, never more than one of each."""
     return {
         Reference(
-            referencing_type=ReferenceableType.LCOMPONENT,
-            referencing_id=component.id,
-            referenced_type=ReferenceableType.GEOMETRY,
-            referenced_id=component.geometry,
+            source_type=ReferenceableType.LCOMPONENT,
+            source_id=component.id,
+            target_type=ReferenceableType.GEOMETRY,
+            target_id=component.geometry,
         ),
         Reference(
-            referencing_type=ReferenceableType.LCOMPONENT,
-            referencing_id=component.id,
-            referenced_type=ReferenceableType.MATERIAL,
-            referenced_id=component.material,
+            source_type=ReferenceableType.LCOMPONENT,
+            source_id=component.id,
+            target_type=ReferenceableType.MATERIAL,
+            target_id=component.material,
         ),
     }
 
@@ -94,10 +94,10 @@ def extract_ccomponent_references(component: CComponent) -> set[Reference]:
     needed here to disambiguate."""
     return {
         Reference(
-            referencing_type=ReferenceableType.CCOMPONENT,
-            referencing_id=component.id,
-            referenced_type=pcomponent.component_type,
-            referenced_id=pcomponent.component,
+            source_type=ReferenceableType.CCOMPONENT,
+            source_id=component.id,
+            target_type=pcomponent.component_type,
+            target_id=pcomponent.component,
         )
         for pcomponent in component.components
     }

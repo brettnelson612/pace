@@ -13,11 +13,7 @@ from sqlalchemy import ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pace.core.ids import MaterialID
-from pace.core.material import (
-    CLASS_TO_MATERIAL_TYPE,
-    MATERIAL_TYPE_TO_CLASS,
-    Material,
-)
+from pace.core.material import Material, material_from_dict
 from pace.db.relational.base import Base
 from pace.db.relational.mixins import PolymorphicVersionMixin
 from pace.db.relational.sql_db import SqlDB
@@ -29,7 +25,7 @@ class MaterialRow(PolymorphicVersionMixin, Base):
     __table_args__ = (Index("ix_materials_family_name", "family_name"),)
 
     derived_from: Mapped[str | None] = mapped_column(
-        ForeignKey("materials.id"), nullable=True
+        ForeignKey(f"{MATERIALS_TABLE_NAME}.id"), nullable=True
     )
 
 
@@ -77,7 +73,14 @@ class MaterialDAO:
             row = session.get(MaterialRow, material_id)
             if row is None:
                 return None
-            return self._row_to_domain(row)
+            return material_from_dict(row.data)
+
+    def get_many(self, ids: list[MaterialID]) -> dict[MaterialID, Material]:
+        if not ids:
+            return {}
+        with self._db.session() as session:
+            rows = session.query(MaterialRow).filter(MaterialRow.id.in_(ids)).all()
+            return {MaterialID(row.id): material_from_dict(row.data) for row in rows}
 
     def versions_of_family(self, family_name: str) -> list[Material]:
         """Every version ever recorded under this family_name — the
@@ -88,7 +91,7 @@ class MaterialDAO:
                 .filter(MaterialRow.family_name == family_name)
                 .all()
             )
-            return [self._row_to_domain(row) for row in rows]
+            return [material_from_dict(row.data) for row in rows]
 
     def latest_version_of_family(self, family_name: str) -> Material | None:
         """The most recently created version in this family, by
@@ -105,23 +108,24 @@ class MaterialDAO:
             )
             if row is None:
                 return None
-            return self._row_to_domain(row)
+            return material_from_dict(row.data)
 
-    def save(self, version: Material) -> None:
+    def save(self, material: Material) -> None:
         """Validates, then upserts (merge). See
         GeometryDAO.save() for why version.validate() is
         called again here despite already running once at construction."""
-        version.validate()
+        material.validate()
 
+        data = material.to_dict()
         row = MaterialRow(
-            id=version.id,
-            family_name=version.family_name,
-            version_label=version.version_label,
-            derived_from=version.derived_from,
-            gt_run_id=version.gt_run_id,
-            user_edit=version.user_edit,
-            type=self._domain_type_name(version),
-            data=version.to_dict(),
+            id=material.id,
+            family_name=material.family_name,
+            version_label=material.version_label,
+            derived_from=material.derived_from,
+            gt_run_id=material.gt_run_id,
+            user_edit=material.user_edit,
+            type=data["type"],
+            data=data,
         )
         with self._db.session() as session:
             session.merge(row)
@@ -147,18 +151,4 @@ class MaterialDAO:
                 .filter(MaterialRow.derived_from == material_id)
                 .all()
             )
-            return [self._row_to_domain(row) for row in rows]
-
-    @staticmethod
-    def _domain_type_name(version: Material) -> str:
-        type_value = CLASS_TO_MATERIAL_TYPE.get(type(version))
-        if type_value is None:
-            raise ValueError(f"unknown Material subclass: {type(version)!r}")
-        return type_value
-
-    @staticmethod
-    def _row_to_domain(row: MaterialRow) -> Material:
-        cls = MATERIAL_TYPE_TO_CLASS.get(row.type)
-        if cls is None:
-            raise ValueError(f"unknown material version type in row: {row.type!r}")
-        return cls.from_dict(row.data)
+            return [material_from_dict(row.data) for row in rows]

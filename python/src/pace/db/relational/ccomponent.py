@@ -81,6 +81,15 @@ class CComponentDAO:
                 return None
             return self._row_to_domain(row)
 
+    def get_many(self, ids: list[CComponentID]) -> dict[CComponentID, CComponent]:
+        if not ids:
+            return {}
+        with self._db.session() as session:
+            rows = session.query(CComponentRow).filter(CComponentRow.id.in_(ids)).all()
+            return {
+                CComponentID(row.id): CComponent.from_dict(row.data) for row in rows
+            }
+
     def versions_of_family(self, family_name: str) -> list[CComponent]:
         """Every version ever recorded under this family_name — the
         query the version-tree UI / version dropdown is built on."""
