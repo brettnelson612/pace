@@ -9,8 +9,22 @@ type per subclass via Versioned[GeometryID], etc.
 
 Versioning rule: a version is either v1 (derived_from=None, no
 gt_run_id, user_edit=False) or a derived version, in which case
-exactly one of gt_run_id (GT-run-derived, e.g. depletion) or user_edit
-(manual edit) must also be set — never neither, never both.
+exactly one of gt_run_id or user_edit must also be set — never
+neither, never both.
+
+    - user_edit=True: a person (or code acting for them, e.g. variant
+          generation) changed the object.
+    - gt_run_id set: the new version was produced from a GT run's
+          output — a deliberate, labeled promotion of run state into
+          the registry (e.g. averaging a depletion snapshot into one
+          uniform material to reuse as a design input).
+
+What a GT-derived version is NOT: the default home of run state.
+Spatially varying results (temperature/density fields, burned
+compositions per pin/layer/ring) live in run output as state
+snapshots keyed by region address. The registry holds designs that
+are uniform within each region; promoting run state into it is an
+explicit, lossy choice, never a side effect of running.
 """
 
 from __future__ import annotations

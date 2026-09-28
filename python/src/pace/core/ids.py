@@ -33,10 +33,8 @@ CComponentID = NewType("CComponentID", str)
 # --- Lattice ---
 LatticeID = NewType("LatticeID", str)
 
-# RTBlueprint has no distinct ID type of its own,
-# an RTBlueprint's ID *is* the CComponent ID of the CComponent it wraps
-# ("It has an ID (specifically, the CComponent ID)"). Use CComponentID
-# wherever an RTBlueprint is referenced; do not introduce RTBlueprintID.
+# --- Reactor ---
+ReactorID = NewType("ReactorID", str)
 
 # --- Simulation provenance ---
 GTRunID = NewType("GTRunID", str)

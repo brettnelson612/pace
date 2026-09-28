@@ -1,110 +1,147 @@
 """
 pace/core/lattice.py
 
-Lattice — a regular rectangular grid of positions, where position is
-implicit from grid index * pitch rather than an explicit PComponent
-list. Exists for repeated structures (a fuel assembly's pin array)
-where CComponent's explicit-position-per-member approach doesn't
-scale to hundreds of members; mirrors OpenMC's RectLattice.
+Lattice — a regular grid of slots, where a slot's position is implied by
+its address and the pitch rather than stored per member. Exists for
+repeated structures (a fuel assembly's 17x17 pin array) where a
+CComponent's explicit PComponent-per-member approach doesn't scale.
 
-2D rectangular only — 3D and hexagonal lattices are a direct
-extension of the same shape, deliberately deferred until needed.
+Two concrete shapes:
+    - RectLattice — addresses are (row, col); row 0 is the TOP row and
+          col 0 the leftmost column, the order an assembly map is drawn
+          in. Matches both OpenMC's RectLattice.universes and the MOOSE
+          Reactor module's `pattern`, so neither translator reorders.
+    - HexLattice — addresses are (ring, index); ring 0 is the single
+          center slot, ring k has 6k slots. Within a ring, index 0 is
+          the "top" slot and indices proceed clockwise — OpenMC's own
+          within-ring convention, so the OpenMC translator only has to
+          reverse the ring order (OpenMC lists rings outermost first).
 
-Versioned the same way as Geometry/Material/LComponent/CComponent:
-family_name + version_label identity, the same three-state
-derived_from/gt_run_id/user_edit lineage rule.
+Slots are stored as placements — one entry per placed component, listing
+every address it occupies — rather than as a full grid:
+    - compact: a 17x17 assembly is three entries (fuel, guide tube,
+          instrument tube), not 289 slots;
+    - "where are all the guide tubes" is a lookup;
+    - empty slots are implicit: any address not listed holds only the
+          lattice's fill material.
+RectLattice.from_grid()/to_grid() convert to and from the grid form for
+authoring and review.
+
+fill is the single material around every occupant and in every empty
+slot. Translators always split it PER SLOT (each slot's fill becomes its
+own cell instance / mesh region / THM channel) — never into one region
+spanning the whole lattice, which would give every pin's coolant one
+shared temperature and density.
+
+An occupant's bounds must fit inside its slot (checked by
+ComponentService, since it needs the referenced geometries); the
+lattice fill covers the rest of the slot. Lattices are 2D: axial
+variation comes from stacking in the parent, and every occupant shares
+one height.
+
+Versioned like Geometry/Material/LComponent/CComponent.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from abc import abstractmethod
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import ClassVar, Self
 
-from pace.core.ids import CComponentID, LatticeID, LComponentID
+from pace.core.component_ref import ComponentKind, ComponentRef
+from pace.core.constraints import Constraint, validate_fields
+from pace.core.ids import LatticeID, MaterialID
 from pace.core.pace_object import PaceObject
-from pace.core.reference_types import ReferenceableType
 from pace.core.versioned import Versioned
+
+LatticeAddress = tuple[int, int]
+
+
+class LatticeType(str, Enum):
+    """Discriminator tag for Lattice subclasses."""
+
+    RECT = "rect"
+    HEX = "hex"
+
+
+class HexOrientation(str, Enum):
+    """Which way a hexagonal lattice's slots point.
+
+    Values:
+        - flat_top: each slot has two faces perpendicular to the y-axis
+              (OpenMC orientation 'y', its default).
+        - pointy_top: each slot has two faces perpendicular to the
+              x-axis (OpenMC orientation 'x').
+    """
+
+    FLAT_TOP = "flat_top"
+    POINTY_TOP = "pointy_top"
+
+
+# lattice types registered here upon definition — see
+# Lattice.__init_subclass__
+LATTICE_TYPE_TO_CLASS: dict[str, type[Lattice]] = {}
 
 
 @dataclass(frozen=True, kw_only=True)
-class LatticeCell(PaceObject):
-    """One lattice position's contents — an LComponent, CComponent, or
-    nested Lattice, with an explicit type discriminator for the same
-    reason PComponent.component_type exists: the bare id string alone
-    can't say which registry it belongs to."""
+class LatticePlacement(PaceObject):
+    """One component and every lattice address it occupies.
 
-    component: LComponentID | CComponentID | LatticeID
-    component_type: ReferenceableType
+    Example — the same pin cell in three slots of a rect lattice's top
+    row:
+        LatticePlacement(
+            ref=ComponentRef(kind=ComponentKind.CCOMPONENT, id=pin_cell.id),
+            addresses=((0, 0), (0, 1), (0, 2)),
+        )
+    """
+
+    ref: ComponentRef
+    addresses: tuple[LatticeAddress, ...]
 
     def validate(self) -> None:
-        if self.component_type not in (
-            ReferenceableType.LCOMPONENT,
-            ReferenceableType.CCOMPONENT,
-            ReferenceableType.LATTICE,
-        ):
-            raise ValueError(
-                "component_type must be LCOMPONENT, CCOMPONENT, or LATTICE, "
-                f"got {self.component_type!r}"
-            )
+        if len(self.addresses) < 1:
+            raise ValueError(f"placement of {self.ref.id!r} lists no addresses")
+        if len(set(self.addresses)) != len(self.addresses):
+            raise ValueError(f"placement of {self.ref.id!r} repeats an address")
 
     def to_dict(self) -> dict:
         return {
-            "component": self.component,
-            "component_type": self.component_type.value,
+            "ref": self.ref.to_dict(),
+            "addresses": [list(address) for address in self.addresses],
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> LatticeCell:
+    def from_dict(cls, data: dict) -> LatticePlacement:
         return cls(
-            component=data["component"],
-            component_type=ReferenceableType(data["component_type"]),
+            ref=ComponentRef.from_dict(data["ref"]),
+            addresses=tuple((a, b) for a, b in data["addresses"]),
         )
 
 
-@dataclass(kw_only=True, frozen=True, eq=False)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class Lattice(Versioned[LatticeID]):
-    """A regular 2D rectangular grid — dimensions is (nx, ny),
-    pitch_m is center-to-center spacing per axis, lower_left_m is the
-    position of the (0,0) cell's own center. universes is flat,
-    row-major (index j*nx + i for grid cell (i, j)), length exactly
-    nx*ny. outer, if set, fills space outside the lattice's own
-    defined extent (e.g. surrounding coolant); if unset, a
-    to_open_mc() translation is expected to bound the lattice exactly
-    to its extent with no space left over.
+    """Shared base for RectLattice and HexLattice.
 
-    Identity/lineage (id/family_name/version_label/derived_from/
-    gt_run_id/user_edit, build_id(), create(), the three-state
-    lineage rule) are inherited from Versioned — see that class's
-    docstring.
+    pitch_m is the center-to-center distance between adjacent slots
+    (for hex: across flats). fill is the material in every empty slot
+    and around every occupant.
 
-    Example — a 2x1 row of the same pin repeated twice:
-        Lattice.create(
-            family_name="two_pin_row",
-            version_label="1",
-            dimensions=(2, 1),
-            pitch_m=(0.0126, 0.0126),
-            lower_left_m=(-0.0063, -0.0063),
-            universes=[
-                LatticeCell(
-                    component=pin.id,
-                    component_type=ReferenceableType.CCOMPONENT,
-                ),
-                LatticeCell(
-                    component=pin.id,
-                    component_type=ReferenceableType.CCOMPONENT,
-                ),
-            ],
-        )
-
-    eq=False / id-based equality: `universes` is a list, not hashable
-    via the frozen-dataclass default — same pattern as CComponent/
-    GAddition/MIsotopic.
+    Identity/lineage are inherited from Versioned. eq=False / id-based
+    equality: `placements` is a list — same pattern as CComponent.
     """
 
-    dimensions: tuple[int, int]
-    pitch_m: tuple[float, float]
-    lower_left_m: tuple[float, float]
-    universes: list[LatticeCell]
-    outer: LatticeCell | None = None
+    lattice_type: ClassVar[LatticeType]
+
+    pitch_m: float = field(metadata={"constraint": Constraint.POSITIVE})
+    fill: MaterialID
+    placements: list[LatticePlacement]
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        if "lattice_type" in cls.__dict__:
+            LATTICE_TYPE_TO_CLASS[cls.lattice_type.value] = cls
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Lattice) and self.id == other.id
@@ -112,77 +149,264 @@ class Lattice(Versioned[LatticeID]):
     def __hash__(self) -> int:
         return hash(self.id)
 
+    @abstractmethod
+    def addresses(self) -> list[LatticeAddress]:
+        """Every valid address in this lattice, in a stable order."""
+
+    @classmethod
+    @abstractmethod
+    def from_dict(cls, data: dict) -> Self: ...
+
+    @abstractmethod
+    def _validate_shape(self) -> None:
+        """Subclass-specific checks on the lattice's own dimensions."""
+
     def validate(self) -> None:
-        """Check identity/lineage (via Versioned), then the
-        lattice-specific grid rules."""
+        """Field constraints, then identity/lineage (via Versioned),
+        then shape, then placements."""
+        validate_fields(self)
         super().validate()
-        self._validate_grid()
+        self._validate_shape()
+        self._validate_placements()
 
-    def _validate_grid(self) -> None:
-        """Enforce the lattice-specific structural rules:
-        - dimensions and pitch_m strictly positive on each axis.
-        - universes length exactly matches dimensions[0]*dimensions[1]
-              — a lattice whose cell count doesn't match its own
-              declared shape is malformed.
-        - no direct self-reference — a cell (or outer) whose
-              component_type is LATTICE and whose component id
-              equals this Lattice's own id. Needs no registry
-              access, same reasoning as CComponent's own
-              self-reference guard.
+    def _validate_placements(self) -> None:
+        """Rules enforced:
+        - at least one placement — a lattice of nothing but fill is
+              just a fill.
+        - each ref appears in at most one placement — one entry per
+              placed component, holding all of its addresses.
+        - every address is valid for this lattice's shape.
+        - no address is occupied twice.
+        - no direct self-reference.
         """
-        nx, ny = self.dimensions
-        if nx < 1 or ny < 1:
-            raise ValueError(f"dimensions must be positive, got {self.dimensions}")
+        if len(self.placements) < 1:
+            raise ValueError(f"Lattice {self.id!r} has no placements")
 
-        if self.pitch_m[0] <= 0 or self.pitch_m[1] <= 0:
-            raise ValueError(f"pitch_m must be positive, got {self.pitch_m}")
+        valid = set(self.addresses())
+        seen_refs: set[ComponentRef] = set()
+        occupied: set[LatticeAddress] = set()
+        for placement in self.placements:
+            ref = placement.ref
+            if ref in seen_refs:
+                raise ValueError(
+                    f"{ref.id!r} appears in more than one placement of {self.id!r}"
+                )
+            seen_refs.add(ref)
 
-        expected_count = nx * ny
-        if len(self.universes) != expected_count:
-            raise ValueError(
-                f"universes has {len(self.universes)} entries, expected "
-                f"{expected_count} for dimensions {self.dimensions}"
+            if ref.kind == ComponentKind.LATTICE and ref.id == self.id:
+                raise ValueError(f"Lattice {self.id!r} cannot reference itself")
+
+            for address in placement.addresses:
+                if address not in valid:
+                    raise ValueError(
+                        f"address {address} is outside lattice {self.id!r}"
+                    )
+                if address in occupied:
+                    raise ValueError(
+                        f"address {address} is occupied twice in {self.id!r}"
+                    )
+                occupied.add(address)
+
+    def occupant_at(self, address: LatticeAddress) -> ComponentRef | None:
+        """The component placed at `address`, or None for an empty slot
+        (fill only)."""
+        if address not in set(self.addresses()):
+            raise ValueError(f"address {address} is outside lattice {self.id!r}")
+        for placement in self.placements:
+            if address in placement.addresses:
+                return placement.ref
+        return None
+
+    def empty_addresses(self) -> list[LatticeAddress]:
+        """Addresses holding only the lattice fill, in address order."""
+        occupied = {a for p in self.placements for a in p.addresses}
+        return [a for a in self.addresses() if a not in occupied]
+
+    def to_dict(self) -> dict:
+        return {
+            "type": self.lattice_type.value,
+            **super().to_dict(),
+            "pitch_m": self.pitch_m,
+            "fill": self.fill,
+            "placements": [placement.to_dict() for placement in self.placements],
+        }
+
+    @classmethod
+    def _lattice_fields_from_dict(cls, data: dict) -> dict:
+        """Shared parsing for every field Lattice adds on top of
+        Versioned."""
+        return {
+            **cls._base_fields_from_dict(data),
+            "pitch_m": data["pitch_m"],
+            "fill": MaterialID(data["fill"]),
+            "placements": [LatticePlacement.from_dict(p) for p in data["placements"]],
+        }
+
+
+@dataclass(frozen=True, kw_only=True, eq=False)
+class RectLattice(Lattice):
+    """A rectangular grid with square pitch.
+
+    shape is (n_rows, n_cols). Addresses are (row, col) with row 0 at
+    the top.
+
+    Example — a 3x3 of fuel pin cells around a central guide-tube cell,
+    authored as a grid:
+        fuel = ComponentRef(kind=ComponentKind.CCOMPONENT, id=pin_cell.id)
+        guide = ComponentRef(kind=ComponentKind.CCOMPONENT, id=guide_cell.id)
+        RectLattice.from_grid(
+            family_name="mini_lattice_3x3",
+            version_label="1",
+            pitch_m=0.0126,
+            fill=borated_water.id,
+            grid=[
+                [fuel, fuel, fuel],
+                [fuel, guide, fuel],
+                [fuel, fuel, fuel],
+            ],
+        )
+    """
+
+    lattice_type: ClassVar[LatticeType] = LatticeType.RECT
+    shape: tuple[int, int]
+
+    def _validate_shape(self) -> None:
+        n_rows, n_cols = self.shape
+        if n_rows < 1 or n_cols < 1:
+            raise ValueError(f"shape must be positive on both axes, got {self.shape}")
+
+    def addresses(self) -> list[LatticeAddress]:
+        n_rows, n_cols = self.shape
+        return [(row, col) for row in range(n_rows) for col in range(n_cols)]
+
+    @classmethod
+    def from_grid(
+        cls,
+        *,
+        family_name: str,
+        version_label: str,
+        pitch_m: float,
+        fill: MaterialID,
+        grid: list[list[ComponentRef | None]],
+        **kwargs,
+    ) -> RectLattice:
+        """Build a RectLattice from a top-row-first grid of refs (None =
+        empty slot). Placements are ordered by each ref's first
+        appearance, reading row by row."""
+        if not grid or not grid[0]:
+            raise ValueError("grid must have at least one row and one column")
+        n_cols = len(grid[0])
+        if any(len(row) != n_cols for row in grid):
+            raise ValueError("every grid row must have the same length")
+
+        addresses_by_ref: dict[ComponentRef, list[LatticeAddress]] = {}
+        for row_index, row in enumerate(grid):
+            for col_index, ref in enumerate(row):
+                if ref is not None:
+                    addresses_by_ref.setdefault(ref, []).append((row_index, col_index))
+
+        return cls.create(
+            family_name=family_name,
+            version_label=version_label,
+            pitch_m=pitch_m,
+            fill=fill,
+            shape=(len(grid), n_cols),
+            placements=[
+                LatticePlacement(ref=ref, addresses=tuple(addresses))
+                for ref, addresses in addresses_by_ref.items()
+            ],
+            **kwargs,
+        )
+
+    def to_grid(self) -> list[list[ComponentRef | None]]:
+        """The top-row-first grid form (None = empty slot)."""
+        n_rows, n_cols = self.shape
+        grid: list[list[ComponentRef | None]] = [[None] * n_cols for _ in range(n_rows)]
+        for placement in self.placements:
+            for row, col in placement.addresses:
+                grid[row][col] = placement.ref
+        return grid
+
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "shape": list(self.shape)}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> RectLattice:
+        n_rows, n_cols = data["shape"]
+        return cls(**cls._lattice_fields_from_dict(data), shape=(n_rows, n_cols))
+
+
+@dataclass(frozen=True, kw_only=True, eq=False)
+class HexLattice(Lattice):
+    """A hexagonal grid of concentric rings.
+
+    num_rings counts the center slot as ring 0, so num_rings=3 has
+    1 + 6 + 12 = 19 slots. Addresses are (ring, index): index 0 is the
+    top slot of the ring, proceeding clockwise; ring k has 6k slots.
+
+    Example — a 2-ring (7-slot) bundle: one center pin plus six around
+    it, all the same pin:
+        HexLattice.create(
+            family_name="seven_pin_bundle",
+            version_label="1",
+            num_rings=2,
+            orientation=HexOrientation.FLAT_TOP,
+            pitch_m=0.009,
+            fill=sodium.id,
+            placements=[
+                LatticePlacement(
+                    ref=ComponentRef(kind=ComponentKind.CCOMPONENT, id=pin.id),
+                    addresses=((0, 0),) + tuple((1, i) for i in range(6)),
+                ),
+            ],
+        )
+    """
+
+    lattice_type: ClassVar[LatticeType] = LatticeType.HEX
+    num_rings: int
+    orientation: HexOrientation
+
+    @staticmethod
+    def ring_size(ring: int) -> int:
+        """Number of slots in `ring` (1 for the center, 6k otherwise)."""
+        return 1 if ring == 0 else 6 * ring
+
+    def _validate_shape(self) -> None:
+        if self.num_rings < 1:
+            raise ValueError(f"num_rings must be at least 1, got {self.num_rings}")
+        if not isinstance(self.orientation, HexOrientation):
+            raise TypeError(
+                f"orientation must be a HexOrientation, got {self.orientation!r}"
             )
 
-        cells_to_check = list(self.universes)
-        if self.outer is not None:
-            cells_to_check.append(self.outer)
-        for cell in cells_to_check:
-            if (
-                cell.component_type == ReferenceableType.LATTICE
-                and cell.component == self.id
-            ):
-                raise ValueError(
-                    f"Lattice {self.id!r} cannot reference itself directly"
-                )
+    def addresses(self) -> list[LatticeAddress]:
+        return list(self._iter_addresses())
+
+    def _iter_addresses(self) -> Iterator[LatticeAddress]:
+        for ring in range(self.num_rings):
+            for index in range(self.ring_size(ring)):
+                yield (ring, index)
 
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
-            "dimensions": list(self.dimensions),
-            "pitch_m": list(self.pitch_m),
-            "lower_left_m": list(self.lower_left_m),
-            "universes": [cell.to_dict() for cell in self.universes],
-            "outer": self.outer.to_dict() if self.outer is not None else None,
+            "num_rings": self.num_rings,
+            "orientation": self.orientation.value,
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> Lattice:
+    def from_dict(cls, data: dict) -> HexLattice:
         return cls(
-            **cls._base_fields_from_dict(data),
-            dimensions=tuple(data["dimensions"]),
-            pitch_m=tuple(data["pitch_m"]),
-            lower_left_m=tuple(data["lower_left_m"]),
-            universes=[LatticeCell.from_dict(c) for c in data["universes"]],
-            outer=(
-                LatticeCell.from_dict(data["outer"])
-                if data["outer"] is not None
-                else None
-            ),
+            **cls._lattice_fields_from_dict(data),
+            num_rings=data["num_rings"],
+            orientation=HexOrientation(data["orientation"]),
         )
 
-    def to_open_mc(self):
-        raise NotImplementedError
 
-    def to_moose(self):
-        raise NotImplementedError
+def lattice_from_dict(data: dict) -> Lattice:
+    """Reconstruct the correct concrete Lattice subclass from a dict
+    produced by any subclass's to_dict(), dispatching on "type"."""
+    cls = LATTICE_TYPE_TO_CLASS.get(data["type"])
+    if cls is None:
+        raise ValueError(f"unknown lattice type: {data['type']!r}")
+    return cls.from_dict(data)

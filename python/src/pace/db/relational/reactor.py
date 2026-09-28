@@ -1,12 +1,10 @@
 """
-pace/db/relational/lattice.py
+pace/db/relational/reactor.py
 
-LatticeRow (the `lattices` table) and LatticeDAO — structural mirror of
-GeometryDAO/MaterialDAO. See GeometryDAO's module docstring for the
-shared reasoning (DAO pattern, refcount/family_exists split of
-responsibility with ComponentService). Lattice is polymorphic
-(RectLattice/HexLattice), so rows carry a `type` column and are
-reconstructed via lattice_from_dict().
+ReactorRow (the `reactors` table) and ReactorDAO — structural mirror of
+ReactorDAO (same versioned method set, no polymorphic subclasses, so
+no `type` column). See GeometryDAO's module docstring for the shared
+reasoning behind the DAO/ComponentService split.
 """
 
 from __future__ import annotations
@@ -14,30 +12,30 @@ from __future__ import annotations
 from sqlalchemy import ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
-from pace.core.ids import LatticeID
-from pace.core.lattice import Lattice, lattice_from_dict
+from pace.core.ids import ReactorID
+from pace.core.reactor import Reactor
 from pace.db.relational.base import Base
-from pace.db.relational.mixins import PolymorphicVersionMixin
+from pace.db.relational.mixins import VersionMixin
 from pace.db.relational.sql_db import SqlDB
-from pace.db.relational.table_names import LATTICES_TABLE_NAME
+from pace.db.relational.table_names import REACTORS_TABLE_NAME
 
 
-class LatticeRow(PolymorphicVersionMixin, Base):
-    __tablename__ = LATTICES_TABLE_NAME
-    __table_args__ = (Index("ix_lattices_family_name", "family_name"),)
+class ReactorRow(VersionMixin, Base):
+    __tablename__ = REACTORS_TABLE_NAME
+    __table_args__ = (Index("ix_reactors_family_name", "family_name"),)
 
     derived_from: Mapped[str | None] = mapped_column(
-        ForeignKey(f"{LATTICES_TABLE_NAME}.id"), nullable=True
+        ForeignKey(f"{REACTORS_TABLE_NAME}.id"), nullable=True
     )
 
 
-class LatticeDAO:
+class ReactorDAO:
     def __init__(self, db: SqlDB):
         self._db = db
 
-    def exists(self, lattice_id: LatticeID) -> bool:
+    def exists(self, reactor_id: ReactorID) -> bool:
         with self._db.session() as session:
-            return session.get(LatticeRow, lattice_id) is not None
+            return session.get(ReactorRow, reactor_id) is not None
 
     def family_exists(self, family_name: str) -> bool:
         """Whether ANY version currently exists under this family_name.
@@ -46,102 +44,99 @@ class LatticeDAO:
         whether that's an error, just answers the question."""
         with self._db.session() as session:
             return (
-                session.query(LatticeRow)
-                .filter(LatticeRow.family_name == family_name)
+                session.query(ReactorRow)
+                .filter(ReactorRow.family_name == family_name)
                 .first()
                 is not None
             )
 
-    def describe(self, lattice_id: LatticeID) -> dict | None:
+    def describe(self, reactor_id: ReactorID) -> dict | None:
         """Lightweight metadata only — no full object reconstruction.
         Cheap even for a version whose `data` blob is large."""
         with self._db.session() as session:
-            row = session.get(LatticeRow, lattice_id)
+            row = session.get(ReactorRow, reactor_id)
             if row is None:
                 return None
             return {
                 "id": row.id,
                 "family_name": row.family_name,
                 "version_label": row.version_label,
-                "type": row.type,
                 "derived_from": row.derived_from,
                 "gt_run_id": row.gt_run_id,
                 "user_edit": row.user_edit,
                 "created_at": row.created_at,
             }
 
-    def get(self, lattice_id: LatticeID) -> Lattice | None:
+    def get(self, reactor_id: ReactorID) -> Reactor | None:
         with self._db.session() as session:
-            row = session.get(LatticeRow, lattice_id)
+            row = session.get(ReactorRow, reactor_id)
             if row is None:
                 return None
-            return lattice_from_dict(row.data)
+            return self._row_to_domain(row)
 
-    def get_many(self, ids: list[LatticeID]) -> dict[LatticeID, Lattice]:
+    def get_many(self, ids: list[ReactorID]) -> dict[ReactorID, Reactor]:
         if not ids:
             return {}
         with self._db.session() as session:
-            rows = session.query(LatticeRow).filter(LatticeRow.id.in_(ids)).all()
-            return {LatticeID(row.id): lattice_from_dict(row.data) for row in rows}
+            rows = session.query(ReactorRow).filter(ReactorRow.id.in_(ids)).all()
+            return {ReactorID(row.id): Reactor.from_dict(row.data) for row in rows}
 
-    def versions_of_family(self, family_name: str) -> list[Lattice]:
+    def versions_of_family(self, family_name: str) -> list[Reactor]:
         """Every version ever recorded under this family_name — the
         query the version-tree UI / version dropdown is built on."""
         with self._db.session() as session:
             rows = (
-                session.query(LatticeRow)
-                .filter(LatticeRow.family_name == family_name)
+                session.query(ReactorRow)
+                .filter(ReactorRow.family_name == family_name)
                 .all()
             )
-            return [lattice_from_dict(row.data) for row in rows]
+            return [self._row_to_domain(row) for row in rows]
 
-    def latest_version_of_family(self, family_name: str) -> Lattice | None:
+    def latest_version_of_family(self, family_name: str) -> Reactor | None:
         """The most recently created version in this family, by
-        created_at — the RT-page fallback default when no cookie/last-
+        created_at — the Reactor-page fallback default when no cookie/last-
         viewed state exists. NOT a substitute for explicit version
         selection anywhere a user is actually choosing which version
         to act on (e.g. starting a GT run)."""
         with self._db.session() as session:
             row = (
-                session.query(LatticeRow)
-                .filter(LatticeRow.family_name == family_name)
-                .order_by(LatticeRow.created_at.desc())
+                session.query(ReactorRow)
+                .filter(ReactorRow.family_name == family_name)
+                .order_by(ReactorRow.created_at.desc())
                 .first()
             )
             if row is None:
                 return None
-            return lattice_from_dict(row.data)
+            return self._row_to_domain(row)
 
-    def save(self, lattice: Lattice) -> None:
+    def save(self, version: Reactor) -> None:
         """Validates, then upserts (merge). See
         GeometryDAO.save() for why version.validate() is
         called again here despite already running once at construction."""
-        lattice.validate()
+        version.validate()
 
-        data = lattice.to_dict()
-        row = LatticeRow(
-            id=lattice.id,
-            family_name=lattice.family_name,
-            version_label=lattice.version_label,
-            derived_from=lattice.derived_from,
-            gt_run_id=lattice.gt_run_id,
-            user_edit=lattice.user_edit,
-            type=data["type"],
-            data=data,
+        row = ReactorRow(
+            id=version.id,
+            family_name=version.family_name,
+            version_label=version.version_label,
+            derived_from=version.derived_from,
+            gt_run_id=version.gt_run_id,
+            user_edit=version.user_edit,
+            data=version.to_dict(),
         )
         with self._db.session() as session:
             session.merge(row)
 
-    def delete(self, lattice_id: LatticeID) -> None:
+    def delete(self, reactor_id: ReactorID) -> None:
         """Pure delete — no refcount check. Callers (ComponentService)
         must confirm refcount == 0 via the ReferenceRow index before
         calling this."""
         with self._db.session() as session:
-            row = session.get(LatticeRow, lattice_id)
+            row = session.get(ReactorRow, reactor_id)
             if row is not None:
                 session.delete(row)
 
-    def children_of(self, lattice_id: LatticeID) -> list[Lattice]:
+    def children_of(self, reactor_id: ReactorID) -> list[Reactor]:
         """Reverse-index query — 'what versions were derived from this
         one' — computed on demand rather than stored on the version
         itself (a frozen dataclass can't hold a field that grows after
@@ -149,8 +144,12 @@ class LatticeDAO:
         created)."""
         with self._db.session() as session:
             rows = (
-                session.query(LatticeRow)
-                .filter(LatticeRow.derived_from == lattice_id)
+                session.query(ReactorRow)
+                .filter(ReactorRow.derived_from == reactor_id)
                 .all()
             )
-            return [lattice_from_dict(row.data) for row in rows]
+            return [self._row_to_domain(row) for row in rows]
+
+    @staticmethod
+    def _row_to_domain(row: ReactorRow) -> Reactor:
+        return Reactor.from_dict(row.data)

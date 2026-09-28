@@ -245,7 +245,7 @@ class TestMaterialBase:
             Material(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
     def test_incomplete_subclass_cannot_instantiate(self):
-        # a subclass missing _validate_composition/to_open_mc/to_moose should
+        # a subclass missing _validate_composition/from_dict should
         # still fail to instantiate, same as the base itself
         class Incomplete(Material):
             pass

@@ -12,9 +12,11 @@ from pace.core.ids import (
     CComponentID,
     GeometryID,
     GTRunID,
+    LatticeID,
     LComponentID,
     MaterialID,
     PComponentID,
+    ReactorID,
 )
 
 ALL_ID_TYPES = [
@@ -23,6 +25,8 @@ ALL_ID_TYPES = [
     LComponentID,
     PComponentID,
     CComponentID,
+    LatticeID,
+    ReactorID,
     GTRunID,
 ]
 

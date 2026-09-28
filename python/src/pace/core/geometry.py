@@ -3,8 +3,8 @@ core/geometry.py
 
 Geometry domain objects: Geometry (the versioned, polymorphic
 class holding actual shape data — GCylinder, GAnnulus, GHexPrism,
-GSphere, GRectanglePrism, GNull, GAddition, GSubtraction — plus
-validate()/to_open_mc()/to_moose()).
+GSphere, GRectanglePrism, GAddition, GSubtraction — plus validate()).
+Translation to solver inputs lives in the solver adapters, not here.
 
 No separate bare "Geometry" identity class/table — a version's family
 is just a `family_name` string carried on the version itself, not a
@@ -80,8 +80,6 @@ class GeometryType(Enum):
               design.
         - rect_prism: a rectangular prism (box) — e.g. a square/
               rectangular assembly duct or structural block.
-        - null: an empty element — a placeholder for a vacant lattice
-              position.
         - addition: a union of two or more other geometries (CSG
               union) — see GAddition.
         - subtraction: a base geometry with one or more other
@@ -94,7 +92,6 @@ class GeometryType(Enum):
     HEX_PRISM = "hex_prism"
     SPHERE = "sphere"
     RECT_PRISM = "rect_prism"
-    NULL = "null"
     ADDITION = "addition"
     SUBTRACTION = "subtraction"
 
@@ -141,16 +138,6 @@ class Geometry(Versioned[GeometryID]):
         handled by validate() before this runs. Most concrete shapes
         have no relational rule beyond that and leave this as a
         no-op; GAnnulus/GAddition/GSubtraction are the exceptions."""
-
-    @abstractmethod
-    def to_open_mc(self):
-        """Method to convert geometry to OpenMC equivalent."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def to_moose(self):
-        """Method to convert geometry to MOOSE equivalent."""
-        raise NotImplementedError
 
     def to_dict(self) -> dict:
         try:
@@ -199,14 +186,6 @@ class GCylinder(Geometry):
 
     def _validate_shape(self):
         pass
-
-    def to_open_mc(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    def to_moose(self):
-        # TODO: implement this
-        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -266,14 +245,6 @@ class GAnnulus(Geometry):
                 f"outer_radius_m ({self.outer_radius_m})"
             )
 
-    def to_open_mc(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    def to_moose(self):
-        # TODO: implement this
-        raise NotImplementedError
-
 
 @dataclass(kw_only=True, frozen=True)
 class GHexPrism(Geometry):
@@ -318,14 +289,6 @@ class GHexPrism(Geometry):
     def _validate_shape(self):
         pass
 
-    def to_open_mc(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    def to_moose(self):
-        # TODO: implement this
-        raise NotImplementedError
-
 
 @dataclass(kw_only=True, frozen=True)
 class GSphere(Geometry):
@@ -355,14 +318,6 @@ class GSphere(Geometry):
 
     def _validate_shape(self):
         pass
-
-    def to_open_mc(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    def to_moose(self):
-        # TODO: implement this
-        raise NotImplementedError
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -409,45 +364,6 @@ class GRectanglePrism(Geometry):
 
     def _validate_shape(self):
         pass
-
-    def to_open_mc(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    def to_moose(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-
-@dataclass(kw_only=True, frozen=True)
-class GNull(Geometry):
-    """An empty element — represents an empty position within a
-    lattice (e.g. a vacant fuel-pin slot, a coolant-only channel with
-    no solid component placed in it)."""
-
-    geometry_type: ClassVar[GeometryType] = GeometryType.NULL
-
-    def to_dict(self) -> dict:
-        return super().to_dict()
-
-    def _validate_shape(self):
-        # no shape-specific fields or relational checks beyond
-        # field-level constraints, already handled by Geometry.validate()
-        pass
-
-    def to_open_mc(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    def to_moose(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    @classmethod
-    def from_dict(cls, data: dict) -> GNull:
-        return cls(
-            **cls._base_fields_from_dict(data),
-        )
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -578,14 +494,6 @@ class GAddition(Geometry):
                 raise ValueError(f"duplicate unit+position: {geometry_id} at {pos}")
             seen.add(key)
 
-    def to_open_mc(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    def to_moose(self):
-        # TODO: implement this
-        raise NotImplementedError
-
 
 @dataclass(kw_only=True, frozen=True)
 class GSubtraction(Geometry):
@@ -672,14 +580,6 @@ class GSubtraction(Geometry):
             if key in seen:
                 raise ValueError(f"duplicate cut: {geometry_id} at {pos}")
             seen.add(key)
-
-    def to_open_mc(self):
-        # TODO: implement this
-        raise NotImplementedError
-
-    def to_moose(self):
-        # TODO: implement this
-        raise NotImplementedError
 
 
 def geometry_from_dict(data: dict) -> Geometry:

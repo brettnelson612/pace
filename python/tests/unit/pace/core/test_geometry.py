@@ -22,7 +22,6 @@ from pace.core.geometry import (
     GCylinder,
     Geometry,
     GHexPrism,
-    GNull,
     GPose,
     GRectanglePrism,
     GSphere,
@@ -119,7 +118,7 @@ class TestGeometryBase:
             Geometry(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
     def test_incomplete_subclass_cannot_instantiate(self):
-        # a subclass missing _validate_shape/to_open_mc/to_moose should
+        # a subclass missing _validate_shape/from_dict should
         # still fail to instantiate, same as the base itself
         class Incomplete(Geometry):
             pass
@@ -221,12 +220,6 @@ class TestGAnnulus:
         # of the inner < outer relational check
         with pytest.raises(ValueError):
             make(GAnnulus, inner_radius_m=0.0, outer_radius_m=0.5, height_m=2.0)
-
-
-class TestGNull:
-    def test_valid_construction_and_round_trip(self):
-        null = make(GNull)
-        assert GNull.from_dict(null.to_dict()) == null
 
 
 # ---------------------------------------------------------------------------

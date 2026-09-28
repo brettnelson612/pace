@@ -6,8 +6,9 @@ connection and constructs every domain-specific DB from it, so nothing
 downstream ever builds its own separate engine pointed at the same
 database.
 
-Currently exposes only `.registry` (RegistryDB) — `.reactor_twins`,
-`.surrogates`, `.gt`, and `.data` are deliberately not stubbed in yet:
+Currently exposes only `.registry` (RegistryDB), which also holds
+Reactors — they're versioned model objects like any other. `.surrogates`,
+`.gt`, and `.data` are deliberately not stubbed in yet:
 each needs its own DAOs (and, for the hybrid ones, an ObjectStore)
 before there's anything real to compose. They get added here as those
 land, not before.
@@ -25,7 +26,6 @@ class PaceDB:
         self.registry = RegistryDB(self._sql_db)
 
         # Not yet built — no domain model exists for these areas.
-        self.reactor_twins_db = None
         self.surrogates = None
         self.data = None
 

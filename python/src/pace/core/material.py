@@ -3,14 +3,15 @@ core/material.py
 
 Material domain objects: Material (the versioned, polymorphic class
 holding actual composition data — MIsotopic, MMixture, MVoid — plus
-validate()/to_open_mc()/to_moose()), mirroring geometry.py's structure
-intentionally — kept in sync by design, not by accident.
+validate()), mirroring geometry.py's structure intentionally — kept in
+sync by design, not by accident. Translation to solver inputs lives in
+the solver adapters, not here.
 
 No separate bare "Material" identity class/table — a version's family
 is just a `family_name` string carried on the version itself. A
 version's id is one opaque string built from family_name +
-version_label (e.g. "uranium3.2-1", "uranium3.2-6month_depletion" —
-see Material.build_id()).
+version_label (e.g. "uranium3.2-1", "uranium3.2-2" — see
+Material.build_id()).
 
 family_name is NOT unique per row — every version in a family shares
 it. Rejecting a duplicate family_name is enforced only at "create a
@@ -19,9 +20,13 @@ logic (ComponentService), not a database constraint.
 
 What "material" means physically here: a material is a description of
 what substance occupies a region of space — which isotopes are
-present, in what relative amounts, and at what density. It says
-nothing about shape (that's Geometry) or temperature (deliberately
-excluded — see Material).
+present, in what relative amounts, and at what reference density —
+plus how its properties respond to conditions (conductivity and
+specific heat as functions of temperature). It is uniform across every
+region it fills. It says nothing about shape (that's Geometry) or about
+the actual temperature/density at any point during a run: spatially
+varying values are run state (initial values on the Reactor's
+OperatingState; converged fields in run output), never stored here.
 """
 
 from __future__ import annotations
@@ -295,8 +300,15 @@ class Material(Versioned[MaterialID]):
     same nuclide inventory behaves differently at different
     temperatures only because of Doppler broadening of cross sections,
     not because the material itself has changed. Temperature is
-    therefore passed as an argument to to_open_mc()/to_moose() at
-    solver-translation time, never stored as a field here.
+    therefore supplied at translation time (from the Reactor's operating
+    state, or from a run's fields), never stored as a field here.
+
+    density_value on concrete subclasses is the REFERENCE density the
+    composition is specified at. For solids it is also the value the
+    solvers use (thermal expansion is neglected in v1). For fluids, the
+    local density during a coupled run comes from the fluid's equation
+    of state at the local temperature and pressure, so the stored value
+    is a starting point, not a constant.
     """
 
     material_type: ClassVar[MaterialType]
@@ -325,14 +337,6 @@ class Material(Versioned[MaterialID]):
 
     @abstractmethod
     def _validate_composition(self) -> None:
-        pass
-
-    @abstractmethod
-    def to_open_mc(self, temperature_k: float | None = None):
-        """Temperature is passed at call time, never stored on the version."""
-
-    @abstractmethod
-    def to_moose(self, temperature_k: float | None = None):
         pass
 
     @classmethod
@@ -426,7 +430,7 @@ class Material(Versioned[MaterialID]):
 class MIsotopic(Material):
     """
     Direct nuclide/element composition — the common case, and the only
-    form v2+ (depletion-derived) versions can take.
+    form GT-run-derived versions can take.
 
     Physically: this is "what is this material actually made of" —
     a set of nuclides/elements (see MaterialComponentEntry for the two
@@ -507,15 +511,6 @@ class MIsotopic(Material):
                         "entry. Only bare elements keys can map to enrichment format entries"
                     )
 
-    def to_open_mc(self, temperature_k: float | None = None):
-        # TODO: build an openmc.Material, call add_components(self.components,
-        # percent_type=self.percent_type), set_density(self.density_unit,
-        # self.density_value), and apply temperature_k if provided.
-        raise NotImplementedError
-
-    def to_moose(self, temperature_k: float | None = None):
-        raise NotImplementedError
-
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
@@ -552,8 +547,8 @@ class MMixture(Material):
     Mixing is its own Material subclass storing references + fractions
     — mirrors GAddition storing list[tuple[GeometryID, GPose]] rather
     than pre-flattening geometry at construction time. The actual
-    nuclide-level combination happens in to_open_mc(), not here — this
-    class only records the recipe.
+    nuclide-level combination happens in the solver adapter, not here —
+    this class only records the recipe.
 
     percent_type here shares OpenMC's mix_materials() vocabulary
     ("ao"/"wo"), but carries a DIFFERENT constraint than MIsotopic's
@@ -622,15 +617,6 @@ class MMixture(Material):
         if not math.isclose(total, 1.0, rel_tol=1e-9):
             raise ValueError(f"mix fractions must sum to 1, got {total}")
 
-    def to_open_mc(self, temperature_k: float | None = None):
-        # TODO: resolve each constituent Material, build/mix the
-        # corresponding openmc.Material objects per self.percent_type, apply
-        # temperature_k.
-        raise NotImplementedError
-
-    def to_moose(self, temperature_k: float | None = None):
-        raise NotImplementedError
-
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
@@ -684,15 +670,6 @@ class MVoid(Material):
     def _validate_composition(self) -> None:
         # nothing to validate — void has no composition
         pass
-
-    def to_open_mc(self, temperature_k: float | None = None):
-        # TODO: implement this — conceptually, this should resolve to
-        # an OpenMC cell/region with fill=None (no material at all),
-        # not a Material object with near-zero density.
-        raise NotImplementedError
-
-    def to_moose(self, temperature_k: float | None = None):
-        raise NotImplementedError
 
     def to_dict(self) -> dict:
         return super().to_dict()
