@@ -50,8 +50,9 @@ from enum import Enum
 from typing import ClassVar, Self
 
 from pace.core.constraints import Constraint, validate_fields
-from pace.core.ids import GeometryID, GTRunID
+from pace.core.ids import GeometryID
 from pace.core.pace_object import PaceObject
+from pace.core.versioned import Versioned
 
 # Bounds are practical sanity limits (catching typos/unit mistakes — e.g. a
 # radius accidentally entered in cm instead of m), not physical constraints.
@@ -104,109 +105,30 @@ GEOMETRY_TYPE_TO_CLASS: dict[str, type[Geometry]] = {}
 
 
 @dataclass(kw_only=True, frozen=True)
-class Geometry(PaceObject):
+class Geometry(Versioned[GeometryID]):
     """General interface for a specific geometry version.
 
-    Identity: id is a single opaque string built from family_name +
-    version_label via build_id() — e.g. family_name="fuel_pellet",
-    version_label="1" -> id="fuel_pellet-1". _validate_id() confirms
-    the two stay consistent, catching an accidentally mismatched/
-    copy-pasted id at construction time.
-
-    Versioning rule: a version is either v1 (user-authored from
-    scratch) or a derived version, and if derived, it has exactly one
-    recorded cause:
-        - derived_from is None: version 1. gt_run_id must be None and
-              user_edit must be False — a v1 has no derivation cause
-              because it has no predecessor.
-        - derived_from is set: a derived version. Exactly one of
-              gt_run_id (this version is the recorded output of a GT
-              run — e.g. thermal expansion or mechanical deformation
-              simulated over the course of a run) or user_edit (a
-              person directly edited a predecessor version, e.g. via
-              the workshop) must also be set — never neither, and
-              never both, since a single version bump can't
-              simultaneously be GT-run output and a manual edit.
+    Identity and versioning (id/family_name/version_label/
+    derived_from/gt_run_id/user_edit, build_id(), create(), the
+    three-state lineage rule) are inherited from Versioned — see that
+    class's docstring. This class adds only what's specific to
+    geometries: the type-tag dispatch mechanism and shape validation.
     """
 
     geometry_type: ClassVar[GeometryType]
-    id: GeometryID
-    family_name: str
-    version_label: str
-    derived_from: GeometryID | None = None
-    gt_run_id: GTRunID | None = None
-    user_edit: bool = False
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
         if "geometry_type" in cls.__dict__:
             GEOMETRY_TYPE_TO_CLASS[cls.geometry_type.value] = cls
 
-    @staticmethod
-    def build_id(family_name: str, version_label: str) -> GeometryID:
-        """The one canonical way an id is constructed from a
-        family_name + version_label pair. Used both when constructing
-        a new version and by _validate_id() to confirm an existing
-        id actually matches its own family_name/version_label."""
-        return GeometryID(f"{family_name}-{version_label}")
-
-    @classmethod
-    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Self:
-        """Named-constructor convenience: derives id via build_id() so
-        callers never have to compute and pass it separately. Works
-        for any concrete subclass unchanged — **kwargs passes through
-        whatever shape-specific fields that subclass requires (e.g.
-        radius_m/height_m for GCylinder).
-
-        Prefer this over calling a subclass's constructor directly
-        when constructing brand-new versions (hand-written examples,
-        ComponentService minting a new version). from_dict() should
-        keep calling cls(...) directly — it already has a trusted,
-        stored id and doesn't need one derived.
-        """
-        return cls(
-            id=cls.build_id(family_name, version_label),
-            family_name=family_name,
-            version_label=version_label,
-            **kwargs,
-        )
-
-    def validate(self):
-        """Check field-level constraints, then id/family_name/
-        version_label consistency, then the derived_from/gt_run_id/
-        user_edit lineage rule, then delegate to the concrete
-        subclass's shape-specific (relational) checks."""
+    def validate(self) -> None:
+        """Check field-level constraints, then identity/lineage (via
+        Versioned), then delegate to the concrete subclass's
+        shape-specific (relational) checks."""
         validate_fields(self)
-        self._validate_id()
-        self._validate_lineage()
+        super().validate()
         self._validate_shape()
-
-    def _validate_id(self) -> None:
-        expected = self.build_id(self.family_name, self.version_label)
-        if self.id != expected:
-            raise ValueError(
-                f"id {self.id!r} does not match family_name/version_label "
-                f"(expected {expected!r})"
-            )
-
-    def _validate_lineage(self) -> None:
-        has_predecessor = self.derived_from is not None
-        has_gt_run = self.gt_run_id is not None
-
-        if not has_predecessor:
-            if has_gt_run or self.user_edit:
-                raise ValueError(
-                    "gt_run_id must be unset and user_edit must be False "
-                    "when derived_from is unset (version 1 has no "
-                    "derivation cause)"
-                )
-        elif has_gt_run == self.user_edit:
-            # both set, or both unset — either way, invalid
-            raise ValueError(
-                "when derived_from is set, exactly one of gt_run_id or "
-                "user_edit must also be set (got gt_run_id="
-                f"{self.gt_run_id!r}, user_edit={self.user_edit!r})"
-            )
 
     @classmethod
     @abstractmethod
@@ -238,15 +160,7 @@ class Geometry(PaceObject):
                 f"{type(self).__name__} does not define geometry_type — "
                 "set it as a ClassVar on the subclass"
             ) from None
-        return {
-            "type": type_value,
-            "id": self.id,
-            "family_name": self.family_name,
-            "version_label": self.version_label,
-            "derived_from": self.derived_from,
-            "gt_run_id": self.gt_run_id,
-            "user_edit": self.user_edit,
-        }
+        return {"type": type_value, **super().to_dict()}
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -278,12 +192,7 @@ class GCylinder(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GCylinder:
         return cls(
-            id=GeometryID(data["id"]),
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=GeometryID(data["derived_from"]),
-            gt_run_id=GTRunID(data["gt_run_id"]),
-            user_edit=data["user_edit"],
+            **cls._base_fields_from_dict(data),
             radius_m=data["radius_m"],
             height_m=data["height_m"],
         )
@@ -337,12 +246,7 @@ class GAnnulus(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GAnnulus:
         return cls(
-            id=GeometryID(data["id"]),
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=GeometryID(data["derived_from"]),
-            gt_run_id=GTRunID(data["gt_run_id"]),
-            user_edit=data["user_edit"],
+            **cls._base_fields_from_dict(data),
             inner_radius_m=data["inner_radius_m"],
             outer_radius_m=data["outer_radius_m"],
             height_m=data["height_m"],
@@ -406,12 +310,7 @@ class GHexPrism(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GHexPrism:
         return cls(
-            id=GeometryID(data["id"]),
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=GeometryID(data["derived_from"]),
-            gt_run_id=GTRunID(data["gt_run_id"]),
-            user_edit=data["user_edit"],
+            **cls._base_fields_from_dict(data),
             circumradius_m=data["circumradius_m"],
             height_m=data["height_m"],
         )
@@ -450,12 +349,7 @@ class GSphere(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GSphere:
         return cls(
-            id=GeometryID(data["id"]),
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=GeometryID(data["derived_from"]),
-            gt_run_id=GTRunID(data["gt_run_id"]),
-            user_edit=data["user_edit"],
+            **cls._base_fields_from_dict(data),
             radius_m=data["radius_m"],
         )
 
@@ -507,12 +401,7 @@ class GRectanglePrism(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GRectanglePrism:
         return cls(
-            id=GeometryID(data["id"]),
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=GeometryID(data["derived_from"]),
-            gt_run_id=GTRunID(data["gt_run_id"]),
-            user_edit=data["user_edit"],
+            **cls._base_fields_from_dict(data),
             length_m=data["length_m"],
             width_m=data["width_m"],
             height_m=data["height_m"],
@@ -557,12 +446,7 @@ class GNull(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GNull:
         return cls(
-            id=GeometryID(data["id"]),
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=GeometryID(data["derived_from"]),
-            gt_run_id=GTRunID(data["gt_run_id"]),
-            user_edit=data["user_edit"],
+            **cls._base_fields_from_dict(data),
         )
 
 
@@ -665,12 +549,7 @@ class GAddition(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GAddition:
         return cls(
-            id=GeometryID(data["id"]),
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=GeometryID(data["derived_from"]),
-            gt_run_id=GTRunID(data["gt_run_id"]),
-            user_edit=data["user_edit"],
+            **cls._base_fields_from_dict(data),
             units=[
                 (GeometryID(unit["geometry_id"]), GPose.from_dict(unit["position"]))
                 for unit in data["units"]
@@ -762,12 +641,7 @@ class GSubtraction(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GSubtraction:
         return cls(
-            id=GeometryID(data["id"]),
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=GeometryID(data["derived_from"]),
-            gt_run_id=GTRunID(data["gt_run_id"]),
-            user_edit=data["user_edit"],
+            **cls._base_fields_from_dict(data),
             base=(
                 GeometryID(data["base"]["geometry_id"]),
                 GPose.from_dict(data["base"]["position"]),

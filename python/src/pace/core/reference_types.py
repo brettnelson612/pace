@@ -21,3 +21,4 @@ class ReferenceableType(str, Enum):
     MATERIAL = "material"
     LCOMPONENT = "lcomponent"
     CCOMPONENT = "ccomponent"
+    LATTICE = "lattice"

@@ -33,8 +33,9 @@ from enum import Enum
 from typing import ClassVar, Literal, Self
 
 from pace.core.constraints import Constraint, validate_fields
-from pace.core.ids import GTRunID, MaterialID
+from pace.core.ids import MaterialID
 from pace.core.pace_object import PaceObject
+from pace.core.versioned import Versioned
 
 """
 Percentage Types:
@@ -61,6 +62,14 @@ add_element()/add_nuclide() and mix_materials(), even though the
 accompanying values are constrained differently in each case.
 """
 PercentType = Literal["ao", "wo"]
+
+# MMixture-only: "vo" (volume percent) is meaningful for mixing whole
+# materials together (OpenMC's mix_materials() supports it natively)
+# but not for MIsotopic's per-nuclide composition, where a nuclide
+# doesn't independently occupy a "volume" — so this is a separate
+# alias from PercentType, not an extension of it, to keep "vo" from
+# looking valid on MIsotopic.percent_type too.
+MixPercentType = Literal["ao", "wo", "vo"]
 
 """
 Density Units:
@@ -102,9 +111,75 @@ class MaterialType(str, Enum):
     VOID = "void"
 
 
-# material types registered here upon definition
-# see Material.__init_subclass__
+# material types registered here upon definition — see
+# Material.__init_subclass__
 MATERIAL_TYPE_TO_CLASS: dict[str, type[Material]] = {}
+
+
+@dataclass(frozen=True, kw_only=True)
+class ThermalScatteringLibrary(PaceObject):
+    """One S(alpha,beta) bound-thermal-scattering table entry —
+    required for any moderating material (water, graphite, zirconium
+    hydride, ...) to be translated correctly, since bound-nuclide
+    scattering physics differs from free-gas scattering.
+
+    `name`:     follows OpenMC's GND naming convention (e.g. "c_H_in_H2O").
+    `fraction`: is the atom fraction of the material this table covers
+
+    Most materials need exactly one entry at fraction 1.0; some
+    (e.g. BeO, where both Be and O need separate tables) need one
+    entry per bound nuclide.
+
+    Example — light water:
+        ThermalScatteringLibrary(name="c_H_in_H2O")
+    """
+
+    name: str
+    nuclide: str  # e.g. "C0", "Be9" — which nuclide's population this covers
+    fraction: float = 1.0
+
+    def validate(self) -> None:
+        if not (0.0 < self.fraction <= 1.0):
+            raise ValueError(f"fraction must be in (0, 1], got {self.fraction}")
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "fraction": self.fraction}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ThermalScatteringLibrary:
+        return cls(
+            name=data["name"], nuclide=data["name"], fraction=data.get("fraction", 1.0)
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class TabulatedProperty(PaceObject):
+    """A temperature-dependent material property as (temperature_k,
+    value) points for interpolation — thermal conductivity, specific
+    heat, thermal expansion, elastic modulus. Distinct from a
+    Material's own gt_run_id/user_edit lineage: this describes how ONE
+    physical property varies with temperature, not how the material's
+    composition evolved over time.
+
+    Units are whatever the specific field on Material documents (e.g.
+    W/(m*K) for thermal_conductivity) — not enforced here.
+    """
+
+    points: list[tuple[float, float]]
+
+    def validate(self) -> None:
+        if len(self.points) < 1:
+            raise ValueError("TabulatedProperty needs at least one point")
+        temperatures = [t for t, _ in self.points]
+        if temperatures != sorted(temperatures):
+            raise ValueError("points must be sorted by increasing temperature_k")
+
+    def to_dict(self) -> dict:
+        return {"points": [[t, v] for t, v in self.points]}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> TabulatedProperty:
+        return cls(points=[(t, v) for t, v in data["points"]])
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -203,16 +278,17 @@ class MaterialComponentEntry(PaceObject):
 
 
 @dataclass(frozen=True, kw_only=True)
-class Material(PaceObject):
+class Material(Versioned[MaterialID]):
     """
     Shared base for concrete composition types (MIsotopic, MMixture,
     MVoid).
 
-    Identity: id is a single opaque string built from family_name +
-    version_label via build_id() — e.g. family_name="uranium3.2",
-    version_label="1" -> id="uranium3.2-1". _validate_id() confirms
-    the two stay consistent, catching an accidentally mismatched/
-    copy-pasted id at construction time.
+    Identity/lineage (id/family_name/version_label/derived_from/
+    gt_run_id/user_edit, build_id(), create(), the three-state
+    lineage rule) are inherited from Versioned — see that class's
+    docstring. This class adds composition-related concerns: the
+    type-tag dispatch mechanism, thermal-scattering tables, and
+    MOOSE-relevant thermomechanical properties.
 
     Notably absent from this class: temperature. Composition and
     temperature are physically orthogonal in OpenMC's own model — the
@@ -221,64 +297,31 @@ class Material(PaceObject):
     not because the material itself has changed. Temperature is
     therefore passed as an argument to to_open_mc()/to_moose() at
     solver-translation time, never stored as a field here.
-
-    Versioning rule: a version is either v1 (user-authored from
-    scratch) or a derived version, and if derived, it has exactly one
-    recorded cause:
-        - derived_from is None: version 1. gt_run_id must be None and
-              user_edit must be False.
-        - derived_from is set: a derived version. Exactly one of
-              gt_run_id (this version is the recorded output of a GT
-              run — physically, depletion: OpenMC's depletion module
-              solving the Bateman equations to evolve a nuclide
-              inventory forward under a flux/power history) or
-              user_edit (a person directly edited a predecessor
-              version's composition) must also be set — never neither,
-              and never both.
     """
 
     material_type: ClassVar[MaterialType]
-    id: MaterialID
-    family_name: str
-    version_label: str
-    derived_from: MaterialID | None = None
-    gt_run_id: GTRunID | None = None
-    user_edit: bool = False
+
+    # S(alpha,beta) bound-thermal-scattering tables — required for any
+    # moderating material (water, graphite, ...) to translate
+    # correctly to OpenMC. Empty for non-moderating materials (fuel,
+    # cladding, structural alloys) and always empty for MVoid.
+    thermal_scattering: tuple[ThermalScatteringLibrary, ...] = ()
+
+    # MOOSE-relevant thermomechanical properties, each optional since
+    # not every material needs every property (a coolant doesn't need
+    # elastic_modulus; a pure neutronics-only material may need none
+    # of these at all). Units: thermal_conductivity in W/(m*K),
+    # specific_heat in J/(kg*K), thermal_expansion_coefficient in 1/K,
+    # elastic_modulus in Pa — each as a function of temperature_k.
+    thermal_conductivity: TabulatedProperty | None = None
+    specific_heat: TabulatedProperty | None = None
+    thermal_expansion_coefficient: TabulatedProperty | None = None
+    elastic_modulus: TabulatedProperty | None = None
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
         if "material_type" in cls.__dict__:
             MATERIAL_TYPE_TO_CLASS[cls.material_type.value] = cls
-
-    @staticmethod
-    def build_id(family_name: str, version_label: str) -> MaterialID:
-        """The one canonical way an id is constructed from a
-        family_name + version_label pair. Used both when constructing
-        a new version and by _validate_id() to confirm an existing
-        id actually matches its own family_name/version_label."""
-        return MaterialID(f"{family_name}-{version_label}")
-
-    @classmethod
-    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Self:
-        """Named-constructor convenience: derives id via build_id() so
-        callers never have to compute and pass it separately. Works
-        for any concrete subclass unchanged — **kwargs passes through
-        whatever composition-specific fields that subclass requires
-        (e.g. components/percent_type/density_value/density_unit for
-        MIsotopic).
-
-        Prefer this over calling a subclass's constructor directly
-        when constructing brand-new versions (hand-written examples,
-        ComponentService minting a new version). from_dict() should
-        keep calling cls(...) directly — it already has a trusted,
-        stored id and doesn't need one derived.
-        """
-        return cls(
-            id=cls.build_id(family_name, version_label),
-            family_name=family_name,
-            version_label=version_label,
-            **kwargs,
-        )
 
     @abstractmethod
     def _validate_composition(self) -> None:
@@ -297,41 +340,18 @@ class Material(PaceObject):
     def from_dict(cls, data: dict) -> Self: ...
 
     def validate(self) -> None:
+        """Check field-level constraints, then identity/lineage (via
+        Versioned), then composition, then thermal-scattering-table
+        sanity."""
         validate_fields(self)
-        self._validate_id()
-        self._validate_lineage()
+        super().validate()
         self._validate_composition()
+        self._validate_thermal_scattering()
 
-    def _validate_id(self) -> None:
-        expected = self.build_id(self.family_name, self.version_label)
-        if self.id != expected:
-            raise ValueError(
-                f"id {self.id!r} does not match family_name/version_label "
-                f"(expected {expected!r})"
-            )
-
-    def _validate_lineage(self) -> None:
-        """Check that derived_from and exactly one of gt_run_id/user_edit
-        are set together, or all three are unset — see the versioning
-        rule described in this class's docstring for the physical
-        reasoning."""
-        has_predecessor = self.derived_from is not None
-        has_gt_run = self.gt_run_id is not None
-
-        if not has_predecessor:
-            if has_gt_run or self.user_edit:
-                raise ValueError(
-                    "gt_run_id must be unset and user_edit must be False "
-                    "when derived_from is unset (version 1 has no "
-                    "derivation cause)"
-                )
-        elif has_gt_run == self.user_edit:
-            # both set, or both unset — either way, invalid
-            raise ValueError(
-                "when derived_from is set, exactly one of gt_run_id or "
-                "user_edit must also be set (got gt_run_id="
-                f"{self.gt_run_id!r}, user_edit={self.user_edit!r})"
-            )
+    def _validate_thermal_scattering(self) -> None:
+        names = [entry.name for entry in self.thermal_scattering]
+        if len(names) != len(set(names)):
+            raise ValueError(f"duplicate thermal_scattering table name(s) in {names!r}")
 
     def to_dict(self) -> dict:
         try:
@@ -343,12 +363,62 @@ class Material(PaceObject):
             ) from None
         return {
             "type": type_value,
-            "id": self.id,
-            "family_name": self.family_name,
-            "version_label": self.version_label,
-            "derived_from": self.derived_from,
-            "gt_run_id": self.gt_run_id,
-            "user_edit": self.user_edit,
+            **super().to_dict(),
+            "thermal_scattering": [
+                entry.to_dict() for entry in self.thermal_scattering
+            ],
+            "thermal_conductivity": (
+                self.thermal_conductivity.to_dict()
+                if self.thermal_conductivity is not None
+                else None
+            ),
+            "specific_heat": (
+                self.specific_heat.to_dict() if self.specific_heat is not None else None
+            ),
+            "thermal_expansion_coefficient": (
+                self.thermal_expansion_coefficient.to_dict()
+                if self.thermal_expansion_coefficient is not None
+                else None
+            ),
+            "elastic_modulus": (
+                self.elastic_modulus.to_dict()
+                if self.elastic_modulus is not None
+                else None
+            ),
+        }
+
+    @classmethod
+    def _material_fields_from_dict(cls, data: dict) -> dict:
+        """Shared parsing for every field Material adds on top of
+        Versioned — every concrete subclass's from_dict() threads this
+        through via **cls._material_fields_from_dict(data) rather than
+        repeating the same parsing block three times."""
+        return {
+            **cls._base_fields_from_dict(data),
+            "thermal_scattering": tuple(
+                ThermalScatteringLibrary.from_dict(entry)
+                for entry in data.get("thermal_scattering", [])
+            ),
+            "thermal_conductivity": (
+                TabulatedProperty.from_dict(data["thermal_conductivity"])
+                if data.get("thermal_conductivity") is not None
+                else None
+            ),
+            "specific_heat": (
+                TabulatedProperty.from_dict(data["specific_heat"])
+                if data.get("specific_heat") is not None
+                else None
+            ),
+            "thermal_expansion_coefficient": (
+                TabulatedProperty.from_dict(data["thermal_expansion_coefficient"])
+                if data.get("thermal_expansion_coefficient") is not None
+                else None
+            ),
+            "elastic_modulus": (
+                TabulatedProperty.from_dict(data["elastic_modulus"])
+                if data.get("elastic_modulus") is not None
+                else None
+            ),
         }
 
 
@@ -460,12 +530,7 @@ class MIsotopic(Material):
     @classmethod
     def from_dict(cls, data: dict) -> MIsotopic:
         return cls(
-            id=data["id"],
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
-            user_edit=data["user_edit"],
+            **cls._material_fields_from_dict(data),
             percent_type=data["percent_type"],
             density_value=data["density_value"],
             density_unit=data["density_unit"],
@@ -522,7 +587,7 @@ class MMixture(Material):
 
     material_type: ClassVar[MaterialType] = MaterialType.MIXTURE
     components: list[tuple[MaterialID, float]]
-    percent_type: PercentType
+    percent_type: MixPercentType
 
     def __eq__(self, value: object) -> bool:
         return isinstance(value, MMixture) and self.id == value.id
@@ -578,15 +643,11 @@ class MMixture(Material):
     @classmethod
     def from_dict(cls, data: dict) -> MMixture:
         return cls(
-            id=data["id"],
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
-            user_edit=data["user_edit"],
+            **cls._material_fields_from_dict(data),
             percent_type=data["percent_type"],
             components=[
-                (material_id, fraction) for material_id, fraction in data["components"]
+                (MaterialID(material_id), fraction)
+                for material_id, fraction in data["components"]
             ],
         )
 
@@ -639,12 +700,7 @@ class MVoid(Material):
     @classmethod
     def from_dict(cls, data: dict) -> MVoid:
         return cls(
-            id=data["id"],
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
-            user_edit=data["user_edit"],
+            **cls._material_fields_from_dict(data),
         )
 
 
@@ -652,7 +708,10 @@ def material_from_dict(data: dict) -> Material:
     """Reconstruct the correct concrete Material subclass from a dict
     produced by any subclass's to_dict() — dispatches on the "type"
     key rather than requiring the caller to already know which
-    concrete class they're deserializing."""
+    concrete class they're deserializing. Material.from_dict() is
+    abstract, so it can never be called directly on the base class;
+    this is the supported way to deserialize a Material of unknown
+    concrete type."""
     cls = MATERIAL_TYPE_TO_CLASS.get(data["type"])
     if cls is None:
         raise ValueError(f"unknown material type: {data['type']!r}")

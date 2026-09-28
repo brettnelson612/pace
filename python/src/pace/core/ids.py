@@ -30,6 +30,9 @@ LComponentID = NewType("LComponentID", str)
 PComponentID = NewType("PComponentID", str)
 CComponentID = NewType("CComponentID", str)
 
+# --- Lattice ---
+LatticeID = NewType("LatticeID", str)
+
 # RTBlueprint has no distinct ID type of its own,
 # an RTBlueprint's ID *is* the CComponent ID of the CComponent it wraps
 # ("It has an ID (specifically, the CComponent ID)"). Use CComponentID
