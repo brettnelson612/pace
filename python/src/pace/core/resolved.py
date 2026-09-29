@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pace.core.component import CComponent, LComponent
-from pace.core.component_ref import ComponentKind, ComponentRef
+from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.geometry import GAddition, Geometry, GSubtraction, geometry_from_dict
 from pace.core.ids import CComponentID, GeometryID, LatticeID, LComponentID, MaterialID
 from pace.core.lattice import Lattice, lattice_from_dict
@@ -47,9 +47,9 @@ class ResolvedModel(PaceObject):
     def contains(self, ref: ComponentRef) -> bool:
         """Whether the placeable object `ref` points at is in this
         bundle."""
-        if ref.kind == ComponentKind.LCOMPONENT:
+        if ref.type == ComponentType.LCOMPONENT:
             return ref.id in self.lcomponents
-        if ref.kind == ComponentKind.CCOMPONENT:
+        if ref.type == ComponentType.CCOMPONENT:
             return ref.id in self.ccomponents
         return ref.id in self.lattices
 
@@ -93,7 +93,7 @@ class ResolvedModel(PaceObject):
     def _require_ref(self, owner: str, ref: ComponentRef) -> None:
         if not self.contains(ref):
             raise ValueError(
-                f"{owner} references {ref.kind.value} {ref.id!r}, which is not "
+                f"{owner} references {ref.type.value} {ref.id!r}, which is not "
                 "present in this bundle."
             )
 
@@ -105,8 +105,8 @@ class ResolvedModel(PaceObject):
             self._require_geometry(owner, ccomponent.bounds)
             if ccomponent.fill is not None:
                 self._require_material(owner, ccomponent.fill)
-            for pcomponent in ccomponent.components:
-                self._require_ref(owner, pcomponent.ref)
+            for placement in ccomponent.components:
+                self._require_ref(owner, placement.ref)
 
         for lattice in self.lattices.values():
             owner = f"Lattice {lattice.id!r}"

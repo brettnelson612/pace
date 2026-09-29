@@ -18,8 +18,8 @@ from typing import Any
 
 import pytest
 from pace.core.bounds import faces_for_geometry_type
-from pace.core.component import CComponent, LComponent, PComponent
-from pace.core.component_ref import ComponentKind, ComponentRef
+from pace.core.component import CComponent, LComponent, Placement
+from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.geometry import (
     GAddition,
     GAnnulus,
@@ -28,7 +28,7 @@ from pace.core.geometry import (
     GPose,
     GRectanglePrism,
 )
-from pace.core.ids import GeometryID, MaterialID, PComponentID
+from pace.core.ids import GeometryID, MaterialID, PlacementID
 from pace.core.lattice import LatticePlacement, RectLattice
 from pace.core.material import MaterialComponentEntry, MIsotopic, MMixture
 from pace.core.reactor import NeutronBC, OperatingState, Reactor
@@ -48,9 +48,9 @@ def _material(name: str) -> MIsotopic:
     )
 
 
-def _place(pc_id: str, kind: ComponentKind, target_id: str) -> PComponent:
-    return PComponent(
-        id=PComponentID(pc_id), pose=ORIGIN, ref=ComponentRef(kind=kind, id=target_id)
+def _place(pc_id: str, kind: ComponentType, target_id: str) -> Placement:
+    return Placement(
+        id=PlacementID(pc_id), pose=ORIGIN, ref=ComponentRef(type=kind, id=target_id)
     )
 
 
@@ -95,8 +95,8 @@ def _bundle_parts() -> dict[str, Any]:
         bounds=rod_cyl.id,
         fill=zirc.id,
         components=[
-            _place("pellet", ComponentKind.LCOMPONENT, pellet.id),
-            _place("clad", ComponentKind.LCOMPONENT, clad.id),
+            _place("pellet", ComponentType.LCOMPONENT, pellet.id),
+            _place("clad", ComponentType.LCOMPONENT, clad.id),
         ],
     )
     pin_cell = CComponent.create(
@@ -104,7 +104,7 @@ def _bundle_parts() -> dict[str, Any]:
         version_label="1",
         bounds=pin_box.id,
         fill=water.id,
-        components=[_place("rod", ComponentKind.CCOMPONENT, rod.id)],
+        components=[_place("rod", ComponentType.CCOMPONENT, rod.id)],
     )
     lattice = RectLattice.create(
         family_name="lattice_2x2",
@@ -114,7 +114,7 @@ def _bundle_parts() -> dict[str, Any]:
         shape=(2, 2),
         placements=[
             LatticePlacement(
-                ref=ComponentRef(kind=ComponentKind.CCOMPONENT, id=pin_cell.id),
+                ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id),
                 addresses=((0, 0), (0, 1), (1, 0)),
             )
         ],
@@ -124,10 +124,10 @@ def _bundle_parts() -> dict[str, Any]:
         version_label="1",
         bounds=assembly_box.id,
         fill=water.id,
-        components=[_place("lattice", ComponentKind.LATTICE, lattice.id)],
+        components=[_place("lattice", ComponentType.LATTICE, lattice.id)],
     )
     return {
-        "root": ComponentRef(kind=ComponentKind.CCOMPONENT, id=assembly.id),
+        "root": ComponentRef(type=ComponentType.CCOMPONENT, id=assembly.id),
         "ccomponents": {c.id: c for c in (rod, pin_cell, assembly)},
         "lcomponents": {c.id: c for c in (pellet, clad)},
         "lattices": {lattice.id: lattice},
@@ -157,20 +157,20 @@ def test_valid_bundle_round_trips():
 @pytest.mark.parametrize(
     "kind,target_id",
     [
-        (ComponentKind.CCOMPONENT, "pin_cell-1"),
-        (ComponentKind.LATTICE, "lattice_2x2-1"),
-        (ComponentKind.LCOMPONENT, "pellet-1"),
+        (ComponentType.CCOMPONENT, "pin_cell-1"),
+        (ComponentType.LATTICE, "lattice_2x2-1"),
+        (ComponentType.LCOMPONENT, "pellet-1"),
     ],
 )
 def test_any_placeable_kind_can_be_root(kind, target_id):
     parts = _bundle_parts()
-    parts["root"] = ComponentRef(kind=kind, id=target_id)
+    parts["root"] = ComponentRef(type=kind, id=target_id)
     assert ResolvedModel(**parts).root.id == target_id
 
 
 def test_root_missing_raises():
     parts = _bundle_parts()
-    parts["root"] = ComponentRef(kind=ComponentKind.CCOMPONENT, id="nope-1")
+    parts["root"] = ComponentRef(type=ComponentType.CCOMPONENT, id="nope-1")
     with pytest.raises(ValueError):
         ResolvedModel(**parts)
 
@@ -244,7 +244,7 @@ def _reactor(**overrides) -> Reactor:
         "family_name": "mini_assembly",
         "version_label": "1",
         "bounds": GeometryID("assembly_box-1"),
-        "root": _place("assembly", ComponentKind.CCOMPONENT, "assembly-1"),
+        "root": _place("assembly", ComponentType.CCOMPONENT, "assembly-1"),
         "neutron_bcs": dict.fromkeys(
             faces_for_geometry_type(GeometryType.RECT_PRISM), NeutronBC.REFLECTIVE
         ),
@@ -269,7 +269,7 @@ def test_resolved_reactor_valid_round_trip():
 
 
 def test_resolved_reactor_root_must_match_model_root():
-    reactor = _reactor(root=_place("pin", ComponentKind.CCOMPONENT, "pin_cell-1"))
+    reactor = _reactor(root=_place("pin", ComponentType.CCOMPONENT, "pin_cell-1"))
     with pytest.raises(ValueError):
         ResolvedReactor(reactor=reactor, model=ResolvedModel(**_bundle_parts()))
 

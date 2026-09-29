@@ -4,7 +4,7 @@ pace/core/lattice.py
 Lattice — a regular grid of slots, where a slot's position is implied by
 its address and the pitch rather than stored per member. Exists for
 repeated structures (a fuel assembly's 17x17 pin array) where a
-CComponent's explicit PComponent-per-member approach doesn't scale.
+CComponent's explicit Placement-per-member approach doesn't scale.
 
 Two concrete shapes:
     - RectLattice — addresses are (row, col); row 0 is the TOP row and
@@ -50,7 +50,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import ClassVar, Self
 
-from pace.core.component_ref import ComponentKind, ComponentRef
+from pace.core.component import ComponentType, ComponentRef
 from pace.core.constraints import Constraint, validate_fields
 from pace.core.ids import LatticeID, MaterialID
 from pace.core.pace_object import PaceObject
@@ -92,7 +92,7 @@ class LatticePlacement(PaceObject):
     Example — the same pin cell in three slots of a rect lattice's top
     row:
         LatticePlacement(
-            ref=ComponentRef(kind=ComponentKind.CCOMPONENT, id=pin_cell.id),
+            ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id),
             addresses=((0, 0), (0, 1), (0, 2)),
         )
     """
@@ -193,7 +193,7 @@ class Lattice(Versioned[LatticeID]):
                 )
             seen_refs.add(ref)
 
-            if ref.kind == ComponentKind.LATTICE and ref.id == self.id:
+            if ref.type == ComponentType.LATTICE and ref.id == self.id:
                 raise ValueError(f"Lattice {self.id!r} cannot reference itself")
 
             for address in placement.addresses:
@@ -252,8 +252,8 @@ class RectLattice(Lattice):
 
     Example — a 3x3 of fuel pin cells around a central guide-tube cell,
     authored as a grid:
-        fuel = ComponentRef(kind=ComponentKind.CCOMPONENT, id=pin_cell.id)
-        guide = ComponentRef(kind=ComponentKind.CCOMPONENT, id=guide_cell.id)
+        fuel = ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id)
+        guide = ComponentRef(type=ComponentType.CCOMPONENT, id=guide_cell.id)
         RectLattice.from_grid(
             family_name="mini_lattice_3x3",
             version_label="1",
@@ -355,7 +355,7 @@ class HexLattice(Lattice):
             fill=sodium.id,
             placements=[
                 LatticePlacement(
-                    ref=ComponentRef(kind=ComponentKind.CCOMPONENT, id=pin.id),
+                    ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin.id),
                     addresses=((0, 0),) + tuple((1, i) for i in range(6)),
                 ),
             ],

@@ -133,7 +133,7 @@ class LComponentDAO:
                 return None
             return LComponent.from_dict(row.data)
 
-    def save(self, component: LComponent) -> None:
+    def save(self, lcomponent: LComponent) -> None:
         """Validates, then upserts (merge).
 
         component.validate() already ran once, automatically, at
@@ -144,18 +144,18 @@ class LComponentDAO:
         object.__setattr__ bypassing __init__ (frozen dataclasses can
         still be bypassed that way).
         """
-        component.validate()
+        lcomponent.validate()
 
         row = LComponentRow(
-            id=component.id,
-            family_name=component.family_name,
-            version_label=component.version_label,
-            derived_from=component.derived_from,
-            gt_run_id=component.gt_run_id,
-            user_edit=component.user_edit,
-            geometry=component.geometry,
-            material=component.material,
-            data=component.to_dict(),
+            id=lcomponent.id,
+            family_name=lcomponent.family_name,
+            version_label=lcomponent.version_label,
+            derived_from=lcomponent.derived_from,
+            gt_run_id=lcomponent.gt_run_id,
+            user_edit=lcomponent.user_edit,
+            geometry=lcomponent.geometry,
+            material=lcomponent.material,
+            data=lcomponent.to_dict(),
         )
         with self._db.session() as session:
             session.merge(row)

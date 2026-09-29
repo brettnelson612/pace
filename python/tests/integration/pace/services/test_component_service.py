@@ -15,15 +15,15 @@ from dataclasses import dataclass
 
 import pytest
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.component import CComponent, LComponent, PComponent
-from pace.core.component_ref import ComponentKind, ComponentRef
+from pace.core.component import CComponent, LComponent, Placement
+from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.geometry import GAnnulus, GCylinder, GeometryType, GPose, GRectanglePrism
 from pace.core.ids import (
     CComponentID,
     GeometryID,
     LComponentID,
     MaterialID,
-    PComponentID,
+    PlacementID,
     ReactorID,
 )
 from pace.core.lattice import LatticePlacement, RectLattice
@@ -88,9 +88,9 @@ def _make_isotopic(
     )
 
 
-def _place(pc_id: str, kind: ComponentKind, target_id: str) -> PComponent:
-    return PComponent(
-        id=PComponentID(pc_id), pose=ORIGIN, ref=ComponentRef(kind=kind, id=target_id)
+def _place(pc_id: str, kind: ComponentType, target_id: str) -> Placement:
+    return Placement(
+        id=PlacementID(pc_id), pose=ORIGIN, ref=ComponentRef(type=kind, id=target_id)
     )
 
 
@@ -131,7 +131,7 @@ def _register_mini_assembly(service: ComponentService) -> MiniAssembly:
             version_label="1",
             bounds=pin_box.id,
             fill=water.id,
-            components=[_place("pellet", ComponentKind.LCOMPONENT, pellet.id)],
+            components=[_place("pellet", ComponentType.LCOMPONENT, pellet.id)],
         )
     )
     lattice = service.register_lattice(
@@ -143,7 +143,7 @@ def _register_mini_assembly(service: ComponentService) -> MiniAssembly:
             shape=(2, 2),
             placements=[
                 LatticePlacement(
-                    ref=ComponentRef(kind=ComponentKind.CCOMPONENT, id=pin_cell.id),
+                    ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id),
                     addresses=((0, 0), (0, 1), (1, 0)),
                 )
             ],
@@ -155,7 +155,7 @@ def _register_mini_assembly(service: ComponentService) -> MiniAssembly:
             version_label="1",
             bounds=assembly_box.id,
             fill=water.id,
-            components=[_place("lattice", ComponentKind.LATTICE, lattice.id)],
+            components=[_place("lattice", ComponentType.LATTICE, lattice.id)],
         )
     )
     return MiniAssembly(
@@ -176,7 +176,7 @@ def _make_reactor(mini: MiniAssembly, **overrides) -> Reactor:
         "family_name": "mini_assembly_2d",
         "version_label": "1",
         "bounds": mini.assembly_box.id,
-        "root": _place("assembly", ComponentKind.CCOMPONENT, mini.assembly.id),
+        "root": _place("assembly", ComponentType.CCOMPONENT, mini.assembly.id),
         "neutron_bcs": dict.fromkeys(BOX_FACES, NeutronBC.REFLECTIVE),
         "operating_state": OperatingState(
             initial_temperatures_k={mini.uo2.id: 565.0, mini.water.id: 565.0}
@@ -278,11 +278,11 @@ def test_register_ccomponent_dedupes_repeated_placements(pace_db, component_serv
         bounds=mini.pin_box.id,
         fill=mini.water.id,
         components=[
-            _place("a", ComponentKind.LCOMPONENT, mini.pellet.id),
-            PComponent(
-                id=PComponentID("b"),
+            _place("a", ComponentType.LCOMPONENT, mini.pellet.id),
+            Placement(
+                id=PlacementID("b"),
                 pose=GPose(x_m=0.0, y_m=0.0, z_m=0.005),
-                ref=ComponentRef(kind=ComponentKind.LCOMPONENT, id=mini.pellet.id),
+                ref=ComponentRef(type=ComponentType.LCOMPONENT, id=mini.pellet.id),
             ),
         ],
     )
@@ -300,7 +300,7 @@ def test_register_ccomponent_rejects_dangling_member(pace_db, component_service)
         version_label="1",
         bounds=mini.pin_box.id,
         components=[
-            _place("x", ComponentKind.LCOMPONENT, LComponentID("nonexistent-1"))
+            _place("x", ComponentType.LCOMPONENT, LComponentID("nonexistent-1"))
         ],
     )
     with pytest.raises(DanglingReferenceError):
@@ -314,7 +314,7 @@ def test_register_ccomponent_rejects_dangling_bounds(component_service):
         family_name="bad_pin",
         version_label="1",
         bounds=GeometryID("nonexistent-1"),
-        components=[_place("p", ComponentKind.LCOMPONENT, mini.pellet.id)],
+        components=[_place("p", ComponentType.LCOMPONENT, mini.pellet.id)],
     )
     with pytest.raises(DanglingReferenceError):
         component_service.register_ccomponent(ccomponent)
@@ -335,7 +335,7 @@ def test_register_ccomponent_rejects_non_bounds_shape(pace_db, component_service
         family_name="ring_bounded",
         version_label="1",
         bounds=ring.id,
-        components=[_place("p", ComponentKind.LCOMPONENT, mini.pellet.id)],
+        components=[_place("p", ComponentType.LCOMPONENT, mini.pellet.id)],
     )
     with pytest.raises(InvalidBoundsError):
         component_service.register_ccomponent(ccomponent)
@@ -352,7 +352,7 @@ def test_ccomponent_cannot_self_reference_at_construction():
             family_name="test_pin",
             version_label="1",
             bounds=GeometryID("pin_box-1"),
-            components=[_place("self", ComponentKind.CCOMPONENT, self_id)],
+            components=[_place("self", ComponentType.CCOMPONENT, self_id)],
         )
 
 
@@ -385,7 +385,7 @@ def test_register_lattice_rejects_dangling_placement(pace_db, component_service)
         placements=[
             LatticePlacement(
                 ref=ComponentRef(
-                    kind=ComponentKind.CCOMPONENT, id=CComponentID("nope-1")
+                    type=ComponentType.CCOMPONENT, id=CComponentID("nope-1")
                 ),
                 addresses=((0, 0),),
             )
@@ -454,7 +454,7 @@ def test_register_reactor_rejects_thermal_condition_on_missing_face(
 def test_register_reactor_rejects_dangling_root(component_service):
     mini = _register_mini_assembly(component_service)
     reactor = _make_reactor(
-        mini, root=_place("x", ComponentKind.CCOMPONENT, CComponentID("nope-1"))
+        mini, root=_place("x", ComponentType.CCOMPONENT, CComponentID("nope-1"))
     )
     with pytest.raises(DanglingReferenceError):
         component_service.register_reactor(reactor)
@@ -510,7 +510,7 @@ def test_get_resolved_model_hydrates_full_tree_once_per_object(component_service
     """assembly -> lattice -> pin cell (3 slots) -> pellet: every
     distinct object appears exactly once, however often it's placed."""
     mini = _register_mini_assembly(component_service)
-    root = ComponentRef(kind=ComponentKind.CCOMPONENT, id=mini.assembly.id)
+    root = ComponentRef(type=ComponentType.CCOMPONENT, id=mini.assembly.id)
     resolved = component_service.get_resolved_model(root)
 
     assert resolved.root == root
@@ -527,7 +527,7 @@ def test_get_resolved_model_hydrates_full_tree_once_per_object(component_service
 
 def test_get_resolved_model_with_lattice_root(component_service):
     mini = _register_mini_assembly(component_service)
-    root = ComponentRef(kind=ComponentKind.LATTICE, id=mini.lattice.id)
+    root = ComponentRef(type=ComponentType.LATTICE, id=mini.lattice.id)
     resolved = component_service.get_resolved_model(root)
     assert resolved.ccomponents.keys() == {mini.pin_cell.id}
     assert mini.assembly_box.id not in resolved.geometries
@@ -536,7 +536,7 @@ def test_get_resolved_model_with_lattice_root(component_service):
 def test_get_resolved_model_raises_for_nonexistent_root(component_service):
     with pytest.raises(ValueError):
         component_service.get_resolved_model(
-            ComponentRef(kind=ComponentKind.CCOMPONENT, id=CComponentID("nope-1"))
+            ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("nope-1"))
         )
 
 

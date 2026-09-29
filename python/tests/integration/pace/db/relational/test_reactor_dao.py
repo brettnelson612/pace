@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import pytest
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.component import PComponent
-from pace.core.component_ref import ComponentKind, ComponentRef
+from pace.core.component import Placement
+from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.geometry import GeometryType, GPose
-from pace.core.ids import CComponentID, GeometryID, MaterialID, PComponentID, ReactorID
+from pace.core.ids import CComponentID, GeometryID, MaterialID, PlacementID, ReactorID
 from pace.core.reactor import (
     FlowInlet,
     FlowOutlet,
@@ -42,11 +42,11 @@ def _reactor(version_label: str = "1", **kwargs) -> Reactor:
         family_name="pin_3d",
         version_label=version_label,
         bounds=GeometryID("pin_box-1"),
-        root=PComponent(
-            id=PComponentID("pin"),
+        root=Placement(
+            id=PlacementID("pin"),
             pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
             ref=ComponentRef(
-                kind=ComponentKind.CCOMPONENT, id=CComponentID("pin_cell-1")
+                type=ComponentType.CCOMPONENT, id=CComponentID("pin_cell-1")
             ),
         ),
         neutron_bcs=bcs,

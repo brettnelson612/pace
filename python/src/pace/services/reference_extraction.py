@@ -10,7 +10,7 @@ to ReferenceDAO.
 Every function here is pure — no DB access, no side effects. A row
 represents an edge between two registered aggregates, not a
 per-occurrence count: if a CComponent embeds the same LComponent at
-several different PComponent positions, that collapses to one edge,
+several different Placement positions, that collapses to one edge,
 since that's what refcounting/propagation actually need to know —
 "does this object currently depend on that one," not "how many times
 does it appear inside it."
@@ -89,69 +89,100 @@ def extract_lcomponent_references(component: LComponent) -> set[Reference]:
     }
 
 
-def _edge(
-    source_type: ReferenceableType,
-    source_id: str,
-    target_type: ReferenceableType,
-    target_id: str,
-) -> Reference:
-    return Reference(
-        source_type=source_type,
-        source_id=source_id,
-        target_type=target_type,
-        target_id=target_id,
-    )
-
-
 def extract_ccomponent_references(component: CComponent) -> set[Reference]:
     """A CComponent references its bounds Geometry, its fill Material
-    (if any), and every LComponent/CComponent/Lattice its PComponent
+    (if any), and every LComponent/CComponent/Lattice its Placement
     members place. Each member's ComponentRef says which registry its
     id belongs to — no registry lookup needed here to disambiguate."""
-    source = ReferenceableType.CCOMPONENT
-    edges = {_edge(source, component.id, ReferenceableType.GEOMETRY, component.bounds)}
-    if component.fill is not None:
-        edges.add(
-            _edge(source, component.id, ReferenceableType.MATERIAL, component.fill)
+    references = {
+        Reference(
+            source_type=ReferenceableType.CCOMPONENT,
+            source_id=component.id,
+            target_type=ReferenceableType.GEOMETRY,
+            target_id=component.bounds,
         )
-    edges.update(
-        _edge(source, component.id, pc.ref.referenceable_type, pc.ref.id)
-        for pc in component.components
+    }
+
+    if component.fill is not None:
+        references.add(
+            Reference(
+                source_type=ReferenceableType.CCOMPONENT,
+                source_id=component.id,
+                target_type=ReferenceableType.MATERIAL,
+                target_id=component.fill,
+            )
+        )
+
+    references.update(
+        Reference(
+            source_type=ReferenceableType.CCOMPONENT,
+            source_id=component.id,
+            target_type=placement.ref.referenceable_type,
+            target_id=placement.ref.id,
+        )
+        for placement in component.components
     )
-    return edges
+    return references
 
 
 def extract_lattice_references(lattice: Lattice) -> set[Reference]:
     """A Lattice references its fill Material and every component it
     places — one edge per placed component, however many addresses it
     occupies."""
-    source = ReferenceableType.LATTICE
-    edges = {_edge(source, lattice.id, ReferenceableType.MATERIAL, lattice.fill)}
-    edges.update(
-        _edge(source, lattice.id, placement.ref.referenceable_type, placement.ref.id)
+    references = {
+        Reference(
+            source_type=ReferenceableType.LATTICE,
+            source_id=lattice.id,
+            target_type=ReferenceableType.MATERIAL,
+            target_id=lattice.fill,
+        )
+    }
+    references.update(
+        Reference(
+            source_type=ReferenceableType.CCOMPONENT,
+            source_id=lattice.id,
+            target_type=placement.ref.referenceable_type,
+            target_id=placement.ref.id,
+        )
         for placement in lattice.placements
     )
-    return edges
+    return references
 
 
 def extract_reactor_references(reactor: Reactor) -> set[Reference]:
     """A Reactor references its bounds Geometry, its fill Material (if
     any), its root component, and every Material its operating state
     gives a starting temperature for."""
-    source = ReferenceableType.REACTOR
-    edges = {
-        _edge(source, reactor.id, ReferenceableType.GEOMETRY, reactor.bounds),
-        _edge(
-            source,
-            reactor.id,
-            reactor.root.ref.referenceable_type,
-            reactor.root.ref.id,
+    references = {
+        Reference(
+            source_type=ReferenceableType.REACTOR,
+            source_id=reactor.id,
+            target_type=ReferenceableType.GEOMETRY,
+            target_id=reactor.bounds,
+        ),
+        Reference(
+            source_type=ReferenceableType.REACTOR,
+            source_id=reactor.id,
+            target_type=reactor.root.ref.referenceable_type,
+            target_id=reactor.root.ref.id,
         ),
     }
     if reactor.fill is not None:
-        edges.add(_edge(source, reactor.id, ReferenceableType.MATERIAL, reactor.fill))
-    edges.update(
-        _edge(source, reactor.id, ReferenceableType.MATERIAL, material_id)
+        references.add(
+            Reference(
+                source_type=ReferenceableType.REACTOR,
+                source_id=reactor.id,
+                target_type=ReferenceableType.MATERIAL,
+                target_id=reactor.fill,
+            )
+        )
+    references.update(
+        Reference(
+            source_type=ReferenceableType.REACTOR,
+            source_id=reactor.id,
+            target_type=ReferenceableType.MATERIAL,
+            target_id=material_id,
+        )
         for material_id in reactor.operating_state.initial_temperatures_k
     )
-    return edges
+    return references

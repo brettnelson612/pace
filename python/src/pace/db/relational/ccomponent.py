@@ -118,20 +118,20 @@ class CComponentDAO:
                 return None
             return self._row_to_domain(row)
 
-    def save(self, version: CComponent) -> None:
+    def save(self, ccomponent: CComponent) -> None:
         """Validates, then upserts (merge). See
-        GeometryDAO.save() for why version.validate() is
+        GeometryDAO.save() for why ccomponent.validate() is
         called again here despite already running once at construction."""
-        version.validate()
+        ccomponent.validate()
 
         row = CComponentRow(
-            id=version.id,
-            family_name=version.family_name,
-            version_label=version.version_label,
-            derived_from=version.derived_from,
-            gt_run_id=version.gt_run_id,
-            user_edit=version.user_edit,
-            data=version.to_dict(),
+            id=ccomponent.id,
+            family_name=ccomponent.family_name,
+            version_label=ccomponent.version_label,
+            derived_from=ccomponent.derived_from,
+            gt_run_id=ccomponent.gt_run_id,
+            user_edit=ccomponent.user_edit,
+            data=ccomponent.to_dict(),
         )
         with self._db.session() as session:
             session.merge(row)

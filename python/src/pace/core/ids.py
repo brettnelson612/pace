@@ -27,7 +27,7 @@ MaterialID = NewType("MaterialID", str)
 
 # --- Components ---
 LComponentID = NewType("LComponentID", str)
-PComponentID = NewType("PComponentID", str)
+PlacementID = NewType("PlacementID", str)
 CComponentID = NewType("CComponentID", str)
 
 # --- Lattice ---
@@ -39,10 +39,10 @@ ReactorID = NewType("ReactorID", str)
 # --- Simulation provenance ---
 GTRunID = NewType("GTRunID", str)
 
-# --- PComponent addressing ---
-# PComponent identity is path-style (relative to its parent CComponent),
+# --- Placement addressing ---
+# Placement identity is path-style (relative to its parent CComponent),
 # not a flat opaque ID like the above — deliberately not aliased to a
 # plain NewType(str) yet. Revisit once the path/address representation
 # itself is designed; a flat-address lookup utility may warrant its own
-# type at that point (e.g. PComponentAddress), separate from the
+# type at that point (e.g. PlacementAddress), separate from the
 # individual per-level position keys that compose it.

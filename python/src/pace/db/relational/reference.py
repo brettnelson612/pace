@@ -64,11 +64,12 @@ class ReferenceDAO:
 
     def add_many(self, references: list[Reference]) -> None:
         """Bulk insert — one save() can establish several edges at
-        once (e.g. a CComponent's several PComponents). Callers must
-        dedupe to unique (source, target) pairs first — this writes
-        an edge per occurrence in `references`, not per placement in
-        the caller's own object; the table's uniqueness constraint
-        rejects an exact duplicate edge as a backstop, not a
+        once (e.g. a CComponent's several PComponents).
+
+        Callers must dedupe to unique (source, target) pairs first —
+        this writes an edge per occurrence in `references`, not per
+        placement in the caller's own object; the table's uniqueness
+        constraint rejects an exact duplicate edge as a backstop, not a
         substitute for that."""
         if not references:
             return

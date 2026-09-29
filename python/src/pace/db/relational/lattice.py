@@ -114,7 +114,7 @@ class LatticeDAO:
 
     def save(self, lattice: Lattice) -> None:
         """Validates, then upserts (merge). See
-        GeometryDAO.save() for why version.validate() is
+        GeometryDAO.save() for why lattice.validate() is
         called again here despite already running once at construction."""
         lattice.validate()
 

@@ -109,20 +109,20 @@ class ReactorDAO:
                 return None
             return self._row_to_domain(row)
 
-    def save(self, version: Reactor) -> None:
+    def save(self, reactor: Reactor) -> None:
         """Validates, then upserts (merge). See
-        GeometryDAO.save() for why version.validate() is
+        GeometryDAO.save() for why reactor.validate() is
         called again here despite already running once at construction."""
-        version.validate()
+        reactor.validate()
 
         row = ReactorRow(
-            id=version.id,
-            family_name=version.family_name,
-            version_label=version.version_label,
-            derived_from=version.derived_from,
-            gt_run_id=version.gt_run_id,
-            user_edit=version.user_edit,
-            data=version.to_dict(),
+            id=reactor.id,
+            family_name=reactor.family_name,
+            version_label=reactor.version_label,
+            derived_from=reactor.derived_from,
+            gt_run_id=reactor.gt_run_id,
+            user_edit=reactor.user_edit,
+            data=reactor.to_dict(),
         )
         with self._db.session() as session:
             session.merge(row)

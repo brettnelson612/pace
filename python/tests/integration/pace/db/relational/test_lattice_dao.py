@@ -10,7 +10,7 @@ delete, and get_many(). Mirrors test_geometry_dao.py.
 from __future__ import annotations
 
 import pytest
-from pace.core.component_ref import ComponentKind, ComponentRef
+from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.ids import CComponentID, LatticeID, MaterialID
 from pace.core.lattice import (
     HexLattice,
@@ -21,7 +21,7 @@ from pace.core.lattice import (
 )
 from pace.db.pace_db import PaceDB
 
-PIN = ComponentRef(kind=ComponentKind.CCOMPONENT, id=CComponentID("pin_cell-1"))
+PIN = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("pin_cell-1"))
 WATER = MaterialID("water-1")
 
 

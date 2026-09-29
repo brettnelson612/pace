@@ -112,7 +112,7 @@ class MaterialDAO:
 
     def save(self, material: Material) -> None:
         """Validates, then upserts (merge). See
-        GeometryDAO.save() for why version.validate() is
+        GeometryDAO.save() for why material.validate() is
         called again here despite already running once at construction."""
         material.validate()
 

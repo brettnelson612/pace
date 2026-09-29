@@ -11,7 +11,7 @@ validation; lattice_from_dict dispatch; id-based equality.
 """
 
 import pytest
-from pace.core.component_ref import ComponentKind, ComponentRef
+from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.ids import GTRunID, LatticeID, MaterialID
 from pace.core.lattice import (
     HexLattice,
@@ -24,9 +24,9 @@ from pace.core.lattice import (
 
 WATER = MaterialID("borated_water-1")
 SODIUM = MaterialID("sodium-1")
-FUEL = ComponentRef(kind=ComponentKind.CCOMPONENT, id="fuel_pin_cell-1")
-GUIDE = ComponentRef(kind=ComponentKind.CCOMPONENT, id="guide_tube_cell-1")
-PIN = ComponentRef(kind=ComponentKind.CCOMPONENT, id="sfr_pin-1")
+FUEL = ComponentRef(type=ComponentType.CCOMPONENT, id="fuel_pin_cell-1")
+GUIDE = ComponentRef(type=ComponentType.CCOMPONENT, id="guide_tube_cell-1")
+PIN = ComponentRef(type=ComponentType.CCOMPONENT, id="sfr_pin-1")
 
 
 def _rect(**overrides) -> RectLattice:
@@ -157,13 +157,13 @@ def test_rejects_address_occupied_twice():
 
 
 def test_rejects_direct_self_reference():
-    self_ref = ComponentRef(kind=ComponentKind.LATTICE, id="mini_lattice-1")
+    self_ref = ComponentRef(type=ComponentType.LATTICE, id="mini_lattice-1")
     with pytest.raises(ValueError):
         _rect(placements=[LatticePlacement(ref=self_ref, addresses=((0, 0),))])
 
 
 def test_can_place_a_nested_lattice():
-    inner = ComponentRef(kind=ComponentKind.LATTICE, id="inner_lattice-1")
+    inner = ComponentRef(type=ComponentType.LATTICE, id="inner_lattice-1")
     lattice = _rect(placements=[LatticePlacement(ref=inner, addresses=((0, 0),))])
     assert lattice.occupant_at((0, 0)) == inner
 

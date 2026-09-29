@@ -8,8 +8,7 @@ on each face of the bounds, and the operating state the solvers start
 from.
 
 Everything spatially varying (temperature and density fields, burned
-compositions) is run state, not part of the Reactor — see Versioned's
-docstring and docs/design/0001-bounds-fill-lattices-reactor.md.
+compositions) is run state, not part of the Reactor.
 
 Boundary conditions exist ONLY here, at the edge of the modeled system.
 Interior surfaces (between a pin cell and its neighbour, between a
@@ -28,7 +27,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from pace.core.bounds import PERIODIC_PARTNER, BoundsFace
-from pace.core.component import PComponent
+from pace.core.component import Placement
 from pace.core.ids import GeometryID, MaterialID, ReactorID
 from pace.core.pace_object import PaceObject
 from pace.core.versioned import Versioned
@@ -214,7 +213,7 @@ class Reactor(Versioned[ReactorID]):
           bounds equal the Reactor's); needed for things like bypass
           flow around a core. It never reaches coolant inside the
           root's nested composites — each composite owns its own fill.
-    - root: the placed root component (a PComponent, so it carries a
+    - root: the placed root component (a Placement, so it carries a
           ComponentRef plus a pose).
     - neutron_bcs: one condition per face of the bounds. ComponentService
           checks the keys are exactly the faces of the bounds shape.
@@ -228,11 +227,11 @@ class Reactor(Versioned[ReactorID]):
             family_name="vera_problem_1",
             version_label="1",
             bounds=pin_cell_box.id,
-            root=PComponent(
-                id=PComponentID("pin_cell"),
+            root=Placement(
+                id=PlacementID("pin_cell"),
                 pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
                 ref=ComponentRef(
-                    kind=ComponentKind.CCOMPONENT, id=fuel_pin_cell.id
+                    type=ComponentType.CCOMPONENT, id=fuel_pin_cell.id
                 ),
             ),
             neutron_bcs=dict.fromkeys(
@@ -248,7 +247,7 @@ class Reactor(Versioned[ReactorID]):
     description: str = ""
     bounds: GeometryID
     fill: MaterialID | None = None
-    root: PComponent
+    root: Placement
     neutron_bcs: dict[BoundsFace, NeutronBC]
     thermal_bcs: dict[BoundsFace, ThermalBC] = field(default_factory=dict)
     flow_bcs: dict[BoundsFace, FlowBC] = field(default_factory=dict)
@@ -318,7 +317,7 @@ class Reactor(Versioned[ReactorID]):
             description=data["description"],
             bounds=GeometryID(data["bounds"]),
             fill=MaterialID(data["fill"]) if data["fill"] is not None else None,
-            root=PComponent.from_dict(data["root"]),
+            root=Placement.from_dict(data["root"]),
             neutron_bcs={
                 BoundsFace(f): NeutronBC(c) for f, c in data["neutron_bcs"].items()
             },

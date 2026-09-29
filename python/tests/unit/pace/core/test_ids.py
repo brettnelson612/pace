@@ -15,7 +15,7 @@ from pace.core.ids import (
     LatticeID,
     LComponentID,
     MaterialID,
-    PComponentID,
+    PlacementID,
     ReactorID,
 )
 
@@ -23,7 +23,7 @@ ALL_ID_TYPES = [
     GeometryID,
     MaterialID,
     LComponentID,
-    PComponentID,
+    PlacementID,
     CComponentID,
     LatticeID,
     ReactorID,

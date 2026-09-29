@@ -10,7 +10,7 @@ fact about the domain's aggregate kinds, not about how references
 happen to be stored.
 
 The subset of these kinds that can be *placed* inside a composite is
-ComponentKind (see component_ref.py).
+ComponentType (see component_ref.py).
 """
 
 from __future__ import annotations
