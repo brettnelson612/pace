@@ -15242,4 +15242,4 @@ packages:
   timestamp: 1787602298391
 - pypi: ./python
   name: pace
-  requires_python: '>=3.11,<3.12'
+  requires_python: '>=3.12,<3.13'
