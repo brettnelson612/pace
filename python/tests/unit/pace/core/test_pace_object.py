@@ -1,5 +1,5 @@
 """
-tests/pace/core/test_pace_object.py
+tests/unit/pace/core/test_pace_object.py
 
 PaceObject is deliberately minimal (to_dict/from_dict only), with a
 default no-op validate() that __post_init__ wires up automatically.

@@ -227,3 +227,11 @@ scratch
 
 # MOOSE stuff
 .moose/
+
+# python/scripts/ — ad hoc scratch scripts, ignored by default;
+# only the curated gold/ set and shared helpers are committed.
+python/scripts/*
+!python/scripts/README.md
+!python/scripts/helpers.py
+!python/scripts/gold/
+!python/scripts/gold/**

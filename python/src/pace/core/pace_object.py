@@ -4,8 +4,9 @@ pace/core/pace_object.py
 PaceObject: the shared ABC for PACE's modeling-domain objects
 (geometries, materials, versions, components, blueprints) — to_dict()
 and from_dict() only. Deliberately minimal: no display/rendering logic
-(that's the registry's job, not the data's), no solver-translation
-methods (those live on Geometry specifically, not this base).
+(that's the registry's job, not the data's), and no solver-translation
+methods anywhere in the domain model — translation to OpenMC/MOOSE/
+Cardinal inputs lives in the solver adapters (pace.solvers.*).
 
 to_dict() always represents references to other PaceObjects as
 bare IDs, never embedded/hydrated content. from_dict() fails loudly on

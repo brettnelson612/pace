@@ -1,14 +1,14 @@
 """
-tests/pace/core/test_geometry.py
+tests/unit/pace/core/test_geometry.py
 
 Covers: Geometry identity (build_id/_validate_id), the three-state
 lineage rule, ABC enforcement, per-shape field constraints via
 validate_fields(), GAnnulus's inner<outer relational check,
 GAddition/GSubtraction structural checks (min count, duplicate
 (geometry, pose) detection including the z_rotation_rad
-differentiation), round-trips, frozen immutability, GAddition/
-GSubtraction id-based equality + the hash(self.id) regression guard,
-and geometry_from_dict()'s type-based dispatch.
+differentiation), round-trips, frozen immutability, id-based equality
+for every shape + the hash(self.id) regression guard, and
+geometry_from_dict()'s type-based dispatch.
 """
 
 import dataclasses
@@ -22,7 +22,6 @@ from pace.core.geometry import (
     GCylinder,
     Geometry,
     GHexPrism,
-    GNull,
     GPose,
     GRectanglePrism,
     GSphere,
@@ -119,7 +118,7 @@ class TestGeometryBase:
             Geometry(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
     def test_incomplete_subclass_cannot_instantiate(self):
-        # a subclass missing _validate_shape/to_open_mc/to_moose should
+        # a subclass missing _validate_shape/from_dict should
         # still fail to instantiate, same as the base itself
         class Incomplete(Geometry):
             pass
@@ -221,12 +220,6 @@ class TestGAnnulus:
         # of the inner < outer relational check
         with pytest.raises(ValueError):
             make(GAnnulus, inner_radius_m=0.0, outer_radius_m=0.5, height_m=2.0)
-
-
-class TestGNull:
-    def test_valid_construction_and_round_trip(self):
-        null = make(GNull)
-        assert GNull.from_dict(null.to_dict()) == null
 
 
 # ---------------------------------------------------------------------------
@@ -420,7 +413,20 @@ class TestRoundTripAndImmutability:
     def test_round_trip(self, cls):
         original = make(cls)
         rebuilt = cls.from_dict(original.to_dict())
-        assert rebuilt == original
+        assert rebuilt.to_dict() == original.to_dict()
+
+    @pytest.mark.parametrize("cls", [GCylinder, GHexPrism, GSphere, GRectanglePrism])
+    def test_equality_is_id_based(self, cls):
+        field_name = next(iter(VALID_SHAPE_KWARGS[cls]))
+        a = make(cls, family_name="shared")
+        b = make(cls, family_name="shared", **{field_name: 0.5})
+        assert a == b
+        assert hash(a) == hash(b) == hash(a.id)
+
+    def test_same_id_different_shape_is_not_equal(self):
+        assert make(GCylinder, family_name="shared") != make(
+            GSphere, family_name="shared"
+        )
 
     @pytest.mark.parametrize("cls", [GCylinder, GHexPrism, GSphere, GRectanglePrism])
     def test_frozen(self, cls):

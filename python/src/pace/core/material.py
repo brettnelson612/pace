@@ -3,25 +3,30 @@ core/material.py
 
 Material domain objects: Material (the versioned, polymorphic class
 holding actual composition data — MIsotopic, MMixture, MVoid — plus
-validate()/to_open_mc()/to_moose()), mirroring geometry.py's structure
-intentionally — kept in sync by design, not by accident.
+validate()), mirroring geometry.py's structure intentionally — kept in
+sync by design, not by accident. Translation to solver inputs lives in
+the solver adapters, not here.
 
 No separate bare "Material" identity class/table — a version's family
 is just a `family_name` string carried on the version itself. A
 version's id is one opaque string built from family_name +
-version_label (e.g. "uranium3.2-1", "uranium3.2-6month_depletion" —
-see Material.build_id()).
+version_label (e.g. "uranium3.2-1", "uranium3.2-2" — see
+Material.build_id()).
 
 family_name is NOT unique per row — every version in a family shares
 it. Rejecting a duplicate family_name is enforced only at "create a
 brand-new family" (v1, derived_from=None) time, and that's application
-logic (ComponentService), not a database constraint.
+logic (RegistryService), not a database constraint.
 
 What "material" means physically here: a material is a description of
 what substance occupies a region of space — which isotopes are
-present, in what relative amounts, and at what density. It says
-nothing about shape (that's Geometry) or temperature (deliberately
-excluded — see Material).
+present, in what relative amounts, and at what reference density —
+plus how its properties respond to conditions (conductivity and
+specific heat as functions of temperature). It is uniform across every
+region it fills. It says nothing about shape (that's Geometry) or about
+the actual temperature/density at any point during a run: spatially
+varying values are run state (initial values in OperatingConditions;
+converged fields in run output), never stored here.
 """
 
 from __future__ import annotations
@@ -29,59 +34,60 @@ from __future__ import annotations
 import math
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import ClassVar, Literal, Self
+from enum import StrEnum
+from typing import ClassVar, Self
 
 from pace.core.constraints import Constraint, validate_fields
-from pace.core.ids import GTRunID, MaterialID
+from pace.core.ids import MaterialID
 from pace.core.pace_object import PaceObject
-
-"""
-Percentage Types:
-    - ao: atomic percent. The number of atoms of a specific
-          nuclide/element divided by the total number of atoms in the
-          material. This is the natural unit for expressing chemical/
-          stoichiometric ratios — e.g. UO2's 1:2 uranium-to-oxygen atom
-          ratio is exact and unambiguous in "ao" terms.
-    - wo: weight percent. The mass of a specific nuclide/element
-          divided by the total mass of the material. Natural for
-          compositions given by measured or spec'd mass fractions —
-          e.g. a structural alloy's constituent metals by weight.
-
-Note: percentages here (on MIsotopic) are RELATIVE WEIGHTS, not
-absolute percentages that must sum to 100. OpenMC normalizes them
-internally against the material's separately-specified density.
-Example: {"U": 1.0, "O": 2.0} under "ao" means a 1:2 atom ratio
-(UO2's stoichiometry), not "1% U, 2% O with 97% unaccounted for."
-
-percent_type carries a DIFFERENT constraint on MMixture (see that
-class) despite sharing the same name and vocabulary — this mirrors
-OpenMC's own choice to reuse percent_type identically across
-add_element()/add_nuclide() and mix_materials(), even though the
-accompanying values are constrained differently in each case.
-"""
-PercentType = Literal["ao", "wo"]
-
-"""
-Density Units:
-    - g/cm3: grams per cubic centimeter. The common general-purpose
-          density unit.
-    - kg/m3: kilograms per cubic meter.
-    - atom/b-cm: atoms per barn-centimeter — atomic number density
-          expressed in units directly compatible with microscopic
-          cross sections (a barn is 10^-24 cm^2, the standard unit
-          nuclear cross sections are quoted in). Expressing density
-          this way means the macroscopic cross section is just
-          N * sigma with no unit conversion — a convenience for the
-          transport-physics side of the pipeline, not a general
-          density unit. Only worth using if you already have
-          atom-density numbers in this form (e.g. from a cross-section
-          library); otherwise prefer g/cm3 with a components dict.
-"""
-DensityUnit = Literal["g/cm3", "kg/m3", "atom/b-cm"]
+from pace.core.versioned import Versioned
 
 
-class MaterialType(str, Enum):
+class PercentType(StrEnum):
+    """How a composition's component weights are expressed.
+
+    Values:
+        - ao: atomic percent. The number of atoms of a specific
+              nuclide/element divided by the total number of atoms in
+              the material. The natural unit for chemical/
+              stoichiometric ratios — e.g. UO2's 1:2 uranium-to-oxygen
+              atom ratio is exact and unambiguous in "ao" terms.
+        - wo: weight percent. The mass of a specific nuclide/element
+              divided by the total mass of the material. Natural for
+              compositions given by measured or spec'd mass fractions —
+              e.g. a structural alloy's constituent metals by weight.
+
+    On MIsotopic the weights are RELATIVE, not absolute percentages
+    that must sum to 100: {"U": 1.0, "O": 2.0} under "ao" means a 1:2
+    atom ratio. On MMixture the same vocabulary carries a stricter
+    constraint (true fractions summing to 1) — see that class. This
+    mirrors OpenMC reusing percent_type across add_element()/
+    add_nuclide() and mix_materials().
+    """
+
+    AO = "ao"
+    WO = "wo"
+
+
+class DensityUnit(StrEnum):
+    """Unit of a material's reference density.
+
+    Values:
+        - g/cm3: grams per cubic centimeter.
+        - kg/m3: kilograms per cubic meter.
+        - atom/b-cm: atoms per barn-centimeter — atomic number density
+              in units directly compatible with microscopic cross
+              sections (a barn is 10^-24 cm^2), so a macroscopic cross
+              section is N * sigma with no conversion. Use only when
+              atom densities are already in this form.
+    """
+
+    G_PER_CM3 = "g/cm3"
+    KG_PER_M3 = "kg/m3"
+    ATOM_PER_B_CM = "atom/b-cm"
+
+
+class MaterialType(StrEnum):
     """Discriminator tag for Material subclasses.
 
     Values:
@@ -102,9 +108,76 @@ class MaterialType(str, Enum):
     VOID = "void"
 
 
-# material types registered here upon definition
-# see Material.__init_subclass__
+# material types registered here upon definition — see
+# Material.__init_subclass__
 MATERIAL_TYPE_TO_CLASS: dict[str, type[Material]] = {}
+
+
+@dataclass(frozen=True, kw_only=True)
+class ThermalScatteringLibrary(PaceObject):
+    """One S(alpha,beta) bound-thermal-scattering table entry —
+    required for any moderating material (water, graphite, zirconium
+    hydride, ...) to be translated correctly, since bound-nuclide
+    scattering physics differs from free-gas scattering.
+
+    `name`:     follows OpenMC's GND naming convention (e.g. "c_H_in_H2O").
+    `nuclide`:  which nuclide's population this covers (e.g. "C0", "Be9")
+    `fraction`: is the atom fraction of the material this table covers
+
+    Most materials need exactly one entry at fraction 1.0; some
+    (e.g. BeO, where both Be and O need separate tables) need one
+    entry per bound nuclide.
+
+    Example — light water:
+        ThermalScatteringLibrary(name="c_H_in_H2O")
+    """
+
+    name: str
+    nuclide: str
+    fraction: float = 1.0
+
+    def validate(self) -> None:
+        if not (0.0 < self.fraction <= 1.0):
+            raise ValueError(f"fraction must be in (0, 1], got {self.fraction}")
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "nuclide": self.nuclide, "fraction": self.fraction}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ThermalScatteringLibrary:
+        return cls(
+            name=data["name"], nuclide=data["name"], fraction=data.get("fraction", 1.0)
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class TabulatedProperty(PaceObject):
+    """A temperature-dependent material property as (temperature_k,
+    value) points for interpolation — thermal conductivity, specific
+    heat, thermal expansion, elastic modulus. Distinct from a
+    Material's own gt_run_id/user_edit lineage: this describes how ONE
+    physical property varies with temperature, not how the material's
+    composition evolved over time.
+
+    Units are whatever the specific field on Material documents (e.g.
+    W/(m*K) for thermal_conductivity) — not enforced here.
+    """
+
+    points: tuple[tuple[float, float], ...]
+
+    def validate(self) -> None:
+        if len(self.points) < 1:
+            raise ValueError("TabulatedProperty needs at least one point")
+        temperatures = [t for t, _ in self.points]
+        if temperatures != sorted(temperatures):
+            raise ValueError("points must be sorted by increasing temperature_k")
+
+    def to_dict(self) -> dict:
+        return {"points": [[t, v] for t, v in self.points]}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> TabulatedProperty:
+        return cls(points=tuple((t, v) for t, v in data["points"]))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -160,6 +233,12 @@ class MaterialComponentEntry(PaceObject):
 
     def validate(self):
         validate_fields(self)
+        if self.enrichment_type is not None and not isinstance(
+            self.enrichment_type, PercentType
+        ):
+            raise TypeError(
+                f"enrichment_type must be a PercentType, got {self.enrichment_type!r}"
+            )
         self._validate_enrichment_fields()
 
     def to_dict(self) -> dict:
@@ -167,7 +246,9 @@ class MaterialComponentEntry(PaceObject):
             "percent": self.percent,
             "enrichment": self.enrichment,
             "enrichment_target": self.enrichment_target,
-            "enrichment_type": self.enrichment_type,
+            "enrichment_type": (
+                self.enrichment_type.value if self.enrichment_type is not None else None
+            ),
         }
 
     @classmethod
@@ -176,7 +257,11 @@ class MaterialComponentEntry(PaceObject):
             percent=data["percent"],
             enrichment=data.get("enrichment"),
             enrichment_target=data.get("enrichment_target"),
-            enrichment_type=data.get("enrichment_type"),
+            enrichment_type=(
+                PercentType(data["enrichment_type"])
+                if data.get("enrichment_type") is not None
+                else None
+            ),
         )
 
     def _validate_enrichment_fields(self):
@@ -202,94 +287,61 @@ class MaterialComponentEntry(PaceObject):
             )
 
 
-@dataclass(frozen=True, kw_only=True)
-class Material(PaceObject):
+@dataclass(frozen=True, kw_only=True, eq=False)
+class Material(Versioned[MaterialID]):
     """
     Shared base for concrete composition types (MIsotopic, MMixture,
     MVoid).
 
-    Identity: id is a single opaque string built from family_name +
-    version_label via build_id() — e.g. family_name="uranium3.2",
-    version_label="1" -> id="uranium3.2-1". _validate_id() confirms
-    the two stay consistent, catching an accidentally mismatched/
-    copy-pasted id at construction time.
+    Identity/lineage (id/family_name/version_label/derived_from/
+    gt_run_id/user_edit, build_id(), create(), the three-state
+    lineage rule) are inherited from Versioned — see that class's
+    docstring. This class adds composition-related concerns: the
+    type-tag dispatch mechanism, thermal-scattering tables, and
+    MOOSE-relevant thermomechanical properties.
 
     Notably absent from this class: temperature. Composition and
     temperature are physically orthogonal in OpenMC's own model — the
     same nuclide inventory behaves differently at different
     temperatures only because of Doppler broadening of cross sections,
     not because the material itself has changed. Temperature is
-    therefore passed as an argument to to_open_mc()/to_moose() at
-    solver-translation time, never stored as a field here.
+    therefore supplied at translation time (from OperatingConditions,
+    or from a run's fields), never stored as a field here.
 
-    Versioning rule: a version is either v1 (user-authored from
-    scratch) or a derived version, and if derived, it has exactly one
-    recorded cause:
-        - derived_from is None: version 1. gt_run_id must be None and
-              user_edit must be False.
-        - derived_from is set: a derived version. Exactly one of
-              gt_run_id (this version is the recorded output of a GT
-              run — physically, depletion: OpenMC's depletion module
-              solving the Bateman equations to evolve a nuclide
-              inventory forward under a flux/power history) or
-              user_edit (a person directly edited a predecessor
-              version's composition) must also be set — never neither,
-              and never both.
+    density_value on concrete subclasses is the REFERENCE density the
+    composition is specified at. For solids it is also the value the
+    solvers use (thermal expansion is neglected in v1). For fluids, the
+    local density during a coupled run comes from the fluid's equation
+    of state at the local temperature and pressure, so the stored value
+    is a starting point, not a constant.
     """
 
     material_type: ClassVar[MaterialType]
-    id: MaterialID
-    family_name: str
-    version_label: str
-    derived_from: MaterialID | None = None
-    gt_run_id: GTRunID | None = None
-    user_edit: bool = False
+
+    # S(alpha,beta) bound-thermal-scattering tables — required for any
+    # moderating material (water, graphite, ...) to translate
+    # correctly to OpenMC. Empty for non-moderating materials (fuel,
+    # cladding, structural alloys) and always empty for MVoid.
+    thermal_scattering: tuple[ThermalScatteringLibrary, ...] = ()
+
+    # MOOSE-relevant thermomechanical properties, each optional since
+    # not every material needs every property (a coolant doesn't need
+    # elastic_modulus; a pure neutronics-only material may need none
+    # of these at all). Units: thermal_conductivity in W/(m*K),
+    # specific_heat in J/(kg*K), thermal_expansion_coefficient in 1/K,
+    # elastic_modulus in Pa — each as a function of temperature_k.
+    thermal_conductivity: TabulatedProperty | None = None
+    specific_heat: TabulatedProperty | None = None
+    thermal_expansion_coefficient: TabulatedProperty | None = None
+    elastic_modulus: TabulatedProperty | None = None
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
         if "material_type" in cls.__dict__:
             MATERIAL_TYPE_TO_CLASS[cls.material_type.value] = cls
 
-    @staticmethod
-    def build_id(family_name: str, version_label: str) -> MaterialID:
-        """The one canonical way an id is constructed from a
-        family_name + version_label pair. Used both when constructing
-        a new version and by _validate_id() to confirm an existing
-        id actually matches its own family_name/version_label."""
-        return MaterialID(f"{family_name}-{version_label}")
-
-    @classmethod
-    def create(cls, *, family_name: str, version_label: str, **kwargs) -> Self:
-        """Named-constructor convenience: derives id via build_id() so
-        callers never have to compute and pass it separately. Works
-        for any concrete subclass unchanged — **kwargs passes through
-        whatever composition-specific fields that subclass requires
-        (e.g. components/percent_type/density_value/density_unit for
-        MIsotopic).
-
-        Prefer this over calling a subclass's constructor directly
-        when constructing brand-new versions (hand-written examples,
-        ComponentService minting a new version). from_dict() should
-        keep calling cls(...) directly — it already has a trusted,
-        stored id and doesn't need one derived.
-        """
-        return cls(
-            id=cls.build_id(family_name, version_label),
-            family_name=family_name,
-            version_label=version_label,
-            **kwargs,
-        )
-
     @abstractmethod
     def _validate_composition(self) -> None:
-        pass
-
-    @abstractmethod
-    def to_open_mc(self, temperature_k: float | None = None):
-        """Temperature is passed at call time, never stored on the version."""
-
-    @abstractmethod
-    def to_moose(self, temperature_k: float | None = None):
         pass
 
     @classmethod
@@ -297,41 +349,18 @@ class Material(PaceObject):
     def from_dict(cls, data: dict) -> Self: ...
 
     def validate(self) -> None:
+        """Check field-level constraints, then identity/lineage (via
+        Versioned), then composition, then thermal-scattering-table
+        sanity."""
         validate_fields(self)
-        self._validate_id()
-        self._validate_lineage()
+        super().validate()
         self._validate_composition()
+        self._validate_thermal_scattering()
 
-    def _validate_id(self) -> None:
-        expected = self.build_id(self.family_name, self.version_label)
-        if self.id != expected:
-            raise ValueError(
-                f"id {self.id!r} does not match family_name/version_label "
-                f"(expected {expected!r})"
-            )
-
-    def _validate_lineage(self) -> None:
-        """Check that derived_from and exactly one of gt_run_id/user_edit
-        are set together, or all three are unset — see the versioning
-        rule described in this class's docstring for the physical
-        reasoning."""
-        has_predecessor = self.derived_from is not None
-        has_gt_run = self.gt_run_id is not None
-
-        if not has_predecessor:
-            if has_gt_run or self.user_edit:
-                raise ValueError(
-                    "gt_run_id must be unset and user_edit must be False "
-                    "when derived_from is unset (version 1 has no "
-                    "derivation cause)"
-                )
-        elif has_gt_run == self.user_edit:
-            # both set, or both unset — either way, invalid
-            raise ValueError(
-                "when derived_from is set, exactly one of gt_run_id or "
-                "user_edit must also be set (got gt_run_id="
-                f"{self.gt_run_id!r}, user_edit={self.user_edit!r})"
-            )
+    def _validate_thermal_scattering(self) -> None:
+        names = [entry.name for entry in self.thermal_scattering]
+        if len(names) != len(set(names)):
+            raise ValueError(f"duplicate thermal_scattering table name(s) in {names!r}")
 
     def to_dict(self) -> dict:
         try:
@@ -343,12 +372,62 @@ class Material(PaceObject):
             ) from None
         return {
             "type": type_value,
-            "id": self.id,
-            "family_name": self.family_name,
-            "version_label": self.version_label,
-            "derived_from": self.derived_from,
-            "gt_run_id": self.gt_run_id,
-            "user_edit": self.user_edit,
+            **super().to_dict(),
+            "thermal_scattering": [
+                entry.to_dict() for entry in self.thermal_scattering
+            ],
+            "thermal_conductivity": (
+                self.thermal_conductivity.to_dict()
+                if self.thermal_conductivity is not None
+                else None
+            ),
+            "specific_heat": (
+                self.specific_heat.to_dict() if self.specific_heat is not None else None
+            ),
+            "thermal_expansion_coefficient": (
+                self.thermal_expansion_coefficient.to_dict()
+                if self.thermal_expansion_coefficient is not None
+                else None
+            ),
+            "elastic_modulus": (
+                self.elastic_modulus.to_dict()
+                if self.elastic_modulus is not None
+                else None
+            ),
+        }
+
+    @classmethod
+    def _material_fields_from_dict(cls, data: dict) -> dict:
+        """Shared parsing for every field Material adds on top of
+        Versioned — every concrete subclass's from_dict() threads this
+        through via **cls._material_fields_from_dict(data) rather than
+        repeating the same parsing block three times."""
+        return {
+            **cls._base_fields_from_dict(data),
+            "thermal_scattering": tuple(
+                ThermalScatteringLibrary.from_dict(entry)
+                for entry in data.get("thermal_scattering", [])
+            ),
+            "thermal_conductivity": (
+                TabulatedProperty.from_dict(data["thermal_conductivity"])
+                if data.get("thermal_conductivity") is not None
+                else None
+            ),
+            "specific_heat": (
+                TabulatedProperty.from_dict(data["specific_heat"])
+                if data.get("specific_heat") is not None
+                else None
+            ),
+            "thermal_expansion_coefficient": (
+                TabulatedProperty.from_dict(data["thermal_expansion_coefficient"])
+                if data.get("thermal_expansion_coefficient") is not None
+                else None
+            ),
+            "elastic_modulus": (
+                TabulatedProperty.from_dict(data["elastic_modulus"])
+                if data.get("elastic_modulus") is not None
+                else None
+            ),
         }
 
 
@@ -356,7 +435,7 @@ class Material(PaceObject):
 class MIsotopic(Material):
     """
     Direct nuclide/element composition — the common case, and the only
-    form v2+ (depletion-derived) versions can take.
+    form GT-run-derived versions can take.
 
     Physically: this is "what is this material actually made of" —
     a set of nuclides/elements (see MaterialComponentEntry for the two
@@ -373,24 +452,18 @@ class MIsotopic(Material):
                     percent=1.0,
                     enrichment=3.2,
                     enrichment_target="U235",
-                    enrichment_type="wo",
+                    enrichment_type=PercentType.WO,
                 ),
                 "O": MaterialComponentEntry(percent=2.0),
             },
-            percent_type="ao",
+            percent_type=PercentType.AO,
             density_value=10.3,
-            density_unit="g/cm3",
+            density_unit=DensityUnit.G_PER_CM3,
         )
     Reading this: one uranium atom for every two oxygen atoms (the
     UO2 stoichiometry, "ao"), with the uranium enriched to 3.2 wo%
     U235 — i.e. standard reactor-grade fuel — at a total density of
     10.3 g/cm3.
-
-    eq=False / id-based equality: `components` is a dict (unhashable,
-    and not meaningfully comparable by value for a frozen-dataclass
-    default __eq__ the way scalar-only Geometry subclasses are) —
-    same reasoning, and same pattern (isinstance check + self.id ==
-    other.id, hash(self.id)), as GAddition/GSubtraction.
     """
 
     material_type: ClassVar[MaterialType] = MaterialType.ISOTOPIC
@@ -398,12 +471,6 @@ class MIsotopic(Material):
     percent_type: PercentType
     density_value: float = field(metadata={"constraint": Constraint.POSITIVE})
     density_unit: DensityUnit
-
-    def __eq__(self, value: object) -> bool:
-        return isinstance(value, MIsotopic) and self.id == value.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
 
     def _validate_composition(self) -> None:
         """Enforce the two composition-level physical rules:
@@ -420,6 +487,14 @@ class MIsotopic(Material):
                   enrich an element's isotope mix, you don't "enrich" an
                   already-exact isotope.
         """
+        if not isinstance(self.percent_type, PercentType):
+            raise TypeError(
+                f"percent_type must be a PercentType, got {self.percent_type!r}"
+            )
+        if not isinstance(self.density_unit, DensityUnit):
+            raise TypeError(
+                f"density_unit must be a DensityUnit, got {self.density_unit!r}"
+            )
         if not self.components:
             raise ValueError("MIsotopic requires at least one component")
 
@@ -437,21 +512,12 @@ class MIsotopic(Material):
                         "entry. Only bare elements keys can map to enrichment format entries"
                     )
 
-    def to_open_mc(self, temperature_k: float | None = None):
-        # TODO: build an openmc.Material, call add_components(self.components,
-        # percent_type=self.percent_type), set_density(self.density_unit,
-        # self.density_value), and apply temperature_k if provided.
-        raise NotImplementedError
-
-    def to_moose(self, temperature_k: float | None = None):
-        raise NotImplementedError
-
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
-            "percent_type": self.percent_type,
+            "percent_type": self.percent_type.value,
             "density_value": self.density_value,
-            "density_unit": self.density_unit,
+            "density_unit": self.density_unit.value,
             "components": {
                 name: entry.to_dict() for name, entry in self.components.items()
             },
@@ -460,15 +526,10 @@ class MIsotopic(Material):
     @classmethod
     def from_dict(cls, data: dict) -> MIsotopic:
         return cls(
-            id=data["id"],
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
-            user_edit=data["user_edit"],
-            percent_type=data["percent_type"],
+            **cls._material_fields_from_dict(data),
+            percent_type=PercentType(data["percent_type"]),
             density_value=data["density_value"],
-            density_unit=data["density_unit"],
+            density_unit=DensityUnit(data["density_unit"]),
             components={
                 name: MaterialComponentEntry.from_dict(v)
                 for name, v in data["components"].items()
@@ -487,8 +548,8 @@ class MMixture(Material):
     Mixing is its own Material subclass storing references + fractions
     — mirrors GAddition storing list[tuple[GeometryID, GPose]] rather
     than pre-flattening geometry at construction time. The actual
-    nuclide-level combination happens in to_open_mc(), not here — this
-    class only records the recipe.
+    nuclide-level combination happens in the solver adapter, not here —
+    this class only records the recipe.
 
     percent_type here shares OpenMC's mix_materials() vocabulary
     ("ao"/"wo"), but carries a DIFFERENT constraint than MIsotopic's
@@ -497,10 +558,8 @@ class MMixture(Material):
     of the resulting mixture — bounded (0, 1) and summing to exactly
     1 — rather than an unbounded relative weight. This mirrors OpenMC's
     own mix_materials(), which hard-errors on ao/wo fractions that
-    don't sum to 1 (OpenMC additionally supports "vo"/volume-fraction
-    mixing with an implicit void remainder — deliberately not
-    supported here yet, to avoid introducing a void-material concept
-    before it's needed).
+    don't sum to 1. OpenMC's "vo" (volume-fraction) mixing is not
+    supported.
 
     Example — a 70/30 atom-fraction mix of two previously-defined
     material versions:
@@ -511,24 +570,15 @@ class MMixture(Material):
                 (MaterialID("fuel_v1-1"), 0.7),
                 (MaterialID("filler_v1-1"), 0.3),
             ],
-            percent_type="ao",
+            percent_type=PercentType.AO,
         )
     Note: the ids inside `components` reference OTHER, already-existing
     Materials — unaffected by this class's own identity scheme.
-
-    eq=False for the same reason as MIsotopic: `components` holds a
-    list, not meaningfully comparable via the frozen-dataclass default.
     """
 
     material_type: ClassVar[MaterialType] = MaterialType.MIXTURE
     components: list[tuple[MaterialID, float]]
     percent_type: PercentType
-
-    def __eq__(self, value: object) -> bool:
-        return isinstance(value, MMixture) and self.id == value.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
 
     def _validate_composition(self) -> None:
         """Enforce the mixture-fraction physical rules:
@@ -543,6 +593,10 @@ class MMixture(Material):
                   tolerance) — mixing combines 100% of a shared volume;
                   no void/remainder concept is supported yet.
         """
+        if not isinstance(self.percent_type, PercentType):
+            raise TypeError(
+                f"percent_type must be a PercentType, got {self.percent_type!r}"
+            )
         if len(self.components) < 2:
             raise ValueError("MMixture requires at least 2 constituent materials")
 
@@ -557,19 +611,10 @@ class MMixture(Material):
         if not math.isclose(total, 1.0, rel_tol=1e-9):
             raise ValueError(f"mix fractions must sum to 1, got {total}")
 
-    def to_open_mc(self, temperature_k: float | None = None):
-        # TODO: resolve each constituent Material, build/mix the
-        # corresponding openmc.Material objects per self.percent_type, apply
-        # temperature_k.
-        raise NotImplementedError
-
-    def to_moose(self, temperature_k: float | None = None):
-        raise NotImplementedError
-
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
-            "percent_type": self.percent_type,
+            "percent_type": self.percent_type.value,
             "components": [
                 [material_id, fraction] for material_id, fraction in self.components
             ],
@@ -578,20 +623,16 @@ class MMixture(Material):
     @classmethod
     def from_dict(cls, data: dict) -> MMixture:
         return cls(
-            id=data["id"],
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
-            user_edit=data["user_edit"],
-            percent_type=data["percent_type"],
+            **cls._material_fields_from_dict(data),
+            percent_type=PercentType(data["percent_type"]),
             components=[
-                (material_id, fraction) for material_id, fraction in data["components"]
+                (MaterialID(material_id), fraction)
+                for material_id, fraction in data["components"]
             ],
         )
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class MVoid(Material):
     """
     No material at all — an empty region, e.g. a fuel rod's gas
@@ -609,10 +650,7 @@ class MVoid(Material):
     guarantee every other consumer of MIsotopic currently relies on
     (that a real MIsotopic always has genuine, physical mass density).
 
-    No fields — there is nothing to compose or configure. Uses the
-    plain frozen-dataclass default __eq__/__hash__ (unlike MIsotopic/
-    MMixture): with no dict/list fields, there's nothing unhashable to
-    work around.
+    No fields — there is nothing to compose or configure.
 
     Example:
         MVoid.create(family_name="plenum_void", version_label="1")
@@ -624,27 +662,13 @@ class MVoid(Material):
         # nothing to validate — void has no composition
         pass
 
-    def to_open_mc(self, temperature_k: float | None = None):
-        # TODO: implement this — conceptually, this should resolve to
-        # an OpenMC cell/region with fill=None (no material at all),
-        # not a Material object with near-zero density.
-        raise NotImplementedError
-
-    def to_moose(self, temperature_k: float | None = None):
-        raise NotImplementedError
-
     def to_dict(self) -> dict:
         return super().to_dict()
 
     @classmethod
     def from_dict(cls, data: dict) -> MVoid:
         return cls(
-            id=data["id"],
-            family_name=data["family_name"],
-            version_label=data["version_label"],
-            derived_from=data["derived_from"],
-            gt_run_id=data["gt_run_id"],
-            user_edit=data["user_edit"],
+            **cls._material_fields_from_dict(data),
         )
 
 
@@ -652,7 +676,10 @@ def material_from_dict(data: dict) -> Material:
     """Reconstruct the correct concrete Material subclass from a dict
     produced by any subclass's to_dict() — dispatches on the "type"
     key rather than requiring the caller to already know which
-    concrete class they're deserializing."""
+    concrete class they're deserializing. Material.from_dict() is
+    abstract, so it can never be called directly on the base class;
+    this is the supported way to deserialize a Material of unknown
+    concrete type."""
     cls = MATERIAL_TYPE_TO_CLASS.get(data["type"])
     if cls is None:
         raise ValueError(f"unknown material type: {data['type']!r}")

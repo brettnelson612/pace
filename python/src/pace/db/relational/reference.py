@@ -4,8 +4,11 @@ pace/db/relational/reference.py
 ReferenceRow — a generic index of "what references what" across the
 whole registry (this is what makes refcount checks and hydration
 cheap, indexed queries instead of full scans). Maintained by
-ComponentService on every create/delete, not derived automatically —
-the database can't see into a JSON blob to enforce it on its own.
+RegistryService on every register, not derived automatically — the
+database can't see into a JSON blob to enforce it on its own.
+
+Reads open their own short session. Writes take the caller's Session,
+so an object and its edges are written in one transaction.
 
 Each row is one directed edge: source (the object holding the
 pointer) -> target (the object being pointed at).
@@ -13,10 +16,11 @@ pointer) -> target (the object being pointed at).
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 
-from sqlalchemy import Index, String, UniqueConstraint, or_
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Index, String, UniqueConstraint, and_, func, or_, select
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from pace.core.reference_types import ReferenceableType
 from pace.db.relational.base import Base
@@ -59,106 +63,90 @@ class ReferenceDAO:
     def __init__(self, sql_db: SqlDB):
         self._db = sql_db
 
-    def add(self, reference: Reference) -> None:
-        self.add_many([reference])
+    def add(self, session: Session, reference: Reference) -> None:
+        self.add_many(session, [reference])
 
-    def add_many(self, references: list[Reference]) -> None:
-        """Bulk insert — one save() can establish several edges at
-        once (e.g. a CComponent's several PComponents). Callers must
-        dedupe to unique (source, target) pairs first — this writes
-        an edge per occurrence in `references`, not per placement in
-        the caller's own object; the table's uniqueness constraint
-        rejects an exact duplicate edge as a backstop, not a
-        substitute for that."""
-        if not references:
-            return
-        rows = [
+    def add_many(self, session: Session, references: Collection[Reference]) -> None:
+        """Insert one edge per element of `references`. Callers pass
+        unique (source, target) pairs — a repeated pair violates
+        uniq_references_edge."""
+        session.add_all(
             ReferenceRow(
-                source_type=ref.source_type.value,
-                source_id=ref.source_id,
-                target_type=ref.target_type.value,
-                target_id=ref.target_id,
+                source_type=reference.source_type.value,
+                source_id=reference.source_id,
+                target_type=reference.target_type.value,
+                target_id=reference.target_id,
             )
-            for ref in references
-        ]
-        with self._db.session() as session:
-            session.add_all(rows)
+            for reference in references
+        )
+        session.flush()
 
-    def remove_outgoing(self, source_type: ReferenceableType, source_id: str) -> None:
-        """Delete every edge sourced from this node — used before
-        re-establishing an object's edges after an in-place edit (so
-        the old set is replaced, not appended to), and before
-        deleting an object outright (so no edge is left pointing from
-        an id that no longer exists)."""
-        with self._db.session() as session:
-            session.query(ReferenceRow).filter(
+    def remove_outgoing(
+        self, session: Session, source_type: ReferenceableType, source_id: str
+    ) -> None:
+        """Delete every edge sourced from this node — before
+        re-recording an object's edges after an in-place edit, or
+        before deleting the object."""
+        for row in session.scalars(
+            select(ReferenceRow).where(
                 ReferenceRow.source_type == source_type.value,
                 ReferenceRow.source_id == source_id,
-            ).delete()
+            )
+        ):
+            session.delete(row)
 
     def count_incoming(self, target_type: ReferenceableType, target_id: str) -> int:
-        """The refcount check: how many other objects currently
-        reference this one. 0 -> in-place edit/delete is legal; >0 ->
-        an edit must mint a new version instead."""
+        """How many objects currently reference this one."""
         with self._db.session() as session:
             return (
-                session.query(ReferenceRow)
-                .filter(
-                    ReferenceRow.target_type == target_type.value,
-                    ReferenceRow.target_id == target_id,
+                session.scalar(
+                    select(func.count())
+                    .select_from(ReferenceRow)
+                    .where(
+                        ReferenceRow.target_type == target_type.value,
+                        ReferenceRow.target_id == target_id,
+                    )
                 )
-                .count()
+                or 0
             )
 
     def incoming(
         self, target_type: ReferenceableType, target_id: str
     ) -> list[tuple[ReferenceableType, str]]:
-        """Who points AT this node — the refcount gate, and anything
-        surfacing 'used in N places' to a user."""
+        """Who points AT this node."""
         with self._db.session() as session:
-            rows = (
-                session.query(ReferenceRow)
-                .filter(
+            rows = session.scalars(
+                select(ReferenceRow).where(
                     ReferenceRow.target_type == target_type.value,
                     ReferenceRow.target_id == target_id,
                 )
-                .all()
-            )
+            ).all()
             return [(ReferenceableType(row.source_type), row.source_id) for row in rows]
 
     def outgoing(
         self, source_type: ReferenceableType, source_id: str
     ) -> list[tuple[ReferenceableType, str]]:
-        """What this node points AT — the edge hydration walks
-        outward from a root id."""
-        with self._db.session() as session:
-            rows = (
-                session.query(ReferenceRow)
-                .filter(
-                    ReferenceRow.source_type == source_type.value,
-                    ReferenceRow.source_id == source_id,
-                )
-                .all()
-            )
-            return [(ReferenceableType(row.target_type), row.target_id) for row in rows]
+        """What this node points AT."""
+        return self.outgoing_many([(source_type, source_id)])
 
     def outgoing_many(
-        self, sources: list[tuple[ReferenceableType, str]]
+        self, sources: Collection[tuple[ReferenceableType, str]]
     ) -> list[tuple[ReferenceableType, str]]:
-        """Batched outgoing() — the edges of several source nodes
-        (possibly different types) in one query."""
+        """The edges of several source nodes (possibly of different
+        types) in one query."""
         if not sources:
             return []
 
-        by_type: dict[str, list[str]] = {}
+        ids_by_type: dict[str, list[str]] = {}
         for source_type, source_id in sources:
-            by_type.setdefault(source_type.value, []).append(source_id)
+            ids_by_type.setdefault(source_type.value, []).append(source_id)
 
+        conditions = [
+            and_(
+                ReferenceRow.source_type == type_value, ReferenceRow.source_id.in_(ids)
+            )
+            for type_value, ids in ids_by_type.items()
+        ]
         with self._db.session() as session:
-            conditions = [
-                (ReferenceRow.source_type == type_value)
-                & (ReferenceRow.source_id.in_(ids))
-                for type_value, ids in by_type.items()
-            ]
-            rows = session.query(ReferenceRow).filter(or_(*conditions)).all()
+            rows = session.scalars(select(ReferenceRow).where(or_(*conditions))).all()
             return [(ReferenceableType(row.target_type), row.target_id) for row in rows]

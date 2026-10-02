@@ -1,5 +1,5 @@
 """
-tests/pace/core/test_ids.py
+tests/unit/pace/core/test_ids.py
 
 ids.py is purely static typing sugar (typing.NewType over str) — these
 tests exist to pin down the runtime behavior the module's own docstring
@@ -12,17 +12,21 @@ from pace.core.ids import (
     CComponentID,
     GeometryID,
     GTRunID,
+    LatticeID,
     LComponentID,
     MaterialID,
-    PComponentID,
+    ComponentPlacementID,
+    ReactorBlueprintID,
 )
 
 ALL_ID_TYPES = [
     GeometryID,
     MaterialID,
     LComponentID,
-    PComponentID,
+    ComponentPlacementID,
     CComponentID,
+    LatticeID,
+    ReactorBlueprintID,
     GTRunID,
 ]
 

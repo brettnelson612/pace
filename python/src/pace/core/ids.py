@@ -17,7 +17,7 @@ before wrapping it.
 
 """
 
-from typing import NewType
+from typing import NewType, TypeAlias
 
 # --- Geometry ---
 GeometryID = NewType("GeometryID", str)
@@ -27,21 +27,24 @@ MaterialID = NewType("MaterialID", str)
 
 # --- Components ---
 LComponentID = NewType("LComponentID", str)
-PComponentID = NewType("PComponentID", str)
 CComponentID = NewType("CComponentID", str)
+LatticeID = NewType("LatticeID", str)
 
-# RTBlueprint has no distinct ID type of its own,
-# an RTBlueprint's ID *is* the CComponent ID of the CComponent it wraps
-# ("It has an ID (specifically, the CComponent ID)"). Use CComponentID
-# wherever an RTBlueprint is referenced; do not introduce RTBlueprintID.
+ComponentID: TypeAlias = LComponentID | CComponentID | LatticeID
+
+# --- ComponentPlacement ---
+ComponentPlacementID = NewType("ComponentPlacementID", str)
+
+# --- Reactor ---
+ReactorBlueprintID = NewType("ReactorBlueprintID", str)
 
 # --- Simulation provenance ---
 GTRunID = NewType("GTRunID", str)
 
-# --- PComponent addressing ---
-# PComponent identity is path-style (relative to its parent CComponent),
+# --- ComponentPlacement addressing ---
+# ComponentPlacement identity is path-style (relative to its parent CComponent),
 # not a flat opaque ID like the above — deliberately not aliased to a
 # plain NewType(str) yet. Revisit once the path/address representation
 # itself is designed; a flat-address lookup utility may warrant its own
-# type at that point (e.g. PComponentAddress), separate from the
+# type at that point (e.g. ComponentPlacementAddress), separate from the
 # individual per-level position keys that compose it.
