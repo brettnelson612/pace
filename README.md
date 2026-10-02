@@ -1,5 +1,5 @@
 # PACE
-[![CI](https://github.com/brettnelson612/pace/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/brettnelson612/pace/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/brettnelson612/pace/ci.yml?branch=main&label=CI&logo=github)](https://github.com/brettnelson612/pace/actions/workflows/ci.yml)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue)](python/pyproject.toml)
 [![License](https://img.shields.io/github/license/brettnelson612/pace)](LICENSE)
 [![Pixi](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
