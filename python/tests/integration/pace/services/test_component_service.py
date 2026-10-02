@@ -6,7 +6,7 @@ PaceDB — confirms the domain objects, DAOs, RegistryDB, and reference
 index actually work together, not just correct in isolation. Covers
 register_*()/get_*() for every kind (including the bounds-shape and
 boundary-condition face checks), reference-index bookkeeping, and full
-hydration via get_resolved_model() / get_resolved_reactor().
+hydration via get_resolved_component() / get_resolved_reactor().
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import pytest
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.component import CComponent, LComponent, Placement
+from pace.core.component import CComponent, LComponent, ComponentPlacement
 from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.geometry import GAnnulus, GCylinder, GeometryType, GPose, GRectanglePrism
 from pace.core.ids import (
@@ -23,12 +23,12 @@ from pace.core.ids import (
     GeometryID,
     LComponentID,
     MaterialID,
-    PlacementID,
-    ReactorID,
+    ComponentPlacementID,
+    ReactorBlueprintID,
 )
-from pace.core.lattice import LatticePlacement, RectLattice
+from pace.core.lattice import LatticeElement, RectLattice
 from pace.core.material import MaterialComponentEntry, MIsotopic
-from pace.core.reactor import NeutronBC, OperatingState, Reactor, ThermalBC
+from pace.core.reactor_blueprint import NeutronBC, OperatingState, Reactor, ThermalBC
 from pace.core.reference_types import ReferenceableType
 from pace.db.pace_db import PaceDB
 from pace.services.component_service import (
@@ -88,9 +88,11 @@ def _make_isotopic(
     )
 
 
-def _place(pc_id: str, kind: ComponentType, target_id: str) -> Placement:
-    return Placement(
-        id=PlacementID(pc_id), pose=ORIGIN, ref=ComponentRef(type=kind, id=target_id)
+def _place(pc_id: str, kind: ComponentType, target_id: str) -> ComponentPlacement:
+    return ComponentPlacement(
+        id=ComponentPlacementID(pc_id),
+        pose=ORIGIN,
+        ref=ComponentRef(type=kind, id=target_id),
     )
 
 
@@ -142,7 +144,7 @@ def _register_mini_assembly(service: ComponentService) -> MiniAssembly:
             fill=water.id,
             shape=(2, 2),
             placements=[
-                LatticePlacement(
+                LatticeElement(
                     ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id),
                     addresses=((0, 0), (0, 1), (1, 0)),
                 )
@@ -279,8 +281,8 @@ def test_register_ccomponent_dedupes_repeated_placements(pace_db, component_serv
         fill=mini.water.id,
         components=[
             _place("a", ComponentType.LCOMPONENT, mini.pellet.id),
-            Placement(
-                id=PlacementID("b"),
+            ComponentPlacement(
+                id=ComponentPlacementID("b"),
                 pose=GPose(x_m=0.0, y_m=0.0, z_m=0.005),
                 ref=ComponentRef(type=ComponentType.LCOMPONENT, id=mini.pellet.id),
             ),
@@ -383,7 +385,7 @@ def test_register_lattice_rejects_dangling_placement(pace_db, component_service)
         fill=mini.water.id,
         shape=(1, 1),
         placements=[
-            LatticePlacement(
+            LatticeElement(
                 ref=ComponentRef(
                     type=ComponentType.CCOMPONENT, id=CComponentID("nope-1")
                 ),
@@ -484,7 +486,7 @@ def test_get_geometry_returns_none_when_absent(component_service):
 
 
 def test_get_reactor_returns_none_when_absent(component_service):
-    assert component_service.get_reactor(ReactorID("nonexistent-1")) is None
+    assert component_service.get_reactor(ReactorBlueprintID("nonexistent-1")) is None
 
 
 def test_get_ccomponent_returns_unhydrated_row(component_service):
@@ -506,12 +508,12 @@ def test_get_lattice_returns_persisted_row(component_service):
 # =============================================================================
 
 
-def test_get_resolved_model_hydrates_full_tree_once_per_object(component_service):
+def test_get_resolved_component_hydrates_full_tree_once_per_object(component_service):
     """assembly -> lattice -> pin cell (3 slots) -> pellet: every
     distinct object appears exactly once, however often it's placed."""
     mini = _register_mini_assembly(component_service)
     root = ComponentRef(type=ComponentType.CCOMPONENT, id=mini.assembly.id)
-    resolved = component_service.get_resolved_model(root)
+    resolved = component_service.get_resolved_component(root)
 
     assert resolved.root == root
     assert resolved.ccomponents.keys() == {mini.assembly.id, mini.pin_cell.id}
@@ -525,17 +527,17 @@ def test_get_resolved_model_hydrates_full_tree_once_per_object(component_service
     assert resolved.materials.keys() == {mini.uo2.id, mini.water.id}
 
 
-def test_get_resolved_model_with_lattice_root(component_service):
+def test_get_resolved_component_with_lattice_root(component_service):
     mini = _register_mini_assembly(component_service)
     root = ComponentRef(type=ComponentType.LATTICE, id=mini.lattice.id)
-    resolved = component_service.get_resolved_model(root)
+    resolved = component_service.get_resolved_component(root)
     assert resolved.ccomponents.keys() == {mini.pin_cell.id}
     assert mini.assembly_box.id not in resolved.geometries
 
 
-def test_get_resolved_model_raises_for_nonexistent_root(component_service):
+def test_get_resolved_component_raises_for_nonexistent_root(component_service):
     with pytest.raises(ValueError):
-        component_service.get_resolved_model(
+        component_service.get_resolved_component(
             ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("nope-1"))
         )
 
@@ -558,4 +560,4 @@ def test_get_resolved_reactor_includes_reactor_only_references(component_service
 
 def test_get_resolved_reactor_raises_for_nonexistent_reactor(component_service):
     with pytest.raises(DanglingReferenceError):
-        component_service.get_resolved_reactor(ReactorID("nope-1"))
+        component_service.get_resolved_reactor(ReactorBlueprintID("nope-1"))

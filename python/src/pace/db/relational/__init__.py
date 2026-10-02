@@ -3,7 +3,10 @@ from pace.db.relational.geometry import GeometryDAO, GeometryRow
 from pace.db.relational.lattice import LatticeDAO, LatticeRow
 from pace.db.relational.lcomponent import LComponentDAO, LComponentRow
 from pace.db.relational.material import MaterialDAO, MaterialRow
-from pace.db.relational.reactor import ReactorDAO, ReactorRow
+from pace.db.relational.reactor_blueprint import (
+    ReactorBlueprintDAO,
+    ReactorBlueprintRow,
+)
 from pace.db.relational.reference import ReferenceDAO, ReferenceRow
 
 __all__ = [
@@ -17,8 +20,8 @@ __all__ = [
     "LatticeRow",
     "MaterialDAO",
     "MaterialRow",
-    "ReactorDAO",
-    "ReactorRow",
+    "ReactorBlueprintDAO",
+    "ReactorBlueprintRow",
     "ReferenceDAO",
     "ReferenceRow",
 ]

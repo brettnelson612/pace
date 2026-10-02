@@ -375,7 +375,7 @@ class GPose(PaceObject):
     Deliberately a plain value object, not a PaceModelObject-style
     registered entity — a GPose has no independent identity or
     lifecycle of its own; it only exists as an attribute of whatever
-    placement it describes.
+    ComponentPlacement it describes.
 
     z_rotation_rad defaults to 0.0 (no rotation) so existing call
     sites that don't need rotation are unaffected. Only z-axis

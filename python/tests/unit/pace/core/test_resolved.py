@@ -1,11 +1,11 @@
 """
 tests/pace/core/test_resolved.py
 
-Covers: ResolvedModel's internal-consistency validation — id-mapping,
+Covers: ResolvedComponent's internal-consistency validation — id-mapping,
 root presence for every root kind, and completeness for every kind of
 reference a bundle can hold (CComponent bounds/fill/members, Lattice
 fill/placements, LComponent geometry/material, GAddition units, MMixture
-constituents) — plus round-trip; ResolvedReactor's checks that the
+constituents) — plus round-trip; ResolvedReactorBlueprint's checks that the
 Reactor's root, bounds, fill and operating-state materials are all in
 the model, plus round-trip.
 
@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 from pace.core.bounds import faces_for_geometry_type
-from pace.core.component import CComponent, LComponent, Placement
+from pace.core.component import CComponent, LComponent, ComponentPlacement
 from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.geometry import (
     GAddition,
@@ -28,11 +28,11 @@ from pace.core.geometry import (
     GPose,
     GRectanglePrism,
 )
-from pace.core.ids import GeometryID, MaterialID, PlacementID
-from pace.core.lattice import LatticePlacement, RectLattice
+from pace.core.ids import GeometryID, MaterialID, ComponentPlacementID
+from pace.core.lattice import LatticeElement, RectLattice
 from pace.core.material import MaterialComponentEntry, MIsotopic, MMixture
-from pace.core.reactor import NeutronBC, OperatingState, Reactor
-from pace.core.resolved import ResolvedModel, ResolvedReactor
+from pace.core.reactor_blueprint import NeutronBC, OperatingState, Reactor
+from pace.core.resolved import ResolvedComponent, ResolvedReactorBlueprint
 
 ORIGIN = GPose(x_m=0.0, y_m=0.0, z_m=0.0)
 
@@ -48,9 +48,11 @@ def _material(name: str) -> MIsotopic:
     )
 
 
-def _place(pc_id: str, kind: ComponentType, target_id: str) -> Placement:
-    return Placement(
-        id=PlacementID(pc_id), pose=ORIGIN, ref=ComponentRef(type=kind, id=target_id)
+def _place(pc_id: str, kind: ComponentType, target_id: str) -> ComponentPlacement:
+    return ComponentPlacement(
+        id=ComponentPlacementID(pc_id),
+        pose=ORIGIN,
+        ref=ComponentRef(type=kind, id=target_id),
     )
 
 
@@ -113,7 +115,7 @@ def _bundle_parts() -> dict[str, Any]:
         fill=water.id,
         shape=(2, 2),
         placements=[
-            LatticePlacement(
+            LatticeElement(
                 ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id),
                 addresses=((0, 0), (0, 1), (1, 0)),
             )
@@ -145,13 +147,13 @@ def _without(parts: dict[str, Any], map_name: str, key: str) -> dict[str, Any]:
 
 
 # =============================================================================
-# ResolvedModel
+# ResolvedComponent
 # =============================================================================
 
 
 def test_valid_bundle_round_trips():
-    bundle = ResolvedModel(**_bundle_parts())
-    assert ResolvedModel.from_dict(bundle.to_dict()).to_dict() == bundle.to_dict()
+    bundle = ResolvedComponent(**_bundle_parts())
+    assert ResolvedComponent.from_dict(bundle.to_dict()).to_dict() == bundle.to_dict()
 
 
 @pytest.mark.parametrize(
@@ -165,14 +167,14 @@ def test_valid_bundle_round_trips():
 def test_any_placeable_kind_can_be_root(kind, target_id):
     parts = _bundle_parts()
     parts["root"] = ComponentRef(type=kind, id=target_id)
-    assert ResolvedModel(**parts).root.id == target_id
+    assert ResolvedComponent(**parts).root.id == target_id
 
 
 def test_root_missing_raises():
     parts = _bundle_parts()
     parts["root"] = ComponentRef(type=ComponentType.CCOMPONENT, id="nope-1")
     with pytest.raises(ValueError):
-        ResolvedModel(**parts)
+        ResolvedComponent(**parts)
 
 
 def test_mismatched_key_raises():
@@ -180,7 +182,7 @@ def test_mismatched_key_raises():
     uo2 = parts["materials"][MaterialID("uo2-1")]
     parts["materials"] = {**parts["materials"], MaterialID("wrong-1"): uo2}
     with pytest.raises(ValueError):
-        ResolvedModel(**parts)
+        ResolvedComponent(**parts)
 
 
 @pytest.mark.parametrize(
@@ -197,13 +199,13 @@ def test_mismatched_key_raises():
 )
 def test_missing_dependency_raises(map_name, key):
     with pytest.raises(ValueError):
-        ResolvedModel(**_without(_bundle_parts(), map_name, key))
+        ResolvedComponent(**_without(_bundle_parts(), map_name, key))
 
 
 def test_missing_fill_material_raises():
     """water is only referenced as fill (pin cell, lattice, assembly)."""
     with pytest.raises(ValueError):
-        ResolvedModel(**_without(_bundle_parts(), "materials", "water-1"))
+        ResolvedComponent(**_without(_bundle_parts(), "materials", "water-1"))
 
 
 def test_gaddition_unit_must_be_present():
@@ -218,7 +220,7 @@ def test_gaddition_unit_must_be_present():
     )
     parts["geometries"] = {**parts["geometries"], addition.id: addition}
     with pytest.raises(ValueError):
-        ResolvedModel(**parts)
+        ResolvedComponent(**parts)
 
 
 def test_mmixture_constituent_must_be_present():
@@ -231,11 +233,11 @@ def test_mmixture_constituent_must_be_present():
     )
     parts["materials"] = {**parts["materials"], mixture.id: mixture}
     with pytest.raises(ValueError):
-        ResolvedModel(**parts)
+        ResolvedComponent(**parts)
 
 
 # =============================================================================
-# ResolvedReactor
+# ResolvedReactorBlueprint
 # =============================================================================
 
 
@@ -261,29 +263,35 @@ def _reactor(**overrides) -> Reactor:
 
 
 def test_resolved_reactor_valid_round_trip():
-    resolved = ResolvedReactor(
-        reactor=_reactor(), model=ResolvedModel(**_bundle_parts())
+    resolved = ResolvedReactorBlueprint(
+        reactor=_reactor(), model=ResolvedComponent(**_bundle_parts())
     )
-    restored = ResolvedReactor.from_dict(resolved.to_dict())
+    restored = ResolvedReactorBlueprint.from_dict(resolved.to_dict())
     assert restored.to_dict() == resolved.to_dict()
 
 
 def test_resolved_reactor_root_must_match_model_root():
     reactor = _reactor(root=_place("pin", ComponentType.CCOMPONENT, "pin_cell-1"))
     with pytest.raises(ValueError):
-        ResolvedReactor(reactor=reactor, model=ResolvedModel(**_bundle_parts()))
+        ResolvedReactorBlueprint(
+            reactor=reactor, model=ResolvedComponent(**_bundle_parts())
+        )
 
 
 def test_resolved_reactor_bounds_must_be_present():
     reactor = _reactor(bounds=GeometryID("missing_box-1"))
     with pytest.raises(ValueError):
-        ResolvedReactor(reactor=reactor, model=ResolvedModel(**_bundle_parts()))
+        ResolvedReactorBlueprint(
+            reactor=reactor, model=ResolvedComponent(**_bundle_parts())
+        )
 
 
 def test_resolved_reactor_fill_must_be_present():
     reactor = _reactor(fill=MaterialID("missing_water-1"))
     with pytest.raises(ValueError):
-        ResolvedReactor(reactor=reactor, model=ResolvedModel(**_bundle_parts()))
+        ResolvedReactorBlueprint(
+            reactor=reactor, model=ResolvedComponent(**_bundle_parts())
+        )
 
 
 def test_resolved_reactor_operating_state_materials_must_be_present():
@@ -293,4 +301,6 @@ def test_resolved_reactor_operating_state_materials_must_be_present():
         )
     )
     with pytest.raises(ValueError):
-        ResolvedReactor(reactor=reactor, model=ResolvedModel(**_bundle_parts()))
+        ResolvedReactorBlueprint(
+            reactor=reactor, model=ResolvedComponent(**_bundle_parts())
+        )

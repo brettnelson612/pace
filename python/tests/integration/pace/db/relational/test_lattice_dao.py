@@ -16,7 +16,7 @@ from pace.core.lattice import (
     HexLattice,
     HexOrientation,
     Lattice,
-    LatticePlacement,
+    LatticeElement,
     RectLattice,
 )
 from pace.db.pace_db import PaceDB
@@ -39,7 +39,7 @@ def _rect(family_name: str = "rect_lattice", version_label: str = "1", **kwargs)
         pitch_m=0.0126,
         fill=WATER,
         shape=(2, 2),
-        placements=[LatticePlacement(ref=PIN, addresses=((0, 0), (1, 1)))],
+        placements=[LatticeElement(ref=PIN, addresses=((0, 0), (1, 1)))],
         **kwargs,
     )
 
@@ -52,7 +52,7 @@ def _hex() -> HexLattice:
         fill=WATER,
         num_rings=2,
         orientation=HexOrientation.FLAT_TOP,
-        placements=[LatticePlacement(ref=PIN, addresses=((0, 0), (1, 3)))],
+        placements=[LatticeElement(ref=PIN, addresses=((0, 0), (1, 3)))],
     )
 
 

@@ -1,13 +1,13 @@
 """
 pace/core/reference_types.py
 
-ReferenceableType — every versioned aggregate kind that can participate
-in a reference between registered objects: Geometry, Material,
-LComponent, CComponent, Lattice, and Reactor. Used as the type tag on
-each row of the persistence-layer reference index (see db/relational/
-reference.py). Lives in core rather than the db layer since it's a
-fact about the domain's aggregate kinds, not about how references
-happen to be stored.
+ReferenceableType — any of the versioned pace objects which can be referenced:
+Geometry, Material, LComponent, CComponent, Lattice, and Reactor.
+
+Used as the type tag on each row of the persistence-layer referenceindex
+(see db/relational/reference.py). Lives in core rather than the db layer
+since it's a fact about the domain's aggregate kinds, not about how
+references happen to be stored.
 
 The subset of these kinds that can be *placed* inside a composite is
 ComponentType (see component_ref.py).
@@ -24,4 +24,4 @@ class ReferenceableType(str, Enum):
     LCOMPONENT = "lcomponent"
     CCOMPONENT = "ccomponent"
     LATTICE = "lattice"
-    REACTOR = "reactor"
+    REACTOR_BLUEPRINT = "reactor_blueprint"

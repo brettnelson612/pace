@@ -7,11 +7,11 @@ Reactor structure objects:
           CComponent: family_name + version_label identity, and the
           same three-state derived_from/gt_run_id/user_edit lineage
           rule.
-    - Placement — a component placement: a pose plus a ComponentRef to one
+    - ComponentPlacement — a component placement: a pose plus a ComponentRef to one
           LComponent, CComponent, or Lattice. Only ever a member of a
-          CComponent's `components` list (or a Reactor's root); has no
+          CComponent's `placements` list (or a Reactor's root); has no
           independent registry, lifecycle, or lineage of its own. Any
-          change to a Placement (a moved pose, a repointed ref) is a
+          change to a ComponentPlacement (a moved pose, a repointed ref) is a
           change to its parent's own serialized data, which is enough
           to mint a new parent version through the existing mechanism.
     - CComponent — a composite: a region of space it owns (`bounds`),
@@ -38,7 +38,7 @@ Bounds and fill:
           size comes from its own bounds; the parent only says where it
           goes.
 
-Structures are recursive: a Placement's ref can point at another
+Structures are recursive: a ComponentPlacement's ref can point at another
 CComponent (or a Lattice), so pellets -> rods -> pin cells -> lattices
 -> assemblies are all built the same way, one nesting level at a time.
 Bare ids are opaque strings with no runtime type information, which is
@@ -46,8 +46,8 @@ why placements go through ComponentRef (kind + id) rather than a bare id.
 
 Reference direction follows PACE's bare-ids-always rule: LComponent,
 CComponent and Lattice have their own registries, so a placement
-references them by id. Placement has no registry, so CComponent embeds
-Placement objects directly.
+references them by id. ComponentPlacement has no registry, so CComponent embeds
+ComponentPlacement objects directly.
 """
 
 from __future__ import annotations
@@ -61,8 +61,9 @@ from pace.core.ids import (
     GeometryID,
     LComponentID,
     MaterialID,
-    PlacementID,
+    ComponentPlacementID,
     LatticeID,
+    ComponentID,
 )
 from pace.core.pace_object import PaceObject
 from pace.core.versioned import Versioned
@@ -79,9 +80,6 @@ class ComponentType(str, Enum):
     LCOMPONENT = "lcomponent"
     CCOMPONENT = "ccomponent"
     LATTICE = "lattice"
-
-
-ComponentID = LComponentID | CComponentID | LatticeID
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -127,6 +125,55 @@ class ComponentRef(PaceObject):
 
 
 @dataclass(frozen=True, kw_only=True)
+class ComponentPlacement(PaceObject):
+    """A component placement — a GPose plus a ComponentRef to the LComponent,
+    CComponent, or Lattice placed at that position. Only ever appears
+    as a member of a CComponent's `placements` list, or as a Reactor's
+    root — has no independent registry, lifecycle, or lineage.
+
+    The pose positions the placed object's own origin (the center of
+    its bounds) in the parent's coordinate frame.
+
+    id must be unique WITHIN its own parent's `placements` list, not
+    globally — the same underlying component legitimately gets reused
+    across many placements, each with its own locally-unique
+    ComponentPlacement.id. This is what makes path-based region addressing
+    (e.g. "/fuel_pin_cell-1/rod/") work: an id stays attached to its
+    ComponentPlacement regardless of list order, unlike an array index.
+
+    Example — a fuel rod placed at its pin cell's center:
+        ComponentPlacement(
+            id=ComponentPlacementID("rod"),
+            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
+            ref=ComponentRef(type=ComponentType.CCOMPONENT, id=fuel_rod.id),
+        )
+    """
+
+    id: ComponentPlacementID
+    pose: GPose
+    ref: ComponentRef
+
+    def validate(self) -> None:
+        if not self.id:
+            raise ValueError("ComponentPlacement id must be a non-empty string")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "pose": self.pose.to_dict(),
+            "ref": self.ref.to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ComponentPlacement:
+        return cls(
+            id=ComponentPlacementID(data["id"]),
+            pose=GPose.from_dict(data["pose"]),
+            ref=ComponentRef.from_dict(data["ref"]),
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
 class LComponent(Versioned[LComponentID]):
     """A leaf component — one geometry paired with one material, no
     position of its own.
@@ -164,12 +211,6 @@ class LComponent(Versioned[LComponentID]):
     geometry: GeometryID
     material: MaterialID
 
-    # No override of validate() — LComponent has nothing beyond the
-    # two bare references and Versioned's own id/lineage checks;
-    # confirming those references actually resolve to something real
-    # requires registry access, which is ComponentService's job, not
-    # this object's own validate().
-
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
@@ -183,55 +224,6 @@ class LComponent(Versioned[LComponentID]):
             **cls._base_fields_from_dict(data),
             geometry=GeometryID(data["geometry"]),
             material=MaterialID(data["material"]),
-        )
-
-
-@dataclass(frozen=True, kw_only=True)
-class Placement(PaceObject):
-    """A component placement — a GPose plus a ComponentRef to the LComponent,
-    CComponent, or Lattice placed at that position. Only ever appears
-    as a member of a CComponent's `components` list, or as a Reactor's
-    root — has no independent registry, lifecycle, or lineage.
-
-    The pose positions the placed object's own origin (the center of
-    its bounds) in the parent's coordinate frame.
-
-    id must be unique WITHIN its own parent's `components` list, not
-    globally — the same underlying component legitimately gets reused
-    across many placements, each with its own locally-unique
-    Placement.id. This is what makes path-based region addressing
-    (e.g. "/fuel_pin_cell-1/rod/") work: an id stays attached to its
-    Placement regardless of list order, unlike an array index.
-
-    Example — a fuel rod placed at its pin cell's center:
-        Placement(
-            id=PlacementID("rod"),
-            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-            ref=ComponentRef(type=ComponentType.CCOMPONENT, id=fuel_rod.id),
-        )
-    """
-
-    id: PlacementID
-    pose: GPose
-    ref: ComponentRef
-
-    def validate(self) -> None:
-        if not self.id:
-            raise ValueError("Placement id must be a non-empty string")
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "pose": self.pose.to_dict(),
-            "ref": self.ref.to_dict(),
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> Placement:
-        return cls(
-            id=PlacementID(data["id"]),
-            pose=GPose.from_dict(data["pose"]),
-            ref=ComponentRef.from_dict(data["ref"]),
         )
 
 
@@ -259,9 +251,9 @@ class CComponent(Versioned[CComponentID]):
             version_label="1",
             bounds=pin_cell_box.id,        # GRectanglePrism, 12.6 mm square
             fill=borated_water.id,
-            components=[
-                Placement(
-                    id=PlacementID("rod"),
+            placements=[
+                ComponentPlacement(
+                    id=ComponentPlacementID("rod"),
                     pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
                     ref=ComponentRef(
                         type=ComponentType.CCOMPONENT, id=fuel_rod.id
@@ -270,14 +262,14 @@ class CComponent(Versioned[CComponentID]):
             ],
         )
 
-    eq=False / id-based equality: `components` is a list, not hashable
+    eq=False / id-based equality: `placements` is a list, not hashable
     via the frozen-dataclass default — same pattern as GAddition/
     GSubtraction and MIsotopic/MMixture.
     """
 
     bounds: GeometryID
     fill: MaterialID | None = None
-    components: list[Placement]
+    placements: list[ComponentPlacement]
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, CComponent) and self.id == other.id
@@ -300,7 +292,7 @@ class CComponent(Versioned[CComponentID]):
             - at least 1 member. A composite with no members would be
                   only its fill; an empty lattice slot already covers
                   that case.
-            - unique Placement ids within this composite — ids are the
+            - unique ComponentPlacement ids within this composite — ids are the
                   path segments region addresses are built from.
             - no duplicate (ref, pose) pairs — the same component
                   placed twice at the exact same pose contributes
@@ -312,15 +304,15 @@ class CComponent(Versioned[CComponentID]):
                   composite's own id). Multi-hop cycles need registry
                   access and are ComponentService's job.
         """
-        if len(self.components) < 1:
+        if len(self.placements) < 1:
             raise ValueError("CComponent must have at least one component.")
 
         seen_ids: set[str] = set()
         seen_placements: set[tuple] = set()
-        for placement in self.components:
+        for placement in self.placements:
             if placement.id in seen_ids:
                 raise ValueError(
-                    f"duplicate Placement id {placement.id!r} in {self.id!r}"
+                    f"duplicate ComponentPlacement id {placement.id!r} in {self.id!r}"
                 )
             seen_ids.add(placement.id)
 
@@ -348,7 +340,7 @@ class CComponent(Versioned[CComponentID]):
             **super().to_dict(),
             "bounds": self.bounds,
             "fill": self.fill,
-            "components": [component.to_dict() for component in self.components],
+            "placements": [component.to_dict() for component in self.placements],
         }
 
     @classmethod
@@ -357,7 +349,8 @@ class CComponent(Versioned[CComponentID]):
             **cls._base_fields_from_dict(data),
             bounds=GeometryID(data["bounds"]),
             fill=MaterialID(data["fill"]) if data["fill"] is not None else None,
-            components=[
-                Placement.from_dict(component) for component in data["components"]
+            placements=[
+                ComponentPlacement.from_dict(component)
+                for component in data["placements"]
             ],
         )

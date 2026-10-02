@@ -11,11 +11,17 @@ from __future__ import annotations
 
 import pytest
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.component import Placement
+from pace.core.component import ComponentPlacement
 from pace.core.component_ref import ComponentType, ComponentRef
 from pace.core.geometry import GeometryType, GPose
-from pace.core.ids import CComponentID, GeometryID, MaterialID, PlacementID, ReactorID
-from pace.core.reactor import (
+from pace.core.ids import (
+    CComponentID,
+    GeometryID,
+    MaterialID,
+    ComponentPlacementID,
+    ReactorBlueprintID,
+)
+from pace.core.reactor_blueprint import (
     FlowInlet,
     FlowOutlet,
     NeutronBC,
@@ -42,8 +48,8 @@ def _reactor(version_label: str = "1", **kwargs) -> Reactor:
         family_name="pin_3d",
         version_label=version_label,
         bounds=GeometryID("pin_box-1"),
-        root=Placement(
-            id=PlacementID("pin"),
+        root=ComponentPlacement(
+            id=ComponentPlacementID("pin"),
             pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
             ref=ComponentRef(
                 type=ComponentType.CCOMPONENT, id=CComponentID("pin_cell-1")
@@ -70,7 +76,7 @@ def test_save_then_get_round_trips_every_field(pace_db: PaceDB):
 
 
 def test_get_returns_none_when_absent(pace_db: PaceDB):
-    assert pace_db.registry.reactors.get(ReactorID("nope-1")) is None
+    assert pace_db.registry.reactors.get(ReactorBlueprintID("nope-1")) is None
 
 
 def test_exists_and_family_exists(pace_db: PaceDB):

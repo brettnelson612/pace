@@ -1,7 +1,7 @@
 """
 tests/pace/core/test_lattice.py
 
-Covers: LatticePlacement validation and round-trip; the Lattice base
+Covers: LatticeElement validation and round-trip; the Lattice base
 (ABC enforcement, pitch constraint, lineage via Versioned, placement
 rules: at least one placement, one placement per ref, addresses in
 range, no address occupied twice, no self-reference); RectLattice
@@ -17,7 +17,7 @@ from pace.core.lattice import (
     HexLattice,
     HexOrientation,
     Lattice,
-    LatticePlacement,
+    LatticeElement,
     RectLattice,
     lattice_from_dict,
 )
@@ -37,11 +37,11 @@ def _rect(**overrides) -> RectLattice:
         "fill": WATER,
         "shape": (3, 3),
         "placements": [
-            LatticePlacement(
+            LatticeElement(
                 ref=FUEL,
                 addresses=((0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)),
             ),
-            LatticePlacement(ref=GUIDE, addresses=((1, 1),)),
+            LatticeElement(ref=GUIDE, addresses=((1, 1),)),
         ],
     }
     kwargs.update(overrides)
@@ -57,7 +57,7 @@ def _hex(**overrides) -> HexLattice:
         "num_rings": 2,
         "orientation": HexOrientation.FLAT_TOP,
         "placements": [
-            LatticePlacement(
+            LatticeElement(
                 ref=PIN, addresses=((0, 0),) + tuple((1, i) for i in range(6))
             )
         ],
@@ -67,29 +67,29 @@ def _hex(**overrides) -> HexLattice:
 
 
 # =============================================================================
-# LatticePlacement
+# LatticeElement
 # =============================================================================
 
 
 def test_placement_round_trip():
-    placement = LatticePlacement(ref=FUEL, addresses=((0, 0), (2, 1)))
-    assert LatticePlacement.from_dict(placement.to_dict()) == placement
+    placement = LatticeElement(ref=FUEL, addresses=((0, 0), (2, 1)))
+    assert LatticeElement.from_dict(placement.to_dict()) == placement
 
 
 def test_placement_requires_an_address():
     with pytest.raises(ValueError):
-        LatticePlacement(ref=FUEL, addresses=())
+        LatticeElement(ref=FUEL, addresses=())
 
 
 def test_placement_rejects_repeated_address():
     with pytest.raises(ValueError):
-        LatticePlacement(ref=FUEL, addresses=((0, 0), (0, 0)))
+        LatticeElement(ref=FUEL, addresses=((0, 0), (0, 0)))
 
 
 def test_placement_serializes_addresses_as_lists():
     """JSON object keys must be strings, so placements are a list of
     {ref, addresses} entries with addresses as [a, b] pairs."""
-    data = LatticePlacement(ref=FUEL, addresses=((0, 1),)).to_dict()
+    data = LatticeElement(ref=FUEL, addresses=((0, 1),)).to_dict()
     assert data["addresses"] == [[0, 1]]
 
 
@@ -135,23 +135,23 @@ def test_rejects_same_ref_in_two_placements():
     with pytest.raises(ValueError):
         _rect(
             placements=[
-                LatticePlacement(ref=FUEL, addresses=((0, 0),)),
-                LatticePlacement(ref=FUEL, addresses=((0, 1),)),
+                LatticeElement(ref=FUEL, addresses=((0, 0),)),
+                LatticeElement(ref=FUEL, addresses=((0, 1),)),
             ]
         )
 
 
 def test_rejects_address_outside_lattice():
     with pytest.raises(ValueError):
-        _rect(placements=[LatticePlacement(ref=FUEL, addresses=((3, 0),))])
+        _rect(placements=[LatticeElement(ref=FUEL, addresses=((3, 0),))])
 
 
 def test_rejects_address_occupied_twice():
     with pytest.raises(ValueError):
         _rect(
             placements=[
-                LatticePlacement(ref=FUEL, addresses=((0, 0),)),
-                LatticePlacement(ref=GUIDE, addresses=((0, 0),)),
+                LatticeElement(ref=FUEL, addresses=((0, 0),)),
+                LatticeElement(ref=GUIDE, addresses=((0, 0),)),
             ]
         )
 
@@ -159,12 +159,12 @@ def test_rejects_address_occupied_twice():
 def test_rejects_direct_self_reference():
     self_ref = ComponentRef(type=ComponentType.LATTICE, id="mini_lattice-1")
     with pytest.raises(ValueError):
-        _rect(placements=[LatticePlacement(ref=self_ref, addresses=((0, 0),))])
+        _rect(placements=[LatticeElement(ref=self_ref, addresses=((0, 0),))])
 
 
 def test_can_place_a_nested_lattice():
     inner = ComponentRef(type=ComponentType.LATTICE, id="inner_lattice-1")
-    lattice = _rect(placements=[LatticePlacement(ref=inner, addresses=((0, 0),))])
+    lattice = _rect(placements=[LatticeElement(ref=inner, addresses=((0, 0),))])
     assert lattice.occupant_at((0, 0)) == inner
 
 
@@ -175,7 +175,8 @@ def test_can_place_a_nested_lattice():
 
 def test_rect_addresses_are_row_major_top_row_first():
     lattice = _rect(
-        shape=(2, 3), placements=[LatticePlacement(ref=FUEL, addresses=((0, 0),))]
+        shape=(2, 3),
+        placements=[LatticeElement(ref=FUEL, addresses=((0, 0),))],
     )
     assert lattice.addresses() == [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
 
@@ -183,14 +184,17 @@ def test_rect_addresses_are_row_major_top_row_first():
 @pytest.mark.parametrize("shape", [(0, 3), (3, 0), (-1, 2)])
 def test_rect_shape_must_be_positive(shape):
     with pytest.raises(ValueError):
-        _rect(shape=shape, placements=[LatticePlacement(ref=FUEL, addresses=((0, 0),))])
+        _rect(
+            shape=shape,
+            placements=[LatticeElement(ref=FUEL, addresses=((0, 0),))],
+        )
 
 
 def test_occupant_at_and_empty_slots():
     lattice = _rect(
         placements=[
-            LatticePlacement(ref=FUEL, addresses=((0, 0), (0, 1))),
-            LatticePlacement(ref=GUIDE, addresses=((1, 1),)),
+            LatticeElement(ref=FUEL, addresses=((0, 0), (0, 1))),
+            LatticeElement(ref=GUIDE, addresses=((1, 1),)),
         ]
     )
     assert lattice.occupant_at((0, 1)) == FUEL
@@ -274,7 +278,7 @@ def test_hex_addresses_center_out_index_zero_first():
 def test_hex_three_rings_has_nineteen_slots():
     lattice = _hex(
         num_rings=3,
-        placements=[LatticePlacement(ref=PIN, addresses=((0, 0),))],
+        placements=[LatticeElement(ref=PIN, addresses=((0, 0),))],
     )
     assert len(lattice.addresses()) == 19
     assert len(lattice.empty_addresses()) == 18
@@ -282,12 +286,12 @@ def test_hex_three_rings_has_nineteen_slots():
 
 def test_hex_rejects_index_past_ring_size():
     with pytest.raises(ValueError):
-        _hex(placements=[LatticePlacement(ref=PIN, addresses=((1, 6),))])
+        _hex(placements=[LatticeElement(ref=PIN, addresses=((1, 6),))])
 
 
 def test_hex_rejects_ring_past_num_rings():
     with pytest.raises(ValueError):
-        _hex(placements=[LatticePlacement(ref=PIN, addresses=((2, 0),))])
+        _hex(placements=[LatticeElement(ref=PIN, addresses=((2, 0),))])
 
 
 def test_hex_requires_at_least_one_ring():
@@ -301,10 +305,10 @@ def test_hex_rejects_non_orientation():
 
 
 def test_hex_round_trip():
-    lattice = _hex(orientation=HexOrientation.POINTY_TOP)
+    lattice = _hex(orientation=HexOrientation.POINT_TOP)
     restored = HexLattice.from_dict(lattice.to_dict())
     assert restored.to_dict() == lattice.to_dict()
-    assert restored.orientation == HexOrientation.POINTY_TOP
+    assert restored.orientation == HexOrientation.POINT_TOP
 
 
 # =============================================================================

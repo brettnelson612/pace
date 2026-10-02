@@ -11,7 +11,7 @@ a DAO can't enforce on its own.
 - validate_*(): the same checks, standalone, for a check-before-save
   flow (e.g. a draft UI that shouldn't persist on every keystroke).
 - get_*(): fetch one row, unhydrated (embedded refs stay as bare ids).
-- get_resolved_model() / get_resolved_reactor(): fetch a full hydrated
+- get_resolved_component() / get_resolved_reactor(): fetch a full hydrated
   tree. Walks RegistryDB.references (cheap — just edges) to find
   everything needed, then does one batched fetch per kind. The result
   self-validates on construction (PaceObject), so a mismatch between
@@ -28,8 +28,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from pace.core.bounds import BOUNDS_GEOMETRY_TYPES, faces_for_geometry_type
-from pace.core.component import CComponent, LComponent
-from pace.core.component_ref import ComponentRef
+from pace.core.component import CComponent, LComponent, ComponentRef
 from pace.core.geometry import Geometry
 from pace.core.ids import (
     CComponentID,
@@ -37,13 +36,13 @@ from pace.core.ids import (
     LatticeID,
     LComponentID,
     MaterialID,
-    ReactorID,
+    ReactorBlueprintID,
 )
 from pace.core.lattice import Lattice
 from pace.core.material import Material
-from pace.core.reactor import Reactor
+from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
-from pace.core.resolved import ResolvedModel, ResolvedReactor
+from pace.core.resolved import ResolvedComponent, ResolvedReactorBlueprint
 from pace.db.registry_db import RegistryDB
 from pace.db.relational.reference import Reference
 from pace.services.reference_extraction import (
@@ -143,16 +142,20 @@ class ComponentService:
         self._registry.references.add_many(list(references))
         return lattice
 
-    def register_reactor(self, reactor: Reactor) -> Reactor:
+    def register_reactor_blueprint(
+        self, reactor_blueprint: ReactorBlueprint
+    ) -> ReactorBlueprint:
         self._reject_duplicate_family(
             self._registry.reactors.family_exists,
-            reactor.family_name,
-            reactor.derived_from,
+            reactor_blueprint.family_name,
+            reactor_blueprint.derived_from,
         )
-        self.validate_reactor(reactor)
-        self._registry.reactors.save(reactor)
-        self._registry.references.add_many(list(extract_reactor_references(reactor)))
-        return reactor
+        self.validate_reactor_blueprint(reactor_blueprint)
+        self._registry.reactors.save(reactor_blueprint)
+        self._registry.references.add_many(
+            list(extract_reactor_references(reactor_blueprint))
+        )
+        return reactor_blueprint
 
     # -------------------------------------------------------------
     # Retrieval — single row, unhydrated
@@ -173,40 +176,46 @@ class ComponentService:
     def get_lattice(self, lattice_id: LatticeID) -> Lattice | None:
         return self._registry.lattices.get(lattice_id)
 
-    def get_reactor(self, reactor_id: ReactorID) -> Reactor | None:
+    def get_reactor(self, reactor_id: ReactorBlueprintID) -> ReactorBlueprint | None:
         return self._registry.reactors.get(reactor_id)
 
     # -------------------------------------------------------------
     # Retrieval — fully hydrated
     # -------------------------------------------------------------
 
-    def get_resolved_model(self, root: ComponentRef) -> ResolvedModel:
+    def get_resolved_component(self, root: ComponentRef) -> ResolvedComponent:
         """Hydrate the full transitive tree a root component depends on.
 
         1. Walk RegistryDB.references to find every id needed (cheap —
            edges only, no object reconstruction).
         2. Batch-fetch the real objects, one query per kind.
 
-        Returns a ResolvedModel, which self-validates on construction:
+        Returns a ResolvedComponent, which self-validates on construction:
         if the reference index and the fetched objects ever disagree
         (e.g. something was deleted between the walk and the fetch),
         construction fails loudly rather than returning a partial tree.
         """
         needed = self._walk_references(root.referenceable_type, root.id)
-        return self._build_resolved_model(root, needed)
+        return self._build_resolved_component(root, needed)
 
-    def get_resolved_reactor(self, reactor_id: ReactorID) -> ResolvedReactor:
+    def get_resolved_reactor_blueprint(
+        self, reactor_blueprint_id: ReactorBlueprintID
+    ) -> ResolvedReactorBlueprint:
         """Hydrate a Reactor and everything it transitively references —
         its root's whole tree plus its own bounds, fill, and every
         material named in its operating state. This is the input the
         solver adapters take."""
-        reactor = self._registry.reactors.get(reactor_id)
+        reactor = self._registry.reactors.get(reactor_blueprint_id)
         if reactor is None:
-            raise DanglingReferenceError(f"reactor {reactor_id!r} does not exist")
-        needed = self._walk_references(ReferenceableType.REACTOR, reactor_id)
-        return ResolvedReactor(
-            reactor=reactor,
-            model=self._build_resolved_model(reactor.root.ref, needed),
+            raise DanglingReferenceError(
+                f"reactor {reactor_blueprint_id!r} does not exist"
+            )
+        needed = self._walk_references(
+            ReferenceableType.REACTOR_BLUEPRINT, reactor_blueprint_id
+        )
+        return ResolvedReactorBlueprint(
+            reactor_blueprint=reactor,
+            rc=self._build_resolved_component(reactor.root.ref, needed),
         )
 
     def _walk_references(
@@ -229,10 +238,10 @@ class ComponentService:
                     frontier.append((edge_type, edge_id))
         return needed
 
-    def _build_resolved_model(
+    def _build_resolved_component(
         self, root: ComponentRef, needed: dict[ReferenceableType, set[str]]
-    ) -> ResolvedModel:
-        return ResolvedModel(
+    ) -> ResolvedComponent:
+        return ResolvedComponent(
             root=root,
             ccomponents=self._registry.ccomponents.get_many(
                 [CComponentID(i) for i in needed[ReferenceableType.CCOMPONENT]]
@@ -280,31 +289,31 @@ class ComponentService:
         """Confirm the fill and every placed component resolve."""
         self.validate_references(list(extract_lattice_references(lattice)))
 
-    def validate_reactor(self, reactor: Reactor) -> None:
+    def validate_reactor_blueprint(self, reactor_blueprint: ReactorBlueprint) -> None:
         """Confirm every reference resolves, the bounds geometry is a
         valid bounds shape, and the boundary conditions match its faces:
         neutron conditions on exactly the shape's faces; thermal and
         flow conditions only on faces the shape has."""
-        self.validate_references(list(extract_reactor_references(reactor)))
-        geometry = self._require_bounds_shape(reactor.bounds)
+        self.validate_references(list(extract_reactor_references(reactor_blueprint)))
+        geometry = self._require_bounds_shape(reactor_blueprint.bounds)
         faces = set(faces_for_geometry_type(geometry.geometry_type))
 
-        neutron_faces = set(reactor.neutron_bcs)
+        neutron_faces = set(reactor_blueprint.neutron_bcs)
         if neutron_faces != faces:
             missing = sorted(f.value for f in faces - neutron_faces)
             extra = sorted(f.value for f in neutron_faces - faces)
             raise InvalidBoundsError(
-                f"Reactor {reactor.id!r} neutron conditions must cover exactly "
+                f"ReactorBlueprint {reactor_blueprint.id!r} neutron conditions must cover exactly "
                 f"the faces of its bounds: missing {missing}, not a face {extra}"
             )
         for label, conditions in (
-            ("thermal", reactor.thermal_bcs),
-            ("flow", reactor.flow_bcs),
+            ("thermal", reactor_blueprint.thermal_bcs),
+            ("flow", reactor_blueprint.flow_bcs),
         ):
             extra_faces = set(conditions) - faces
             if extra_faces:
                 raise InvalidBoundsError(
-                    f"Reactor {reactor.id!r} has {label} conditions on faces its "
+                    f"ReactorBlueprint {reactor_blueprint.id!r} has {label} conditions on faces its "
                     f"bounds don't have: {sorted(f.value for f in extra_faces)}"
                 )
 
@@ -356,8 +365,8 @@ class ComponentService:
             ReferenceableType.LATTICE: lambda: self._registry.lattices.exists(
                 LatticeID(target_id)
             ),
-            ReferenceableType.REACTOR: lambda: self._registry.reactors.exists(
-                ReactorID(target_id)
+            ReferenceableType.REACTOR_BLUEPRINT: lambda: self._registry.reactors.exists(
+                ReactorBlueprintID(target_id)
             ),
         }
         exists = exists_by_type.get(reference.target_type)
