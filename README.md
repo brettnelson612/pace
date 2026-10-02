@@ -1,6 +1,6 @@
 # PACE
 [![CI](https://img.shields.io/github/actions/workflow/status/brettnelson612/pace/ci.yml?branch=main&label=CI&logo=github)](https://github.com/brettnelson612/pace/actions/workflows/ci.yml)
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue)](python/pyproject.toml)
+[![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https://raw.githubusercontent.com/brettnelson612/pace/main/python/pyproject.toml)](python/pyproject.toml)
 [![License](https://img.shields.io/github/license/brettnelson612/pace)](LICENSE)
 [![Pixi](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
