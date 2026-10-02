@@ -1,6 +1,9 @@
 # PACE
 [![CI](https://github.com/brettnelson612/pace/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/brettnelson612/pace/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/brettnelson612/pace/branch/main/graph/badge.svg)](https://codecov.io/gh/brettnelson612/pace)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue)](python/pyproject.toml)
+[![License](https://img.shields.io/github/license/brettnelson612/pace)](LICENSE)
+[![Pixi](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 **PACE (Physics-Aware Coupled Emulator)** is a reactor modeling platform that sits above open-source physics solvers. PACE will allow a user to build a versioned, composable model, then turn that model into inputs for OpenMC, MOOSE and Cardinal. Once a model is complete, PACE will allow a user to run physics simulations + V&V and turn the resulting output into datasets and surrogate models.
 
