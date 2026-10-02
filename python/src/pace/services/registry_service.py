@@ -163,6 +163,7 @@ class RegistryService:
         transaction. If another writer registers the same id between
         the check and the write, the primary key rejects the insert and
         that is reported as VersionAlreadyExistsError too."""
+
         dao = self._registry.dao_for(referenceable_type)
         self._reject_existing_id(dao, model)
         self._validate_lineage(dao, model)
@@ -257,7 +258,8 @@ class RegistryService:
     ) -> ResolvedReactorBlueprint:
         """Hydrate a ReactorBlueprint and everything it transitively
         references — its root's whole tree plus its own bounds and
-        fill. This is the model input the solver adapters take."""
+        fill. This is the model input the solver adapters take.
+        """
         reactor_blueprint = self._registry.reactor_blueprints.get(reactor_blueprint_id)
         if reactor_blueprint is None:
             raise DanglingReferenceError(
@@ -347,13 +349,13 @@ class RegistryService:
             extract_reactor_blueprint_references(reactor_blueprint)
         )
         geometry = self._require_bounds_shape(reactor_blueprint.bounds)
-        faces = set(faces_for_geometry_type(geometry.geometry_type))
+        bounds_faces = set(faces_for_geometry_type(geometry.geometry_type))
         owner = f"ReactorBlueprint {reactor_blueprint.id!r}"
 
         neutron_faces = set(reactor_blueprint.neutron_bcs)
-        if neutron_faces != faces:
-            missing = sorted(face.value for face in faces - neutron_faces)
-            extra = sorted(face.value for face in neutron_faces - faces)
+        if neutron_faces != bounds_faces:
+            missing = sorted(face.value for face in bounds_faces - neutron_faces)
+            extra = sorted(face.value for face in neutron_faces - bounds_faces)
             raise InvalidBoundsError(
                 f"{owner} neutron conditions must cover exactly the faces of "
                 f"its bounds: missing {missing}, not a face {extra}"
@@ -362,7 +364,7 @@ class RegistryService:
             ("thermal", reactor_blueprint.thermal_bcs),
             ("flow", reactor_blueprint.flow_bcs),
         ):
-            extra_faces = set(conditions) - faces
+            extra_faces = set(conditions) - bounds_faces
             if extra_faces:
                 raise InvalidBoundsError(
                     f"{owner} has {label} conditions on faces its bounds don't "
