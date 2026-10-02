@@ -9,9 +9,9 @@ adapters consume:
           references, as flat id-keyed maps. A component reused at many
           positions (one pin cell in 264 lattice slots) appears once in
           its map, referenced by id from wherever it's used.
-    - ResolvedReactorBlueprint — a Reactor plus the ResolvedComponent of its root,
-          whose maps also hold the Reactor's own bounds geometry, fill
-          material, and every material its operating state names.
+    - ResolvedReactorBlueprint — a ReactorBlueprint plus the
+          ResolvedComponent of its root, whose maps also hold the
+          blueprint's own bounds geometry and fill material.
 
 Neither is registered or versioned: they're derived, transient views
 over already-persisted data. Both self-validate on construction

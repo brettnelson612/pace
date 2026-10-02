@@ -15,6 +15,10 @@ the earlier decision to avoid standing up and operating a Postgres
 server for a solo build. The connection string is the only thing that
 changes if/when this migrates to Postgres later; SQLAlchemy abstracts
 the rest.
+
+SQLite ignores foreign-key constraints unless `PRAGMA foreign_keys=ON`
+is set on each connection; SqlDB sets it on every new SQLite
+connection so the schema's foreign keys are enforced.
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from pace.db.relational.base import Base
@@ -40,6 +44,8 @@ class SqlDB:
             {"check_same_thread": False} if db_url.startswith("sqlite") else {}
         )
         self._engine = create_engine(db_url, echo=echo, connect_args=connect_args)
+        if db_url.startswith("sqlite"):
+            event.listen(self._engine, "connect", _enable_sqlite_foreign_keys)
         self._session_factory = sessionmaker(bind=self._engine, expire_on_commit=False)
 
     def create_all(self) -> None:
@@ -67,3 +73,9 @@ class SqlDB:
             raise
         finally:
             session.close()
+
+
+def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()

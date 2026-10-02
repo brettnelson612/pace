@@ -8,6 +8,7 @@ from pace.db.relational.reactor_blueprint import (
     ReactorBlueprintRow,
 )
 from pace.db.relational.reference import ReferenceDAO, ReferenceRow
+from pace.db.relational.versioned_dao import PolymorphicVersionedDAO, VersionedDAO
 
 __all__ = [
     "CComponentDAO",
@@ -20,8 +21,10 @@ __all__ = [
     "LatticeRow",
     "MaterialDAO",
     "MaterialRow",
+    "PolymorphicVersionedDAO",
     "ReactorBlueprintDAO",
     "ReactorBlueprintRow",
     "ReferenceDAO",
     "ReferenceRow",
+    "VersionedDAO",
 ]

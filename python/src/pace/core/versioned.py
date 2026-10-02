@@ -2,7 +2,8 @@
 pace/core/versioned.py
 
 Versioned — shared identity + three-state lineage for every versioned
-aggregate (Geometry, Material, LComponent, CComponent, Lattice).
+aggregate (Geometry, Material, LComponent, CComponent, Lattice,
+ReactorBlueprint).
 Generic over the concrete NewType each subclass uses for its own id
 (GeometryID, MaterialID, ...) — id/derived_from resolve to the right
 type per subclass via Versioned[GeometryID], etc.
@@ -25,6 +26,12 @@ compositions per pin/layer/ring) live in run output as state
 snapshots keyed by region address. The registry holds designs that
 are uniform within each region; promoting run state into it is an
 explicit, lossy choice, never a side effect of running.
+
+Equality: two versioned objects are equal when they are the same
+concrete type with the same id, and hash by id. Every subclass must be
+declared with @dataclass(..., eq=False); with the default eq=True the
+dataclass decorator generates a field-based __eq__ on the subclass that
+replaces this one.
 """
 
 from __future__ import annotations
@@ -38,7 +45,7 @@ from pace.core.pace_object import PaceObject
 IDType = TypeVar("IDType")
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class Versioned(PaceObject, Generic[IDType]):
     id: IDType
     family_name: str
@@ -46,6 +53,16 @@ class Versioned(PaceObject, Generic[IDType]):
     derived_from: IDType | None = None
     gt_run_id: GTRunID | None = None
     user_edit: bool = False
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, Versioned)
+            and type(self) is type(other)
+            and self.id == other.id
+        )
+
+    def __hash__(self) -> int:
+        return hash(self.id)
 
     @staticmethod
     def build_id(family_name: str, version_label: str) -> IDType:

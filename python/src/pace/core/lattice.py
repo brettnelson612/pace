@@ -24,7 +24,7 @@ spanning the whole lattice, which would give every pin's coolant one
 shared temperature and density.
 
 An occupant's bounds must fit inside its slot (checked by
-ComponentService, since it needs the referenced geometries); the
+RegistryService, since it needs the referenced geometries); the
 lattice fill covers the rest of the slot. Lattices are 2D: axial
 variation comes from stacking in the parent, and every occupant shares
 one height.
@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import ClassVar, Self
 
 from pace.core.component import ComponentType, ComponentRef
@@ -48,14 +48,14 @@ from pace.core.versioned import Versioned
 LatticeAddress = tuple[int, int]
 
 
-class LatticeType(str, Enum):
+class LatticeType(StrEnum):
     """Discriminator tag for Lattice subclasses."""
 
     RECT = "rect"
     HEX = "hex"
 
 
-class HexOrientation(str, Enum):
+class HexOrientation(StrEnum):
     """Which way a hexagonal lattice's slots point.
 
     Values:
@@ -118,8 +118,7 @@ class Lattice(Versioned[LatticeID]):
     (for hex: across flats). fill is the material in every empty slot
     and around every occupant.
 
-    Identity/lineage are inherited from Versioned. eq=False / id-based
-    equality: `elements` is a list — same pattern as CComponent.
+    Identity, lineage and equality are inherited from Versioned.
     """
 
     lattice_type: ClassVar[LatticeType]
@@ -132,12 +131,6 @@ class Lattice(Versioned[LatticeID]):
         super().__init_subclass__(**kwargs)
         if "lattice_type" in cls.__dict__:
             LATTICE_TYPE_TO_CLASS[cls.lattice_type.value] = cls
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, Lattice) and self.id == other.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
 
     @abstractmethod
     def addresses(self) -> list[LatticeAddress]:

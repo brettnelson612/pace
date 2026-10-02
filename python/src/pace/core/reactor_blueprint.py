@@ -1,13 +1,14 @@
 """
 pace/core/reactor_blueprint.py
 
-Reactor — the top-level, simulatable model: the region of space being
+ReactorBlueprint — the top-level model: the region of space being
 modeled (`bounds`), what fills any space the root component leaves
-(`fill`), the root component placed inside it, and the operating state
-the solvers start from.
+(`fill`), the root component placed inside it, and the boundary
+conditions on the faces of the bounds. Operating conditions (power,
+pressure, temperatures, inlet flow) are not part of the blueprint.
 
 Everything spatially varying (temperature and density fields, burned
-compositions) is run state, not part of the Reactor.
+compositions) is run state, not part of the blueprint.
 
 Every kind of boundary condition is keyed by BoundsFace (see bounds.py),
 a named face of the bounds shape. That includes coolant flow: the inlet
@@ -31,7 +32,7 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
     """The top-level, simulatable model.
 
     - bounds: the region being modeled (GRectanglePrism, GHexPrism or
-          GCylinder — checked by ComponentService).
+          GCylinder — checked by RegistryService).
     - fill: the material occupying space inside the bounds that the root
           doesn't. Usually None (e.g. VERA problem 2, whose assembly
           bounds equal the Reactor's); needed for things like bypass
@@ -39,11 +40,11 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
           root's nested composites — each composite owns its own fill.
     - root: the placed root component (a ComponentPlacement, so it carries a
           ComponentRef plus a pose).
-    - neutron_bcs: one condition per face of the bounds. ComponentService
+    - neutron_bcs: one condition per face of the bounds. RegistryService
           checks the keys are exactly the faces of the bounds shape.
     - thermal_bcs: optional; any face not listed is adiabatic.
-    - flow_bcs: optional; if given, exactly one FlowInlet face and one
-          FlowOutlet face.
+    - flow_bcs: optional; if given, exactly one FlowBC.INLET face and
+          one FlowBC.OUTLET face.
 
     Example — VERA problem 1 (2D, reflective on every face):
         Reactor.create(
@@ -62,8 +63,6 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
                 NeutronBC.REFLECTIVE,
             ),
         )
-
-    eq=False / id-based equality: several fields are dicts.
     """
 
     description: str = ""
@@ -74,19 +73,13 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
     thermal_bcs: dict[BoundsFace, ThermalBC] = field(default_factory=dict)
     flow_bcs: dict[BoundsFace, FlowBC] = field(default_factory=dict)
 
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, ReactorBlueprint) and self.id == other.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
-
     def validate(self) -> None:
         super().validate()
         self._validate_boundary_conditions()
 
     def _validate_boundary_conditions(self) -> None:
         """Within-object checks. Whether the faces match the bounds
-        shape needs the bounds geometry — ComponentService's job.
+        shape needs the bounds geometry — RegistryService's job.
 
         Rules enforced:
             - at least one neutron condition.

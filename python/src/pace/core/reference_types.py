@@ -15,10 +15,10 @@ ComponentType (see component_ref.py).
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ReferenceableType(str, Enum):
+class ReferenceableType(StrEnum):
     GEOMETRY = "geometry"
     MATERIAL = "material"
     LCOMPONENT = "lcomponent"

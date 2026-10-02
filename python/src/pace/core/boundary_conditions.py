@@ -2,10 +2,10 @@
 pace/core/boundary_conditions.py
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class NeutronBC(str, Enum):
+class NeutronBC(StrEnum):
     """What happens to a neutron reaching a face of the Reactor's bounds.
 
     Values (OpenMC's boundary types, minus 'transmission', which is the
@@ -29,7 +29,7 @@ class NeutronBC(str, Enum):
     WHITE = "white"
 
 
-class ThermalBC(str, Enum):
+class ThermalBC(StrEnum):
     """Heat-conduction condition on a face of the Reactor's bounds.
 
     Values:
@@ -43,12 +43,12 @@ class ThermalBC(str, Enum):
     ADIABATIC = "adiabatic"
 
 
-class FlowBC(str, Enum):
+class FlowBC(StrEnum):
     """Flow condition on a face of the ReactorBlueprint's bounds.
 
-    This simply specifies whether a face is an inlet or an outlet;
-    no specification of any flow-related operating state parameters.
-    See operating_state.py for those.
+    Marks a face as the inlet or the outlet. Flow rate, inlet
+    temperature and system pressure are operating conditions (see
+    operating_conditions.py).
     """
 
     INLET = "inlet"

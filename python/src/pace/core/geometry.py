@@ -17,7 +17,7 @@ GAddition.units, etc.) actually points at.
 family_name is NOT unique per row — every version in a family shares
 it. Rejecting a duplicate family_name is enforced only at "create a
 brand-new family" (v1, derived_from=None) time, and that's application
-logic (ComponentService), not a database constraint, since the column
+logic (RegistryService), not a database constraint, since the column
 legitimately repeats across many rows.
 
 What "geometry" means physically here: a geometry is a description of
@@ -46,7 +46,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import ClassVar, Self
 
 from pace.core.constraints import Constraint, validate_fields
@@ -66,7 +66,7 @@ MIN_GEO_LENGTH_M = 0.0
 MAX_GEO_LENGTH_M = 1000.0
 
 
-class GeometryType(Enum):
+class GeometryType(StrEnum):
     """Discriminator tag for Geometry subclasses.
 
     Values:
@@ -101,7 +101,7 @@ class GeometryType(Enum):
 GEOMETRY_TYPE_TO_CLASS: dict[str, type[Geometry]] = {}
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class Geometry(Versioned[GeometryID]):
     """General interface for a specific geometry version.
 
@@ -150,7 +150,7 @@ class Geometry(Versioned[GeometryID]):
         return {"type": type_value, **super().to_dict()}
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class GCylinder(Geometry):
     """A basic solid cylinder — e.g. a fuel pellet, a fuel pin
     (without cladding), or a simple control-rod slug."""
@@ -188,7 +188,7 @@ class GCylinder(Geometry):
         pass
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class GAnnulus(Geometry):
     """An annulus (ring cross-section) shape — e.g. a fuel-cladding
     gap, or the cladding tube itself (inner_radius_m = fuel outer
@@ -246,7 +246,7 @@ class GAnnulus(Geometry):
             )
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class GHexPrism(Geometry):
     """A hexagonal prism shape — e.g. a hexagonal fuel assembly duct,
     the standard cross-section for SFR and HTGR lattice designs.
@@ -290,7 +290,7 @@ class GHexPrism(Geometry):
         pass
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class GSphere(Geometry):
     """A sphere shape — e.g. a pebble in a pebble-bed reactor design,
     or a spherical fuel/absorber element."""
@@ -320,7 +320,7 @@ class GSphere(Geometry):
         pass
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class GRectanglePrism(Geometry):
     """A basic rectangular prism shape — e.g. a square/rectangular
     assembly duct, a structural block, or a plate-type fuel element."""
@@ -408,7 +408,7 @@ class GPose(PaceObject):
         )
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class GAddition(Geometry):
     """An Addition Geometry; a union of geometries — PACE's CSG
     "union" operator.
@@ -436,22 +436,10 @@ class GAddition(Geometry):
         )
     Note: the ids inside `units` reference OTHER, already-existing
     Geometrys — unaffected by this class's own identity scheme.
-
-    __eq__/__hash__ are identity-based via self.id (rather than the
-    dataclass-generated field-based default) since `units` is a list
-    of tuples containing GPose objects — not a natural fit for
-    value-based equality/hashing the way a scalar-only Geometry
-    subclass (e.g. GSphere) is.
     """
 
     geometry_type: ClassVar[GeometryType] = GeometryType.ADDITION
     units: list[tuple[GeometryID, GPose]]
-
-    def __eq__(self, value: object) -> bool:
-        return isinstance(value, GAddition) and self.id == value.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
 
     def to_dict(self) -> dict:
         return {
@@ -495,7 +483,7 @@ class GAddition(Geometry):
             seen.add(key)
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class GSubtraction(Geometry):
     """A Subtraction Geometry — PACE's CSG "complement"/"difference"
     operator.
@@ -520,20 +508,11 @@ class GSubtraction(Geometry):
         )
     Note: the ids inside `base`/`cuts` reference OTHER, already-existing
     Geometrys — unaffected by this class's own identity scheme.
-
-    __eq__/__hash__ are identity-based via self.id, same reasoning as
-    GAddition.
     """
 
     geometry_type: ClassVar[GeometryType] = GeometryType.SUBTRACTION
     base: tuple[GeometryID, GPose]
     cuts: list[tuple[GeometryID, GPose]]
-
-    def __eq__(self, value: object) -> bool:
-        return isinstance(value, GSubtraction) and self.id == value.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
 
     def to_dict(self) -> dict:
         base_id, base_pos = self.base

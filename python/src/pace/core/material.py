@@ -16,7 +16,7 @@ Material.build_id()).
 family_name is NOT unique per row — every version in a family shares
 it. Rejecting a duplicate family_name is enforced only at "create a
 brand-new family" (v1, derived_from=None) time, and that's application
-logic (ComponentService), not a database constraint.
+logic (RegistryService), not a database constraint.
 
 What "material" means physically here: a material is a description of
 what substance occupies a region of space — which isotopes are
@@ -25,8 +25,8 @@ plus how its properties respond to conditions (conductivity and
 specific heat as functions of temperature). It is uniform across every
 region it fills. It says nothing about shape (that's Geometry) or about
 the actual temperature/density at any point during a run: spatially
-varying values are run state (initial values on the Reactor's
-OperatingState; converged fields in run output), never stored here.
+varying values are run state (initial values in OperatingConditions;
+converged fields in run output), never stored here.
 """
 
 from __future__ import annotations
@@ -34,68 +34,60 @@ from __future__ import annotations
 import math
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import ClassVar, Literal, Self
+from enum import StrEnum
+from typing import ClassVar, Self
 
 from pace.core.constraints import Constraint, validate_fields
 from pace.core.ids import MaterialID
 from pace.core.pace_object import PaceObject
 from pace.core.versioned import Versioned
 
-"""
-Percentage Types:
-    - ao: atomic percent. The number of atoms of a specific
-          nuclide/element divided by the total number of atoms in the
-          material. This is the natural unit for expressing chemical/
-          stoichiometric ratios — e.g. UO2's 1:2 uranium-to-oxygen atom
-          ratio is exact and unambiguous in "ao" terms.
-    - wo: weight percent. The mass of a specific nuclide/element
-          divided by the total mass of the material. Natural for
-          compositions given by measured or spec'd mass fractions —
-          e.g. a structural alloy's constituent metals by weight.
 
-Note: percentages here (on MIsotopic) are RELATIVE WEIGHTS, not
-absolute percentages that must sum to 100. OpenMC normalizes them
-internally against the material's separately-specified density.
-Example: {"U": 1.0, "O": 2.0} under "ao" means a 1:2 atom ratio
-(UO2's stoichiometry), not "1% U, 2% O with 97% unaccounted for."
+class PercentType(StrEnum):
+    """How a composition's component weights are expressed.
 
-percent_type carries a DIFFERENT constraint on MMixture (see that
-class) despite sharing the same name and vocabulary — this mirrors
-OpenMC's own choice to reuse percent_type identically across
-add_element()/add_nuclide() and mix_materials(), even though the
-accompanying values are constrained differently in each case.
-"""
-PercentType = Literal["ao", "wo"]
+    Values:
+        - ao: atomic percent. The number of atoms of a specific
+              nuclide/element divided by the total number of atoms in
+              the material. The natural unit for chemical/
+              stoichiometric ratios — e.g. UO2's 1:2 uranium-to-oxygen
+              atom ratio is exact and unambiguous in "ao" terms.
+        - wo: weight percent. The mass of a specific nuclide/element
+              divided by the total mass of the material. Natural for
+              compositions given by measured or spec'd mass fractions —
+              e.g. a structural alloy's constituent metals by weight.
 
-# MMixture-only: "vo" (volume percent) is meaningful for mixing whole
-# materials together (OpenMC's mix_materials() supports it natively)
-# but not for MIsotopic's per-nuclide composition, where a nuclide
-# doesn't independently occupy a "volume" — so this is a separate
-# alias from PercentType, not an extension of it, to keep "vo" from
-# looking valid on MIsotopic.percent_type too.
-MixPercentType = Literal["ao", "wo", "vo"]
+    On MIsotopic the weights are RELATIVE, not absolute percentages
+    that must sum to 100: {"U": 1.0, "O": 2.0} under "ao" means a 1:2
+    atom ratio. On MMixture the same vocabulary carries a stricter
+    constraint (true fractions summing to 1) — see that class. This
+    mirrors OpenMC reusing percent_type across add_element()/
+    add_nuclide() and mix_materials().
+    """
 
-"""
-Density Units:
-    - g/cm3: grams per cubic centimeter. The common general-purpose
-          density unit.
-    - kg/m3: kilograms per cubic meter.
-    - atom/b-cm: atoms per barn-centimeter — atomic number density
-          expressed in units directly compatible with microscopic
-          cross sections (a barn is 10^-24 cm^2, the standard unit
-          nuclear cross sections are quoted in). Expressing density
-          this way means the macroscopic cross section is just
-          N * sigma with no unit conversion — a convenience for the
-          transport-physics side of the pipeline, not a general
-          density unit. Only worth using if you already have
-          atom-density numbers in this form (e.g. from a cross-section
-          library); otherwise prefer g/cm3 with a components dict.
-"""
-DensityUnit = Literal["g/cm3", "kg/m3", "atom/b-cm"]
+    AO = "ao"
+    WO = "wo"
 
 
-class MaterialType(str, Enum):
+class DensityUnit(StrEnum):
+    """Unit of a material's reference density.
+
+    Values:
+        - g/cm3: grams per cubic centimeter.
+        - kg/m3: kilograms per cubic meter.
+        - atom/b-cm: atoms per barn-centimeter — atomic number density
+              in units directly compatible with microscopic cross
+              sections (a barn is 10^-24 cm^2), so a macroscopic cross
+              section is N * sigma with no conversion. Use only when
+              atom densities are already in this form.
+    """
+
+    G_PER_CM3 = "g/cm3"
+    KG_PER_M3 = "kg/m3"
+    ATOM_PER_B_CM = "atom/b-cm"
+
+
+class MaterialType(StrEnum):
     """Discriminator tag for Material subclasses.
 
     Values:
@@ -171,7 +163,7 @@ class TabulatedProperty(PaceObject):
     W/(m*K) for thermal_conductivity) — not enforced here.
     """
 
-    points: list[tuple[float, float]]
+    points: tuple[tuple[float, float], ...]
 
     def validate(self) -> None:
         if len(self.points) < 1:
@@ -185,7 +177,7 @@ class TabulatedProperty(PaceObject):
 
     @classmethod
     def from_dict(cls, data: dict) -> TabulatedProperty:
-        return cls(points=[(t, v) for t, v in data["points"]])
+        return cls(points=tuple((t, v) for t, v in data["points"]))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -241,6 +233,12 @@ class MaterialComponentEntry(PaceObject):
 
     def validate(self):
         validate_fields(self)
+        if self.enrichment_type is not None and not isinstance(
+            self.enrichment_type, PercentType
+        ):
+            raise TypeError(
+                f"enrichment_type must be a PercentType, got {self.enrichment_type!r}"
+            )
         self._validate_enrichment_fields()
 
     def to_dict(self) -> dict:
@@ -248,7 +246,9 @@ class MaterialComponentEntry(PaceObject):
             "percent": self.percent,
             "enrichment": self.enrichment,
             "enrichment_target": self.enrichment_target,
-            "enrichment_type": self.enrichment_type,
+            "enrichment_type": (
+                self.enrichment_type.value if self.enrichment_type is not None else None
+            ),
         }
 
     @classmethod
@@ -257,7 +257,11 @@ class MaterialComponentEntry(PaceObject):
             percent=data["percent"],
             enrichment=data.get("enrichment"),
             enrichment_target=data.get("enrichment_target"),
-            enrichment_type=data.get("enrichment_type"),
+            enrichment_type=(
+                PercentType(data["enrichment_type"])
+                if data.get("enrichment_type") is not None
+                else None
+            ),
         )
 
     def _validate_enrichment_fields(self):
@@ -283,7 +287,7 @@ class MaterialComponentEntry(PaceObject):
             )
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class Material(Versioned[MaterialID]):
     """
     Shared base for concrete composition types (MIsotopic, MMixture,
@@ -301,8 +305,8 @@ class Material(Versioned[MaterialID]):
     same nuclide inventory behaves differently at different
     temperatures only because of Doppler broadening of cross sections,
     not because the material itself has changed. Temperature is
-    therefore supplied at translation time (from the Reactor's operating
-    state, or from a run's fields), never stored as a field here.
+    therefore supplied at translation time (from OperatingConditions,
+    or from a run's fields), never stored as a field here.
 
     density_value on concrete subclasses is the REFERENCE density the
     composition is specified at. For solids it is also the value the
@@ -448,24 +452,18 @@ class MIsotopic(Material):
                     percent=1.0,
                     enrichment=3.2,
                     enrichment_target="U235",
-                    enrichment_type="wo",
+                    enrichment_type=PercentType.WO,
                 ),
                 "O": MaterialComponentEntry(percent=2.0),
             },
-            percent_type="ao",
+            percent_type=PercentType.AO,
             density_value=10.3,
-            density_unit="g/cm3",
+            density_unit=DensityUnit.G_PER_CM3,
         )
     Reading this: one uranium atom for every two oxygen atoms (the
     UO2 stoichiometry, "ao"), with the uranium enriched to 3.2 wo%
     U235 — i.e. standard reactor-grade fuel — at a total density of
     10.3 g/cm3.
-
-    eq=False / id-based equality: `components` is a dict (unhashable,
-    and not meaningfully comparable by value for a frozen-dataclass
-    default __eq__ the way scalar-only Geometry subclasses are) —
-    same reasoning, and same pattern (isinstance check + self.id ==
-    other.id, hash(self.id)), as GAddition/GSubtraction.
     """
 
     material_type: ClassVar[MaterialType] = MaterialType.ISOTOPIC
@@ -473,12 +471,6 @@ class MIsotopic(Material):
     percent_type: PercentType
     density_value: float = field(metadata={"constraint": Constraint.POSITIVE})
     density_unit: DensityUnit
-
-    def __eq__(self, value: object) -> bool:
-        return isinstance(value, MIsotopic) and self.id == value.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
 
     def _validate_composition(self) -> None:
         """Enforce the two composition-level physical rules:
@@ -495,6 +487,14 @@ class MIsotopic(Material):
                   enrich an element's isotope mix, you don't "enrich" an
                   already-exact isotope.
         """
+        if not isinstance(self.percent_type, PercentType):
+            raise TypeError(
+                f"percent_type must be a PercentType, got {self.percent_type!r}"
+            )
+        if not isinstance(self.density_unit, DensityUnit):
+            raise TypeError(
+                f"density_unit must be a DensityUnit, got {self.density_unit!r}"
+            )
         if not self.components:
             raise ValueError("MIsotopic requires at least one component")
 
@@ -515,9 +515,9 @@ class MIsotopic(Material):
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
-            "percent_type": self.percent_type,
+            "percent_type": self.percent_type.value,
             "density_value": self.density_value,
-            "density_unit": self.density_unit,
+            "density_unit": self.density_unit.value,
             "components": {
                 name: entry.to_dict() for name, entry in self.components.items()
             },
@@ -527,9 +527,9 @@ class MIsotopic(Material):
     def from_dict(cls, data: dict) -> MIsotopic:
         return cls(
             **cls._material_fields_from_dict(data),
-            percent_type=data["percent_type"],
+            percent_type=PercentType(data["percent_type"]),
             density_value=data["density_value"],
-            density_unit=data["density_unit"],
+            density_unit=DensityUnit(data["density_unit"]),
             components={
                 name: MaterialComponentEntry.from_dict(v)
                 for name, v in data["components"].items()
@@ -558,10 +558,8 @@ class MMixture(Material):
     of the resulting mixture — bounded (0, 1) and summing to exactly
     1 — rather than an unbounded relative weight. This mirrors OpenMC's
     own mix_materials(), which hard-errors on ao/wo fractions that
-    don't sum to 1 (OpenMC additionally supports "vo"/volume-fraction
-    mixing with an implicit void remainder — deliberately not
-    supported here yet, to avoid introducing a void-material concept
-    before it's needed).
+    don't sum to 1. OpenMC's "vo" (volume-fraction) mixing is not
+    supported.
 
     Example — a 70/30 atom-fraction mix of two previously-defined
     material versions:
@@ -572,24 +570,15 @@ class MMixture(Material):
                 (MaterialID("fuel_v1-1"), 0.7),
                 (MaterialID("filler_v1-1"), 0.3),
             ],
-            percent_type="ao",
+            percent_type=PercentType.AO,
         )
     Note: the ids inside `components` reference OTHER, already-existing
     Materials — unaffected by this class's own identity scheme.
-
-    eq=False for the same reason as MIsotopic: `components` holds a
-    list, not meaningfully comparable via the frozen-dataclass default.
     """
 
     material_type: ClassVar[MaterialType] = MaterialType.MIXTURE
     components: list[tuple[MaterialID, float]]
-    percent_type: MixPercentType
-
-    def __eq__(self, value: object) -> bool:
-        return isinstance(value, MMixture) and self.id == value.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
+    percent_type: PercentType
 
     def _validate_composition(self) -> None:
         """Enforce the mixture-fraction physical rules:
@@ -604,6 +593,10 @@ class MMixture(Material):
                   tolerance) — mixing combines 100% of a shared volume;
                   no void/remainder concept is supported yet.
         """
+        if not isinstance(self.percent_type, PercentType):
+            raise TypeError(
+                f"percent_type must be a PercentType, got {self.percent_type!r}"
+            )
         if len(self.components) < 2:
             raise ValueError("MMixture requires at least 2 constituent materials")
 
@@ -621,7 +614,7 @@ class MMixture(Material):
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
-            "percent_type": self.percent_type,
+            "percent_type": self.percent_type.value,
             "components": [
                 [material_id, fraction] for material_id, fraction in self.components
             ],
@@ -631,7 +624,7 @@ class MMixture(Material):
     def from_dict(cls, data: dict) -> MMixture:
         return cls(
             **cls._material_fields_from_dict(data),
-            percent_type=data["percent_type"],
+            percent_type=PercentType(data["percent_type"]),
             components=[
                 (MaterialID(material_id), fraction)
                 for material_id, fraction in data["components"]
@@ -639,7 +632,7 @@ class MMixture(Material):
         )
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class MVoid(Material):
     """
     No material at all — an empty region, e.g. a fuel rod's gas
@@ -657,10 +650,7 @@ class MVoid(Material):
     guarantee every other consumer of MIsotopic currently relies on
     (that a real MIsotopic always has genuine, physical mass density).
 
-    No fields — there is nothing to compose or configure. Uses the
-    plain frozen-dataclass default __eq__/__hash__ (unlike MIsotopic/
-    MMixture): with no dict/list fields, there's nothing unhashable to
-    work around.
+    No fields — there is nothing to compose or configure.
 
     Example:
         MVoid.create(family_name="plenum_void", version_label="1")

@@ -67,10 +67,10 @@ from pace.core.ids import (
 )
 from pace.core.pace_object import PaceObject
 from pace.core.versioned import Versioned
-from enum import Enum
+from enum import StrEnum
 
 
-class ComponentType(str, Enum):
+class ComponentType(StrEnum):
     """The kinds of object a composite or lattice can place.
 
     Values match ReferenceableType's, so converting between the two is a
@@ -173,7 +173,7 @@ class ComponentPlacement(PaceObject):
         )
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class LComponent(Versioned[LComponentID]):
     """A leaf component — one geometry paired with one material, no
     position of its own.
@@ -189,7 +189,7 @@ class LComponent(Versioned[LComponentID]):
     conceptual SLOT this pairing fills (e.g. "fuel_pellet"), not a
     description of any content that survives a version bump.
 
-    A version minted as part of a cascading edit (ComponentService
+    A version minted as part of a cascading edit (RegistryService
     propagating a change up through every reference path) carries the
     SAME cause as the root edit that triggered the cascade: if a human
     hand-edited the referenced geometry, the new LComponent version
@@ -240,7 +240,7 @@ class CComponent(Versioned[CComponentID]):
     bounds must reference a GRectanglePrism, GHexPrism or GCylinder —
     the shapes every translator can turn into a clipping region and the
     Reactor module can mesh. That check needs the referenced geometry,
-    so it's enforced by ComponentService, not here. The same goes for
+    so it's enforced by RegistryService, not here. The same goes for
     "every member lies inside the bounds".
 
     Example — the VERA problem 1 pin cell: a fuel rod (itself a
@@ -261,21 +261,11 @@ class CComponent(Versioned[CComponentID]):
                 ),
             ],
         )
-
-    eq=False / id-based equality: `placements` is a list, not hashable
-    via the frozen-dataclass default — same pattern as GAddition/
-    GSubtraction and MIsotopic/MMixture.
     """
 
     bounds: GeometryID
     fill: MaterialID | None = None
     placements: list[ComponentPlacement]
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, CComponent) and self.id == other.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
 
     def validate(self) -> None:
         """Check identity/lineage (via Versioned), then the
@@ -286,7 +276,7 @@ class CComponent(Versioned[CComponentID]):
     def _validate_composition(self) -> None:
         """Enforce the within-object composition rules — no registry
         access needed (dangling references, bounds shape and
-        containment are ComponentService's job).
+        containment are RegistryService's job).
 
         Rules enforced:
             - at least 1 member. A composite with no members would be
@@ -302,7 +292,7 @@ class CComponent(Versioned[CComponentID]):
                   id string are not mistaken for one another.
             - no direct self-reference (a CCOMPONENT ref to this
                   composite's own id). Multi-hop cycles need registry
-                  access and are ComponentService's job.
+                  access and are RegistryService's job.
         """
         if len(self.placements) < 1:
             raise ValueError("CComponent must have at least one component.")

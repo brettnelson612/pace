@@ -15,12 +15,12 @@ Reactor are keyed by face (see reactor.py).
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pace.core.geometry import GeometryType
 
 
-class BoundsFace(str, Enum):
+class BoundsFace(StrEnum):
     """A named face of a bounds shape.
 
     Which faces exist depends on the bounds geometry type — see

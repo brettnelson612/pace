@@ -4,8 +4,8 @@ pace/services/reference_extraction.py
 One function per versioned aggregate kind, each walking that object's
 embedded structure and returning the deduplicated set of outgoing
 Reference edges it should record in the registry. Used by
-ComponentService on every register_*()/edit_*() call, before writing
-to ReferenceDAO.
+RegistryService on every register_*() call, before writing to
+ReferenceDAO.
 
 Every function here is pure — no DB access, no side effects. A row
 represents an edge between two registered aggregates, not a
@@ -149,10 +149,11 @@ def extract_lattice_references(lattice: Lattice) -> set[Reference]:
     return references
 
 
-def extract_reactor_references(reactor_blueprint: ReactorBlueprint) -> set[Reference]:
-    """A Reactor references its bounds Geometry, its fill Material (if
-    any), its root component, and every Material its operating state
-    gives a starting temperature for."""
+def extract_reactor_blueprint_references(
+    reactor_blueprint: ReactorBlueprint,
+) -> set[Reference]:
+    """A ReactorBlueprint references its bounds Geometry, its fill
+    Material (if any), and its root component."""
     references = {
         Reference(
             source_type=ReferenceableType.REACTOR_BLUEPRINT,

@@ -12,10 +12,10 @@ expressible here and stay hand-written per class.
 """
 
 from dataclasses import fields
-from enum import Enum
+from enum import StrEnum
 
 
-class Constraint(Enum):
+class Constraint(StrEnum):
     POSITIVE = "positive"
     NON_NEGATIVE = "non_negative"
 
