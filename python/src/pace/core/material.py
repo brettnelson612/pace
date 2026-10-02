@@ -129,6 +129,7 @@ class ThermalScatteringLibrary(PaceObject):
     scattering physics differs from free-gas scattering.
 
     `name`:     follows OpenMC's GND naming convention (e.g. "c_H_in_H2O").
+    `nuclide`:  which nuclide's population this covers (e.g. "C0", "Be9")
     `fraction`: is the atom fraction of the material this table covers
 
     Most materials need exactly one entry at fraction 1.0; some
@@ -140,7 +141,7 @@ class ThermalScatteringLibrary(PaceObject):
     """
 
     name: str
-    nuclide: str  # e.g. "C0", "Be9" — which nuclide's population this covers
+    nuclide: str
     fraction: float = 1.0
 
     def validate(self) -> None:
@@ -148,7 +149,7 @@ class ThermalScatteringLibrary(PaceObject):
             raise ValueError(f"fraction must be in (0, 1], got {self.fraction}")
 
     def to_dict(self) -> dict:
-        return {"name": self.name, "fraction": self.fraction}
+        return {"name": self.name, "nuclide": self.nuclide, "fraction": self.fraction}
 
     @classmethod
     def from_dict(cls, data: dict) -> ThermalScatteringLibrary:

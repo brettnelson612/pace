@@ -139,7 +139,7 @@ def extract_lattice_references(lattice: Lattice) -> set[Reference]:
     }
     references.update(
         Reference(
-            source_type=ReferenceableType.CCOMPONENT,
+            source_type=ReferenceableType.LATTICE,
             source_id=lattice.id,
             target_type=element.ref.referenceable_type,
             target_id=element.ref.id,

@@ -4,7 +4,7 @@ from pace.db.relational import (
     LatticeDAO,
     LComponentDAO,
     MaterialDAO,
-    ReactorDAO,
+    ReactorBlueprintDAO,
     ReferenceDAO,
 )
 from pace.db.relational.sql_db import SqlDB
@@ -22,5 +22,5 @@ class RegistryDB:
         self.lcomponents = LComponentDAO(sql_db)
         self.ccomponents = CComponentDAO(sql_db)
         self.lattices = LatticeDAO(sql_db)
-        self.reactors = ReactorDAO(sql_db)
+        self.reactor_blueprints = ReactorBlueprintDAO(sql_db)
         self.references = ReferenceDAO(sql_db)

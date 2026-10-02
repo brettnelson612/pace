@@ -146,12 +146,12 @@ class ComponentService:
         self, reactor_blueprint: ReactorBlueprint
     ) -> ReactorBlueprint:
         self._reject_duplicate_family(
-            self._registry.reactors.family_exists,
+            self._registry.reactor_blueprints.family_exists,
             reactor_blueprint.family_name,
             reactor_blueprint.derived_from,
         )
         self.validate_reactor_blueprint(reactor_blueprint)
-        self._registry.reactors.save(reactor_blueprint)
+        self._registry.reactor_blueprints.save(reactor_blueprint)
         self._registry.references.add_many(
             list(extract_reactor_references(reactor_blueprint))
         )
@@ -177,7 +177,7 @@ class ComponentService:
         return self._registry.lattices.get(lattice_id)
 
     def get_reactor(self, reactor_id: ReactorBlueprintID) -> ReactorBlueprint | None:
-        return self._registry.reactors.get(reactor_id)
+        return self._registry.reactor_blueprints.get(reactor_id)
 
     # -------------------------------------------------------------
     # Retrieval — fully hydrated
@@ -205,7 +205,7 @@ class ComponentService:
         its root's whole tree plus its own bounds, fill, and every
         material named in its operating state. This is the input the
         solver adapters take."""
-        reactor = self._registry.reactors.get(reactor_blueprint_id)
+        reactor = self._registry.reactor_blueprints.get(reactor_blueprint_id)
         if reactor is None:
             raise DanglingReferenceError(
                 f"reactor {reactor_blueprint_id!r} does not exist"
@@ -365,7 +365,7 @@ class ComponentService:
             ReferenceableType.LATTICE: lambda: self._registry.lattices.exists(
                 LatticeID(target_id)
             ),
-            ReferenceableType.REACTOR_BLUEPRINT: lambda: self._registry.reactors.exists(
+            ReferenceableType.REACTOR_BLUEPRINT: lambda: self._registry.reactor_blueprints.exists(
                 ReactorBlueprintID(target_id)
             ),
         }

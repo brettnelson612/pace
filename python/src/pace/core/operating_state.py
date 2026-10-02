@@ -36,7 +36,6 @@ class FlowInlet(PaceObject):
 
     def to_dict(self) -> dict:
         return {
-            "kind": "inlet",
             "mass_flow_rate_kg_s": self.mass_flow_rate_kg_s,
             "temperature_k": self.temperature_k,
         }
@@ -64,7 +63,7 @@ class FlowOutlet(PaceObject):
             raise ValueError(f"pressure_pa must be positive, got {self.pressure_pa}")
 
     def to_dict(self) -> dict:
-        return {"kind": "outlet", "pressure_pa": self.pressure_pa}
+        return {"pressure_pa": self.pressure_pa}
 
     @classmethod
     def from_dict(cls, data: dict) -> FlowOutlet:
@@ -77,8 +76,8 @@ class OperatingState(PaceObject):
 
     power_w: float | None = None
     initial_temperatures_k: dict[MaterialID, float] = field(default_factory=dict)
-    flow_inlet: FlowInlet
-    flow_outlet: FlowOutlet
+    flow_inlet: FlowInlet | None
+    flow_outlet: FlowOutlet | None
 
     def validate(self) -> None:
         if self.power_w is not None and self.power_w <= 0:
@@ -94,6 +93,8 @@ class OperatingState(PaceObject):
         return {
             "power_w": self.power_w,
             "initial_temperatures_k": dict(self.initial_temperatures_k),
+            "flow_inlet": self.flow_inlet.to_dict() if self.flow_inlet else None,
+            "flow_outlet": self.flow_outlet.to_dict() if self.flow_outlet else None,
         }
 
     @classmethod
@@ -104,6 +105,14 @@ class OperatingState(PaceObject):
                 MaterialID(material_id): temperature_k
                 for material_id, temperature_k in data["initial_temperatures_k"].items()
             },
-            flow_inlet=FlowInlet.from_dict(data["flow_inlet"]),
-            flow_outlet=FlowOutlet.from_dict(data["flow_outlet"]),
+            flow_inlet=(
+                FlowInlet.from_dict(data["flow_inlet"])
+                if data["flow_inlet"] is not None
+                else None
+            ),
+            flow_outlet=(
+                FlowOutlet.from_dict(data["flow_outlet"])
+                if data["flow_outlet"] is not None
+                else None
+            ),
         )

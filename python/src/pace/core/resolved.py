@@ -193,8 +193,8 @@ class ResolvedReactorBlueprint(PaceObject):
 
     def to_dict(self) -> dict:
         return {
-            "reactor": self.reactor_blueprint.to_dict(),
-            "model": self.rc.to_dict(),
+            "reactor_blueprint": self.reactor_blueprint.to_dict(),
+            "rc": self.rc.to_dict(),
         }
 
     @classmethod
