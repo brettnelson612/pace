@@ -1,20 +1,27 @@
 """
-tests/pace/core/test_component.py
+tests/unit/pace/core/test_component.py
 
-Covers: LComponent identity (build_id/_validate_id) and the three-state
-lineage rule; ComponentPlacement round-trips for every placeable kind and frozen
-immutability; CComponent identity, lineage, bounds/fill, composition
-(min-member, unique member ids, duplicate-placement detection including
-the z_rotation_rad and ref-kind differentiation, self-reference), id-based
-equality + the hash(self.id) regression guard, and round-trips.
+Covers: ComponentRef round-trips, the ComponentType -> ReferenceableType
+mapping, validation and value-based equality; LComponent identity
+(build_id/_validate_id), the three-state lineage rule and id-based
+equality; ComponentPlacement round-trips for every placeable type and
+frozen immutability; CComponent identity, lineage, bounds/fill,
+composition (min-member, unique placement ids, duplicate-placement
+detection including the z_rotation_rad and ref-type differentiation,
+self-reference), id-based equality and round-trips.
 ResolvedComponent/ResolvedReactorBlueprint are covered in test_resolved.py.
 """
 
 from dataclasses import FrozenInstanceError
 
 import pytest
-from pace.core.component import CComponent, LComponent, ComponentPlacement
-from pace.core.component_ref import ComponentType, ComponentRef
+from pace.core.component import (
+    CComponent,
+    ComponentPlacement,
+    ComponentRef,
+    ComponentType,
+    LComponent,
+)
 from pace.core.geometry import GPose
 from pace.core.ids import (
     CComponentID,
@@ -25,6 +32,65 @@ from pace.core.ids import (
     MaterialID,
     ComponentPlacementID,
 )
+from pace.core.reference_types import ReferenceableType
+
+# =============================================================================
+# ComponentRef
+# =============================================================================
+
+
+@pytest.mark.parametrize("component_type", list(ComponentType))
+def test_component_ref_round_trip_every_type(component_type):
+    ref = ComponentRef(type=component_type, id=LComponentID("thing-1"))
+    assert ComponentRef.from_dict(ref.to_dict()) == ref
+
+
+@pytest.mark.parametrize(
+    "component_type,expected",
+    [
+        (ComponentType.LCOMPONENT, ReferenceableType.LCOMPONENT),
+        (ComponentType.CCOMPONENT, ReferenceableType.CCOMPONENT),
+        (ComponentType.LATTICE, ReferenceableType.LATTICE),
+    ],
+)
+def test_component_ref_referenceable_type(component_type, expected):
+    ref = ComponentRef(type=component_type, id=LComponentID("thing-1"))
+    assert ref.referenceable_type == expected
+
+
+def test_every_component_type_is_a_referenceable_type():
+    """ComponentType must stay a subset of ReferenceableType, by value."""
+    for component_type in ComponentType:
+        assert ReferenceableType(component_type.value)
+
+
+def test_component_ref_rejects_a_plain_string_type():
+    with pytest.raises(TypeError):
+        ComponentRef(type="ccomponent", id=CComponentID("thing-1"))  # type: ignore[arg-type]
+
+
+def test_component_ref_rejects_empty_id():
+    with pytest.raises(ValueError):
+        ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID(""))
+
+
+def test_component_ref_from_dict_rejects_unplaceable_type():
+    with pytest.raises(ValueError):
+        ComponentRef.from_dict({"type": "geometry", "id": "cyl-1"})
+
+
+def test_equal_component_refs_hash_equal():
+    a = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("pin-1"))
+    b = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("pin-1"))
+    assert a == b
+    assert len({a, b}) == 1
+
+
+def test_same_id_different_type_is_a_different_component_ref():
+    a = ComponentRef(type=ComponentType.LCOMPONENT, id=LComponentID("pin-1"))
+    b = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("pin-1"))
+    assert a != b
+
 
 # =============================================================================
 # LComponent — identity
@@ -110,7 +176,7 @@ def test_lcomponent_round_trip():
         geometry=GeometryID("fuel_pellet_cyl-1"),
         material=MaterialID("uranium3.2_uo2-1"),
     )
-    assert LComponent.from_dict(lc.to_dict()) == lc
+    assert LComponent.from_dict(lc.to_dict()).to_dict() == lc.to_dict()
 
 
 def test_lcomponent_derived_round_trip():
@@ -123,7 +189,7 @@ def test_lcomponent_derived_round_trip():
         user_edit=True,
     )
     round_tripped = LComponent.from_dict(lc.to_dict())
-    assert round_tripped == lc
+    assert round_tripped.to_dict() == lc.to_dict()
     assert round_tripped.derived_from == "fuel_pellet-1"
     assert round_tripped.user_edit is True
 
@@ -139,30 +205,22 @@ def test_lcomponent_is_frozen():
         lc.family_name = "other"  # type: ignore[misc]
 
 
-def test_lcomponent_default_equality_is_value_based():
-    """LComponent has no dict/list fields, so it keeps the plain
-    frozen-dataclass default equality — unlike CComponent, it does NOT
-    override __eq__/__hash__ to be id-based."""
-
-    def build() -> LComponent:
-        return LComponent.create(
-            family_name="fuel_pellet",
-            version_label="1",
-            geometry=GeometryID("fuel_pellet_cyl-1"),
-            material=MaterialID("uranium3.2_uo2-1"),
-        )
-
-    lc_a = build()
-    lc_b = build()
-    assert lc_a == lc_b
-
-    lc_c = LComponent.create(
+def test_lcomponent_equality_is_id_based():
+    """Same id, different fields: equal, since the id is the identity."""
+    lc_a = LComponent.create(
+        family_name="fuel_pellet",
+        version_label="1",
+        geometry=GeometryID("fuel_pellet_cyl-1"),
+        material=MaterialID("uranium3.2_uo2-1"),
+    )
+    lc_b = LComponent.create(
         family_name="fuel_pellet",
         version_label="1",
         geometry=GeometryID("different_geometry-1"),
         material=MaterialID("uranium3.2_uo2-1"),
     )
-    assert lc_a != lc_c
+    assert lc_a == lc_b
+    assert hash(lc_a) == hash(lc_b) == hash(lc_a.id)
 
 
 # =============================================================================
@@ -178,7 +236,7 @@ ORIGIN = GPose(x_m=0.0, y_m=0.0, z_m=0.0)
 
 
 @pytest.mark.parametrize("ref", [PELLET_REF, ROD_REF, LATTICE_REF])
-def test_placement_round_trip_every_placeable_kind(ref):
+def test_placement_round_trip_every_placeable_type(ref):
     pc = ComponentPlacement(id=ComponentPlacementID("pc-1"), pose=ORIGIN, ref=ref)
     assert ComponentPlacement.from_dict(pc.to_dict()) == pc
 
@@ -225,7 +283,7 @@ def _ccomponent(**overrides) -> CComponent:
         "version_label": "1",
         "bounds": BOUNDS,
         "fill": WATER,
-        "components": _two_placements(),
+        "placements": _two_placements(),
     }
     kwargs.update(overrides)
     return CComponent.create(**kwargs)
@@ -246,7 +304,7 @@ def test_ccomponent_validate_id_mismatch_raises():
             family_name="fuel_pin",
             version_label="1",
             bounds=BOUNDS,
-            components=_two_placements(),
+            placements=_two_placements(),
         )
 
 
@@ -293,13 +351,13 @@ def test_ccomponent_fill_is_optional():
 def test_ccomponent_single_member_is_allowed():
     """A guide-tube cell is one tube member plus fill — the minimum is
     one member, not two."""
-    cc = _ccomponent(components=_two_placements()[:1])
-    assert len(cc.components) == 1
+    cc = _ccomponent(placements=_two_placements()[:1])
+    assert len(cc.placements) == 1
 
 
-def test_ccomponent_requires_at_least_one_component():
+def test_ccomponent_requires_at_least_one_placement():
     with pytest.raises(ValueError):
-        _ccomponent(components=[])
+        _ccomponent(placements=[])
 
 
 @pytest.mark.parametrize("fill", [WATER, None])
@@ -320,7 +378,7 @@ def test_ccomponent_rejects_duplicate_placement_id():
     first, second = _two_placements()
     renamed = ComponentPlacement(id=first.id, pose=second.pose, ref=second.ref)
     with pytest.raises(ValueError):
-        _ccomponent(components=[first, renamed])
+        _ccomponent(placements=[first, renamed])
 
 
 def test_ccomponent_rejects_duplicate_component_position():
@@ -333,7 +391,7 @@ def test_ccomponent_rejects_duplicate_component_position():
         ),
     ]
     with pytest.raises(ValueError):
-        _ccomponent(components=duplicate)
+        _ccomponent(placements=duplicate)
 
 
 def test_ccomponent_same_position_different_rotation_is_not_a_duplicate():
@@ -349,11 +407,11 @@ def test_ccomponent_same_position_different_rotation_is_not_a_duplicate():
             ref=PELLET_REF,
         ),
     ]
-    assert len(_ccomponent(components=rotated).components) == 2
+    assert len(_ccomponent(placements=rotated).placements) == 2
 
 
-def test_ccomponent_same_id_string_different_kind_is_not_a_duplicate():
-    """The ref's kind is part of the duplicate key — an LComponent and a
+def test_ccomponent_same_id_string_different_type_is_not_a_duplicate():
+    """The ref's type is part of the duplicate key — an LComponent and a
     CComponent that coincidentally share an id string, placed at the
     same pose, are two different objects."""
     shared = "shared-1"
@@ -369,7 +427,7 @@ def test_ccomponent_same_id_string_different_kind_is_not_a_duplicate():
             ref=ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID(shared)),
         ),
     ]
-    assert len(_ccomponent(components=members).components) == 2
+    assert len(_ccomponent(placements=members).placements) == 2
 
 
 def test_ccomponent_rejects_direct_self_reference():
@@ -379,18 +437,18 @@ def test_ccomponent_rejects_direct_self_reference():
         ref=ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("fuel_pin-1")),
     )
     with pytest.raises(ValueError):
-        _ccomponent(components=[self_ref])
+        _ccomponent(placements=[self_ref])
 
 
 def test_ccomponent_can_place_a_lattice():
     cc = _ccomponent(
-        components=[
+        placements=[
             ComponentPlacement(
                 id=ComponentPlacementID("lattice"), pose=ORIGIN, ref=LATTICE_REF
             )
         ]
     )
-    assert cc.components[0].ref.type == ComponentType.LATTICE
+    assert cc.placements[0].ref.type == ComponentType.LATTICE
 
 
 # =============================================================================

@@ -1,5 +1,5 @@
 """
-tests/pace/core/test_ids.py
+tests/unit/pace/core/test_ids.py
 
 ids.py is purely static typing sugar (typing.NewType over str) — these
 tests exist to pin down the runtime behavior the module's own docstring

@@ -1,16 +1,16 @@
 """
-tests/pace/core/test_material.py
+tests/unit/pace/core/test_material.py
 
 Covers: Material identity (build_id/_validate_id), the three-state
 lineage rule, ABC enforcement, MaterialComponentEntry's all-or-none
-enrichment invariant, field constraints, MIsotopic's composition-level
-rules (non-empty, GT-run-derived restricted to exact nuclides,
-enrichment-format keys restricted to bare elements), MMixture's
-composition-level rules (min constituents, fraction bounds, fractions
-summing to 1), MVoid's default field-based equality, round-trips,
-frozen immutability, MIsotopic/MMixture's id-based equality + the
-hash(self.id) regression guard, and material_from_dict()'s type-based
-dispatch.
+enrichment invariant, field constraints, enum-typed fields (PercentType,
+DensityUnit) rejecting plain strings and unknown values,
+MIsotopic's composition-level rules (non-empty, GT-run-derived
+restricted to exact nuclides, enrichment-format keys restricted to bare
+elements), MMixture's composition-level rules (min constituents,
+fraction bounds, fractions summing to 1), ThermalScatteringLibrary and
+TabulatedProperty, round-trips, frozen immutability, id-based equality,
+and material_from_dict()'s type-based dispatch.
 """
 
 import dataclasses
@@ -19,11 +19,15 @@ from typing import ClassVar
 import pytest
 from pace.core.ids import GTRunID, MaterialID
 from pace.core.material import (
+    DensityUnit,
     Material,
     MaterialComponentEntry,
     MIsotopic,
     MMixture,
     MVoid,
+    PercentType,
+    TabulatedProperty,
+    ThermalScatteringLibrary,
     material_from_dict,
 )
 
@@ -58,9 +62,9 @@ def _valid_isotopic_kwargs(**overrides) -> dict:
             "U235": MaterialComponentEntry(percent=3.2),
             "U238": MaterialComponentEntry(percent=96.8),
         },
-        "percent_type": "wo",
+        "percent_type": PercentType.WO,
         "density_value": 10.3,
-        "density_unit": "g/cm3",
+        "density_unit": DensityUnit.G_PER_CM3,
     }
     kwargs.update(overrides)
     return kwargs
@@ -73,7 +77,7 @@ def _valid_mixture_kwargs(**overrides) -> dict:
             (MaterialID("mv-a"), 0.7),
             (MaterialID("mv-b"), 0.3),
         ],
-        "percent_type": "ao",
+        "percent_type": PercentType.AO,
     }
     kwargs.update(overrides)
     return kwargs
@@ -148,7 +152,7 @@ class TestMaterialComponentEntry:
             percent=1.0,
             enrichment=3.2,
             enrichment_target="U235",
-            enrichment_type="wo",
+            enrichment_type=PercentType.WO,
         )
         assert entry.enrichment == 3.2
 
@@ -157,12 +161,12 @@ class TestMaterialComponentEntry:
         [
             {"enrichment": 3.2},  # enrichment only
             {"enrichment_target": "U235"},  # target only
-            {"enrichment_type": "wo"},  # type only
+            {"enrichment_type": PercentType.WO},  # type only
             {"enrichment": 3.2, "enrichment_target": "U235"},  # missing type
-            {"enrichment": 3.2, "enrichment_type": "wo"},  # missing target
+            {"enrichment": 3.2, "enrichment_type": PercentType.WO},  # missing target
             {
                 "enrichment_target": "U235",
-                "enrichment_type": "wo",
+                "enrichment_type": PercentType.WO,
             },  # missing enrichment
         ],
     )
@@ -192,7 +196,7 @@ class TestMaterialComponentEntry:
                 percent=1.0,
                 enrichment=0.0,
                 enrichment_target="U235",
-                enrichment_type="wo",
+                enrichment_type=PercentType.WO,
             )
 
     def test_enrichment_negative_rejected(self):
@@ -201,7 +205,7 @@ class TestMaterialComponentEntry:
                 percent=1.0,
                 enrichment=-5.0,
                 enrichment_target="U235",
-                enrichment_type="wo",
+                enrichment_type=PercentType.WO,
             )
 
     def test_enrichment_at_max_is_allowed(self):
@@ -210,7 +214,7 @@ class TestMaterialComponentEntry:
             percent=1.0,
             enrichment=100.0,
             enrichment_target="U235",
-            enrichment_type="wo",
+            enrichment_type=PercentType.WO,
         )
 
     def test_enrichment_above_max_rejected(self):
@@ -219,14 +223,37 @@ class TestMaterialComponentEntry:
                 percent=1.0,
                 enrichment=100.1,
                 enrichment_target="U235",
-                enrichment_type="wo",
+                enrichment_type=PercentType.WO,
             )
 
     def test_round_trip(self):
         entry = MaterialComponentEntry(
-            percent=1.0, enrichment=3.2, enrichment_target="U235", enrichment_type="wo"
+            percent=1.0,
+            enrichment=3.2,
+            enrichment_target="U235",
+            enrichment_type=PercentType.WO,
         )
         assert MaterialComponentEntry.from_dict(entry.to_dict()) == entry
+
+    def test_enrichment_type_rejects_plain_string(self):
+        with pytest.raises(TypeError):
+            MaterialComponentEntry(
+                percent=1.0,
+                enrichment=3.2,
+                enrichment_target="U235",
+                enrichment_type="wo",  # type: ignore[arg-type]
+            )
+
+    def test_from_dict_rejects_unknown_enrichment_type(self):
+        with pytest.raises(ValueError):
+            MaterialComponentEntry.from_dict(
+                {
+                    "percent": 1.0,
+                    "enrichment": 3.2,
+                    "enrichment_target": "U235",
+                    "enrichment_type": "vo",
+                }
+            )
 
     def test_frozen(self):
         entry = MaterialComponentEntry(percent=1.0)
@@ -317,7 +344,7 @@ class TestMIsotopic:
                     percent=1.0,
                     enrichment=3.2,
                     enrichment_target="U235",
-                    enrichment_type="wo",
+                    enrichment_type=PercentType.WO,
                 ),
                 "O": MaterialComponentEntry(percent=2.0),
             }
@@ -334,7 +361,7 @@ class TestMIsotopic:
                         percent=1.0,
                         enrichment=3.2,
                         enrichment_target="U235",
-                        enrichment_type="wo",
+                        enrichment_type=PercentType.WO,
                     ),
                 }
             )
@@ -349,7 +376,7 @@ class TestMIsotopic:
                     percent=1.0,
                     enrichment=3.2,
                     enrichment_target="U235",
-                    enrichment_type="wo",
+                    enrichment_type=PercentType.WO,
                 ),
             },
         )
@@ -367,7 +394,7 @@ class TestMIsotopic:
                     percent=1.0,
                     enrichment=3.2,
                     enrichment_target="U235",
-                    enrichment_type="wo",
+                    enrichment_type=PercentType.WO,
                 ),
             },
         )
@@ -386,7 +413,7 @@ class TestMIsotopic:
                         percent=1.0,
                         enrichment=3.2,
                         enrichment_target="U235",
-                        enrichment_type="wo",
+                        enrichment_type=PercentType.WO,
                     ),
                 },
             )
@@ -414,7 +441,7 @@ class TestMIsotopic:
     def test_to_dict_from_dict_round_trip(self):
         original = make_isotopic()
         rebuilt = MIsotopic.from_dict(original.to_dict())
-        assert rebuilt == original
+        assert rebuilt.to_dict() == original.to_dict()
         assert rebuilt.family_name == original.family_name
         assert rebuilt.version_label == original.version_label
         assert rebuilt.derived_from == original.derived_from
@@ -428,6 +455,46 @@ class TestMIsotopic:
     def test_to_dict_includes_type(self):
         assert make_isotopic().to_dict()["type"] == "isotopic"
 
+    def test_to_dict_stores_enum_values_as_plain_strings(self):
+        data = make_isotopic().to_dict()
+        assert type(data["percent_type"]) is str
+        assert type(data["density_unit"]) is str
+
+    def test_percent_type_rejects_plain_string(self):
+        with pytest.raises(TypeError):
+            make_isotopic(percent_type="wo")
+
+    def test_density_unit_rejects_plain_string(self):
+        with pytest.raises(TypeError):
+            make_isotopic(density_unit="g/cm3")
+
+    @pytest.mark.parametrize(
+        "key,bad_value", [("percent_type", "vo"), ("density_unit", "lb/ft3")]
+    )
+    def test_from_dict_rejects_unknown_enum_value(self, key, bad_value):
+        data = make_isotopic().to_dict()
+        data[key] = bad_value
+        with pytest.raises(ValueError):
+            MIsotopic.from_dict(data)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="ThermalScatteringLibrary.from_dict reads nuclide from data['name']",
+    )
+    def test_thermal_scattering_round_trips(self):
+        original = make_isotopic(
+            thermal_scattering=(
+                ThermalScatteringLibrary(name="c_H_in_H2O", nuclide="H1"),
+            )
+        )
+        rebuilt = MIsotopic.from_dict(original.to_dict())
+        assert rebuilt.thermal_scattering == original.thermal_scattering
+
+    def test_duplicate_thermal_scattering_name_rejected(self):
+        table = ThermalScatteringLibrary(name="c_H_in_H2O", nuclide="H1")
+        with pytest.raises(ValueError):
+            make_isotopic(thermal_scattering=(table, table))
+
     def test_frozen(self):
         instance = make_isotopic()
         with pytest.raises(dataclasses.FrozenInstanceError):
@@ -435,11 +502,9 @@ class TestMIsotopic:
 
 
 class TestMIsotopicEquality:
-    """MIsotopic's __eq__/__hash__ are id-based (isinstance check +
-    self.id == value.id), matching GAddition/GSubtraction in geometry.py —
-    NOT pure object identity. Two separately-constructed instances with the
-    same id (same family_name/version_label) are equal and must hash
-    identically, even with different composition data."""
+    """Equality is inherited from Versioned: same concrete type and same
+    id. Two separately-constructed instances with the same id are equal
+    and hash identically, even with different composition data."""
 
     def test_same_id_different_fields_are_equal(self):
         a = make_isotopic(
@@ -532,7 +597,7 @@ class TestMMixture:
     def test_to_dict_from_dict_round_trip(self):
         original = make_mixture()
         rebuilt = MMixture.from_dict(original.to_dict())
-        assert rebuilt == original
+        assert rebuilt.to_dict() == original.to_dict()
         assert rebuilt.family_name == original.family_name
         assert rebuilt.version_label == original.version_label
         assert rebuilt.percent_type == original.percent_type
@@ -541,15 +606,24 @@ class TestMMixture:
     def test_to_dict_includes_type(self):
         assert make_mixture().to_dict()["type"] == "mixture"
 
+    def test_percent_type_rejects_plain_string(self):
+        with pytest.raises(TypeError):
+            make_mixture(percent_type="ao")
+
+    def test_volume_percent_is_not_accepted(self):
+        data = make_mixture().to_dict()
+        data["percent_type"] = "vo"
+        with pytest.raises(ValueError):
+            MMixture.from_dict(data)
+
     def test_frozen(self):
         instance = make_mixture()
         with pytest.raises(dataclasses.FrozenInstanceError):
-            instance.percent_type = "ao"  # type: ignore[misc]
+            instance.percent_type = PercentType.WO  # type: ignore[misc]
 
 
 class TestMMixtureEquality:
-    """Same id-based __eq__/__hash__ as MIsotopic — see
-    TestMIsotopicEquality."""
+    """Same id-based equality as MIsotopic — see TestMIsotopicEquality."""
 
     def test_same_id_different_fields_are_equal(self):
         a = make_mixture(
@@ -593,11 +667,7 @@ class TestMVoid:
     def test_to_dict_from_dict_round_trip(self):
         original = make_void()
         rebuilt = MVoid.from_dict(original.to_dict())
-        # MVoid uses the plain frozen-dataclass default __eq__ (no
-        # dict/list fields, nothing unhashable to work around) — unlike
-        # MIsotopic/MMixture, direct == works here without needing a
-        # field-by-field comparison.
-        assert rebuilt == original
+        assert rebuilt.to_dict() == original.to_dict()
 
     def test_to_dict_includes_type(self):
         assert make_void().to_dict()["type"] == "void"
@@ -615,19 +685,26 @@ class TestMVoid:
         with pytest.raises(dataclasses.FrozenInstanceError):
             instance.family_name = "other"  # type: ignore[misc]
 
-    def test_default_equality_is_field_based_not_only_id_based(self):
-        # default (not overridden) equality — two MVoid instances that
-        # differ only in id must NOT compare equal, unlike MIsotopic/
-        # MMixture's id-only __eq__
+    def test_different_id_is_not_equal(self):
         a = make_void(family_name="fam-a", version_label="1")
         b = make_void(family_name="fam-b", version_label="1")
         assert a != b
 
-    def test_same_id_and_fields_are_equal(self):
+    def test_same_id_different_fields_are_equal(self):
         a = make_void(family_name="shared", version_label="1")
-        b = make_void(family_name="shared", version_label="1")
+        b = make_void(
+            family_name="shared",
+            version_label="1",
+            thermal_conductivity=TabulatedProperty(points=((300.0, 1.0),)),
+        )
         assert a == b
         assert hash(a) == hash(b)
+
+    def test_hashable_with_a_tabulated_property(self):
+        instance = make_void(
+            thermal_conductivity=TabulatedProperty(points=((300.0, 1.0),))
+        )
+        assert hash(instance) == hash(instance.id)
 
 
 # ---------------------------------------------------------------------------
@@ -640,20 +717,92 @@ class TestMaterialFromDict:
         original = make_isotopic()
         rebuilt = material_from_dict(original.to_dict())
         assert type(rebuilt) is MIsotopic
-        assert rebuilt == original
+        assert rebuilt.to_dict() == original.to_dict()
 
     def test_dispatches_mixture(self):
         original = make_mixture()
         rebuilt = material_from_dict(original.to_dict())
         assert type(rebuilt) is MMixture
-        assert rebuilt == original
+        assert rebuilt.to_dict() == original.to_dict()
 
     def test_dispatches_void(self):
         original = make_void()
         rebuilt = material_from_dict(original.to_dict())
         assert type(rebuilt) is MVoid
-        assert rebuilt == original
+        assert rebuilt.to_dict() == original.to_dict()
 
     def test_unknown_type_raises_value_error_not_key_error(self):
         with pytest.raises(ValueError):
             material_from_dict({"type": "not_a_real_material"})
+
+
+def test_isotopic_and_void_with_same_id_are_not_equal():
+    """Equality requires the same concrete type, not just the same id."""
+    assert make_isotopic(family_name="shared") != make_void(family_name="shared")
+
+
+# ---------------------------------------------------------------------------
+# ThermalScatteringLibrary
+# ---------------------------------------------------------------------------
+
+
+class TestThermalScatteringLibrary:
+    def test_valid_construction(self):
+        table = ThermalScatteringLibrary(
+            name="c_Be_in_BeO", nuclide="Be9", fraction=0.5
+        )
+        assert table.fraction == 0.5
+
+    @pytest.mark.parametrize("bad_fraction", [0.0, -0.1, 1.1])
+    def test_fraction_out_of_range_rejected(self, bad_fraction):
+        with pytest.raises(ValueError):
+            ThermalScatteringLibrary(
+                name="c_H_in_H2O", nuclide="H1", fraction=bad_fraction
+            )
+
+    def test_fraction_of_one_is_allowed(self):
+        ThermalScatteringLibrary(name="c_H_in_H2O", nuclide="H1", fraction=1.0)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="ThermalScatteringLibrary.from_dict reads nuclide from data['name']",
+    )
+    def test_round_trip_keeps_nuclide(self):
+        table = ThermalScatteringLibrary(name="c_H_in_H2O", nuclide="H1")
+        assert ThermalScatteringLibrary.from_dict(table.to_dict()) == table
+
+
+# ---------------------------------------------------------------------------
+# TabulatedProperty
+# ---------------------------------------------------------------------------
+
+
+class TestTabulatedProperty:
+    def test_valid_construction(self):
+        prop = TabulatedProperty(points=((300.0, 3.0), (600.0, 2.5)))
+        assert len(prop.points) == 2
+
+    def test_requires_at_least_one_point(self):
+        with pytest.raises(ValueError):
+            TabulatedProperty(points=())
+
+    def test_unsorted_temperatures_rejected(self):
+        with pytest.raises(ValueError):
+            TabulatedProperty(points=((600.0, 2.5), (300.0, 3.0)))
+
+    def test_round_trip(self):
+        prop = TabulatedProperty(points=((300.0, 3.0), (600.0, 2.5)))
+        assert TabulatedProperty.from_dict(prop.to_dict()) == prop
+
+    def test_is_hashable(self):
+        prop = TabulatedProperty(points=((300.0, 3.0),))
+        assert hash(prop) == hash(TabulatedProperty(points=((300.0, 3.0),)))
+
+    def test_material_round_trip_keeps_tabulated_properties(self):
+        original = make_isotopic(
+            thermal_conductivity=TabulatedProperty(points=((300.0, 3.0), (900.0, 2.4))),
+            specific_heat=TabulatedProperty(points=((300.0, 240.0),)),
+        )
+        rebuilt = MIsotopic.from_dict(original.to_dict())
+        assert rebuilt.thermal_conductivity == original.thermal_conductivity
+        assert rebuilt.specific_heat == original.specific_heat

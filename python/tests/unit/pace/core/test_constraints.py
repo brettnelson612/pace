@@ -1,5 +1,5 @@
 """
-tests/pace/core/test_constraints.py
+tests/unit/pace/core/test_constraints.py
 
 Exercises validate_fields() directly against ad-hoc dataclasses, since
 geometry.py/material.py only ever exercise it indirectly through their

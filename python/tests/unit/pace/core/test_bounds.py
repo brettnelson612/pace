@@ -1,5 +1,5 @@
 """
-tests/pace/core/test_bounds.py
+tests/unit/pace/core/test_bounds.py
 
 Covers: which geometry types may serve as bounds, the faces each bounds
 shape has, and the periodic face pairing.

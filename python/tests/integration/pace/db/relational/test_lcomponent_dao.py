@@ -1,16 +1,12 @@
 """
-tests/integration/pace/db/relational/test_lcomponent.py
+tests/integration/pace/db/relational/test_lcomponent_dao.py
 
-Direct LComponentDAO tests against a real DB. Also checks whether the
-geometry/material foreign keys on LComponentRow are actually enforced
-by SQLite at the DB level, or only by ComponentService's own
-dangling-reference check above it -- SQLite does not enforce foreign
-keys by default; it requires "PRAGMA foreign_keys = ON" per
-connection. If SqlDB doesn't set this, LComponentRow's FK columns give
-no real referential integrity on their own, despite the docstring's
-claim -- ComponentService's validation would be the ONLY thing
-preventing a dangling geometry/material reference, not a backstop on
-top of one.
+LComponentDAO-specific behaviour against a real DB: the geometry and
+material foreign-key columns are written on insert, reported by
+describe(), and enforced by SQLite (PRAGMA foreign_keys=ON, set by
+SqlDB) — a row can't point at a missing Geometry/Material, and a
+referenced Geometry/Material can't be deleted. The generic DAO methods
+are covered in test_versioned_dao.py.
 """
 
 from __future__ import annotations
@@ -18,127 +14,86 @@ from __future__ import annotations
 import pytest
 from pace.core.component import LComponent
 from pace.core.geometry import GCylinder
-from pace.core.ids import LComponentID
-from pace.core.material import MaterialComponentEntry, MIsotopic
+from pace.core.ids import GeometryID, MaterialID
+from pace.core.material import (
+    DensityUnit,
+    MaterialComponentEntry,
+    MIsotopic,
+    PercentType,
+)
 from pace.db.pace_db import PaceDB
+from sqlalchemy.exc import IntegrityError
+
+
+def _geometry() -> GCylinder:
+    return GCylinder.create(
+        family_name="test_cyl", version_label="1", radius_m=0.005, height_m=0.01
+    )
+
+
+def _material() -> MIsotopic:
+    return MIsotopic.create(
+        family_name="test_uo2",
+        version_label="1",
+        components={"U235": MaterialComponentEntry(percent=100.0)},
+        percent_type=PercentType.WO,
+        density_value=10.3,
+        density_unit=DensityUnit.G_PER_CM3,
+    )
+
+
+def _pellet(geometry_id: str = "test_cyl-1", material_id: str = "test_uo2-1"):
+    return LComponent.create(
+        family_name="test_pellet",
+        version_label="1",
+        geometry=GeometryID(geometry_id),
+        material=MaterialID(material_id),
+    )
 
 
 @pytest.fixture
-def pace_db() -> PaceDB:
-    db = PaceDB(db_url="sqlite:///:memory:")
-    db.create_all()
-    return db
+def registered_parts(pace_db: PaceDB, insert) -> None:
+    insert(pace_db.registry.geometries, _geometry())
+    insert(pace_db.registry.materials, _material())
 
 
-def _make_geometry(family_name: str = "test_cyl") -> GCylinder:
-    return GCylinder.create(
-        family_name=family_name, version_label="1", radius_m=0.005, height_m=0.01
-    )
+def test_insert_then_get(pace_db: PaceDB, insert, registered_parts):
+    pellet = _pellet()
+    insert(pace_db.registry.lcomponents, pellet)
+    fetched = pace_db.registry.lcomponents.get(pellet.id)
+    assert fetched is not None
+    assert fetched.to_dict() == pellet.to_dict()
 
 
-def _make_material(family_name: str = "test_uo2") -> MIsotopic:
-    return MIsotopic.create(
-        family_name=family_name,
-        version_label="1",
-        components={"U235": MaterialComponentEntry(percent=100.0)},
-        percent_type="wo",
-        density_value=10.3,
-        density_unit="g/cm3",
-    )
+def test_describe_includes_geometry_and_material_columns(
+    pace_db: PaceDB, insert, registered_parts
+):
+    pellet = _pellet()
+    insert(pace_db.registry.lcomponents, pellet)
+    described = pace_db.registry.lcomponents.describe(pellet.id)
+    assert described is not None
+    assert described["geometry"] == "test_cyl-1"
+    assert described["material"] == "test_uo2-1"
 
 
-def test_save_then_get(pace_db: PaceDB):
-    geometry = _make_geometry()
-    material = _make_material()
-    pace_db.registry.geometries.save(geometry)
-    pace_db.registry.materials.save(material)
-
-    lcomponent = LComponent.create(
-        family_name="test_pellet",
-        version_label="1",
-        geometry=geometry.id,
-        material=material.id,
-    )
-    pace_db.registry.lcomponents.save(lcomponent)
-    assert pace_db.registry.lcomponents.get(lcomponent.id) == lcomponent
+@pytest.mark.parametrize(
+    "geometry_id,material_id",
+    [("missing_cyl-1", "test_uo2-1"), ("test_cyl-1", "missing_uo2-1")],
+)
+def test_insert_pointing_at_a_missing_part_violates_foreign_key(
+    pace_db: PaceDB, insert, registered_parts, geometry_id, material_id
+):
+    pellet = _pellet(geometry_id=geometry_id, material_id=material_id)
+    with pytest.raises(IntegrityError):
+        insert(pace_db.registry.lcomponents, pellet)
+    assert not pace_db.registry.lcomponents.exists(pellet.id)
 
 
-def test_family_exists(pace_db: PaceDB):
-    assert not pace_db.registry.lcomponents.family_exists("test_pellet")
-    geometry = _make_geometry()
-    material = _make_material()
-    pace_db.registry.geometries.save(geometry)
-    pace_db.registry.materials.save(material)
-    pace_db.registry.lcomponents.save(
-        LComponent.create(
-            family_name="test_pellet",
-            version_label="1",
-            geometry=geometry.id,
-            material=material.id,
-        )
-    )
-    assert pace_db.registry.lcomponents.family_exists("test_pellet")
-
-
-def test_children_of(pace_db: PaceDB):
-    geometry = _make_geometry()
-    material = _make_material()
-    pace_db.registry.geometries.save(geometry)
-    pace_db.registry.materials.save(material)
-
-    v1 = LComponent.create(
-        family_name="test_pellet",
-        version_label="1",
-        geometry=geometry.id,
-        material=material.id,
-    )
-    pace_db.registry.lcomponents.save(v1)
-    v2 = LComponent.create(
-        family_name="test_pellet",
-        version_label="2",
-        geometry=geometry.id,
-        material=material.id,
-        derived_from=v1.id,
-        user_edit=True,
-    )
-    pace_db.registry.lcomponents.save(v2)
-
-    assert {c.id for c in pace_db.registry.lcomponents.children_of(v1.id)} == {v2.id}
-
-
-def test_get_many(pace_db: PaceDB):
-    geometry = _make_geometry()
-    material = _make_material()
-    pace_db.registry.geometries.save(geometry)
-    pace_db.registry.materials.save(material)
-
-    a = LComponent.create(
-        family_name="a", version_label="1", geometry=geometry.id, material=material.id
-    )
-    b = LComponent.create(
-        family_name="b", version_label="1", geometry=geometry.id, material=material.id
-    )
-    pace_db.registry.lcomponents.save(a)
-    pace_db.registry.lcomponents.save(b)
-
-    fetched = pace_db.registry.lcomponents.get_many(
-        [a.id, LComponentID("nonexistent-1")]
-    )
-    assert fetched == {a.id: a}
-
-
-def test_delete_removes_the_row(pace_db: PaceDB):
-    geometry = _make_geometry()
-    material = _make_material()
-    pace_db.registry.geometries.save(geometry)
-    pace_db.registry.materials.save(material)
-
-    lcomponent = LComponent.create(
-        family_name="test_pellet",
-        version_label="1",
-        geometry=geometry.id,
-        material=material.id,
-    )
-    pace_db.registry.lcomponents.save(lcomponent)
-    pace_db.registry.lcomponents.delete(lcomponent.id)
-    assert pace_db.registry.lcomponents.get(lcomponent.id) is None
+def test_deleting_a_referenced_geometry_violates_foreign_key(
+    pace_db: PaceDB, insert, registered_parts
+):
+    insert(pace_db.registry.lcomponents, _pellet())
+    with pytest.raises(IntegrityError):
+        with pace_db.registry.transaction() as session:
+            pace_db.registry.geometries.delete(session, GeometryID("test_cyl-1"))
+    assert pace_db.registry.geometries.exists(GeometryID("test_cyl-1"))
