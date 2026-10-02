@@ -8,11 +8,6 @@ omitting eq=False from its @dataclass decorator.
 """
 
 import pytest
-import pace.core.component  # noqa: F401  (registers subclasses)
-import pace.core.geometry  # noqa: F401
-import pace.core.lattice  # noqa: F401
-import pace.core.material  # noqa: F401
-import pace.core.reactor_blueprint  # noqa: F401
 from pace.core.geometry import GCylinder
 from pace.core.material import MVoid
 from pace.core.versioned import Versioned
