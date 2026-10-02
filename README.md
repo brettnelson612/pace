@@ -36,8 +36,13 @@ PACE does not solve physics or couple solvers. Transport, heat conduction, fluid
 1. **Parametric studies.**
    - persisted GT runs, model variants and batch runs;
    - datasets and surrogates, with hooks for the UQ layer;
-   - fast reactor modeling (lots of work needed here, and V&V datasets are limited).
-2. **Service and UI.** A FastAPI service with the Workshop on top.
+   - fast reactor modeling (lots of work needed here, and V&V datasets are limited/restricted).
+2. **Service and UI.**
+   - Providing a "Reactor Workshop" to make design/visualization easier
+   - Providing a Reactors hub to compile everything a user cares about regarding a reactor (GT runs, datasets, surrogates, etc.)
+
+### Knowledge Base / Resources to get us there
+[PACE Knowledge Base](https://brettnelson612.github.io/pace/knowledge-base.html) — a map of the different knowledge domains involved here along with helpful resources + anecdotes.
 
 ## Repository layout
 
