@@ -936,7 +936,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pytokens-0.4.1-py311haee01d2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.3-py311h3778330_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-hd6e31c0_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.16.5-hdfdb5ae_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.15.15-h6a952e8_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sqlalchemy-2.0.52-py311haee01d2_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h1df4ec4_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/uvloop-0.22.1-py311h49ec1c0_1.conda
@@ -1082,7 +1082,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pytokens-0.4.1-py311h15eb09d_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pyyaml-6.0.3-py311h53ebfaf_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/readline-8.3-h000c2f7_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/ruff-0.16.5-h08e744f_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/ruff-0.15.15-h1ddadc8_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/sqlalchemy-2.0.52-py311h15eb09d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tk-8.6.13-ha6c374e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/uvloop-0.22.1-py311hf197a57_1.conda
@@ -1173,7 +1173,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytokens-0.4.1-py311he363849_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pyyaml-6.0.3-py311hc290fe0_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/readline-8.3-h8b90a29_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ruff-0.16.5-h4e39fff_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ruff-0.15.15-h80928e0_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/sqlalchemy-2.0.52-py311hbea7f41_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-hbeba79b_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/uvloop-0.22.1-py311h9408147_1.conda
@@ -1263,7 +1263,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pytokens-0.4.1-py312hba6025d_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pyyaml-6.0.3-py312h51361c1_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/readline-8.3-h000c2f7_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/ruff-0.16.5-h08e744f_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/ruff-0.15.15-h1ddadc8_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/sqlalchemy-2.0.52-py312hba6025d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tk-8.6.13-ha6c374e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/uvloop-0.22.1-py312h80b0991_1.conda
@@ -1402,7 +1402,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/qhull-2020.2-h434a139_5.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/rdma-core-63.1-h192683f_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-hd6e31c0_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.16.5-hdfdb5ae_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.15.15-h6a952e8_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/scipy-1.17.1-py311hbe70eeb_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/snappy-1.2.2-h03e3b7b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sqlalchemy-2.0.52-py311haee01d2_0.conda
@@ -1708,7 +1708,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pyyaml-6.0.3-py311h53ebfaf_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/qhull-2020.2-h3c5361c_5.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/readline-8.3-h000c2f7_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/ruff-0.16.5-h08e744f_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/ruff-0.15.15-h1ddadc8_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/scipy-1.17.1-py311h556693a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/sqlalchemy-2.0.52-py311h15eb09d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tbb-2023.0.0-he3dc2fa_2.conda
@@ -1772,7 +1772,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/ast-serialize?source=compressed-mapping
+  - pkg:pypi/ast-serialize?source=hash-mapping
   run_exports: {}
   size: 1116952
   timestamp: 1786328964477
@@ -3210,7 +3210,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/greenlet?source=compressed-mapping
+  - pkg:pypi/greenlet?source=hash-mapping
   run_exports: {}
   size: 280754
   timestamp: 1786384053770
@@ -6823,22 +6823,6 @@ packages:
   run_exports: {}
   size: 9174319
   timestamp: 1780055663369
-- conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.16.5-hdfdb5ae_0.conda
-  noarch: python
-  sha256: 6e056514a68826e940616a26fb0351d3d15d89ba47f6c2cbeb1cadd0fe60277a
-  md5: 7ddc6f2699c79c53286b478a6b4c9e92
-  depends:
-  - python
-  - __glibc >=2.17,<3.0.a0
-  - libgcc >=15
-  constrains:
-  - __glibc >=2.17
-  license: MIT
-  purls:
-  - pkg:pypi/ruff?source=compressed-mapping
-  run_exports: {}
-  size: 8955205
-  timestamp: 1787865273472
 - conda: https://conda.anaconda.org/conda-forge/linux-64/rust-1.98.0-hc89c8c8_0.conda
   sha256: 137e8db74dc08aa6fd9483bf40950fef73394d0111dae16b57ed0dbd00608c72
   md5: c911b9a176d76644cb77475537569210
@@ -8783,7 +8767,7 @@ packages:
   - python
   license: MIT
   purls:
-  - pkg:pypi/platformdirs?source=compressed-mapping
+  - pkg:pypi/platformdirs?source=hash-mapping
   run_exports: {}
   size: 27461
   timestamp: 1787881635603
@@ -9572,7 +9556,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/uvicorn?source=compressed-mapping
+  - pkg:pypi/uvicorn?source=hash-mapping
   run_exports: {}
   size: 60189
   timestamp: 1787133003107
@@ -14098,21 +14082,6 @@ packages:
   run_exports: {}
   size: 9225669
   timestamp: 1780055803872
-- conda: https://conda.anaconda.org/conda-forge/osx-64/ruff-0.16.5-h08e744f_0.conda
-  noarch: python
-  sha256: 1773c16d69e2a84213ec77c63d11a8daffdd96b2341cb4584dc66479cd67d1d5
-  md5: f03221287ebc3e60dc4564d2aa34f9c0
-  depends:
-  - python
-  - __osx >=11.0
-  constrains:
-  - __osx >=11.0
-  license: MIT
-  purls:
-  - pkg:pypi/ruff?source=hash-mapping
-  run_exports: {}
-  size: 8837779
-  timestamp: 1787865588580
 - conda: https://conda.anaconda.org/conda-forge/osx-64/rust-1.98.0-h5655b98_0.conda
   sha256: 7d619af2f69231f9cfc63e137ce0d14ebbee2e455e53a4a5c220c1e9df1c39a7
   md5: e99e883dda140294efd9f31e89c156e2
@@ -14273,7 +14242,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/sqlalchemy?source=compressed-mapping
+  - pkg:pypi/sqlalchemy?source=hash-mapping
   run_exports: {}
   size: 3709156
   timestamp: 1786535323117
@@ -14571,7 +14540,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/ast-serialize?source=compressed-mapping
+  - pkg:pypi/ast-serialize?source=hash-mapping
   run_exports: {}
   size: 1085485
   timestamp: 1786328966627
@@ -14632,7 +14601,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/greenlet?source=compressed-mapping
+  - pkg:pypi/greenlet?source=hash-mapping
   run_exports: {}
   size: 275987
   timestamp: 1786384278192
@@ -14937,21 +14906,22 @@ packages:
     - readline >=8.3,<9.0a0
   size: 314395
   timestamp: 1787033878899
-- conda: https://conda.anaconda.org/conda-forge/osx-arm64/ruff-0.16.5-h4e39fff_0.conda
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/ruff-0.15.15-h80928e0_1.conda
   noarch: python
-  sha256: 7770d275e7bab61c9f33dd646551975e546c8df5fa215691133e13207814f535
-  md5: c736cce00267b24375ea10abbe2fedc7
+  sha256: 770d6f74f247b02f4cf8bc6f7066bac178746fbfabea12f2675aea20c50ba9c6
+  md5: cbe46e26504a93010089bc3d3ed636aa
   depends:
   - python
   - __osx >=11.0
   constrains:
   - __osx >=11.0
   license: MIT
+  license_family: MIT
   purls:
   - pkg:pypi/ruff?source=hash-mapping
   run_exports: {}
-  size: 8177581
-  timestamp: 1787865392183
+  size: 8424737
+  timestamp: 1780055998652
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/sqlalchemy-2.0.52-py311hbea7f41_0.conda
   sha256: ae00294e6ba3826e4fd65de41afbc2ce3c0ec3b1b7efef213f86127233b2f705
   md5: 506153f8303e9a10d8b326e55be12661
@@ -14964,7 +14934,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/sqlalchemy?source=compressed-mapping
+  - pkg:pypi/sqlalchemy?source=hash-mapping
   run_exports: {}
   size: 3767670
   timestamp: 1786535243833
