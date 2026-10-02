@@ -1,4 +1,4 @@
-# PACE (still being developed)
+# PACE
 
 **PACE (Physics-Aware Coupled Emulator)** is a reactor modeling platform that sits above open-source physics solvers. PACE will allow a user to build a versioned, composable model, then turn that model into inputs for OpenMC, MOOSE and Cardinal. Once a model is complete, PACE will allow a user to run physics simulations + V&V and turn the resulting output into datasets and surrogate models.
 
