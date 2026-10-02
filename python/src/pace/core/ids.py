@@ -17,7 +17,7 @@ before wrapping it.
 
 """
 
-from typing import NewType, TypeAlias
+from typing import NewType
 
 # --- Geometry ---
 GeometryID = NewType("GeometryID", str)
@@ -30,7 +30,7 @@ LComponentID = NewType("LComponentID", str)
 CComponentID = NewType("CComponentID", str)
 LatticeID = NewType("LatticeID", str)
 
-ComponentID: TypeAlias = LComponentID | CComponentID | LatticeID
+type ComponentID = LComponentID | CComponentID | LatticeID
 
 # --- ComponentPlacement ---
 ComponentPlacementID = NewType("ComponentPlacementID", str)
