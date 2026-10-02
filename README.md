@@ -1,60 +1,89 @@
-# PACE
-Monorepo to hold PACE (Physics-Aware Coupled Emulator) platform and digital twin implementations.
+# PACE (still being developed)
 
-## Developer workflow
+**PACE (Physics-Aware Coupled Emulator)** is a reactor modeling platform that sits above open-source physics solvers. PACE will allow a user to build a versioned, composable model, then turn that model into inputs for OpenMC, MOOSE and Cardinal. Once a model is complete, PACE will allow a user to run physics simulations + V&V and turn the resulting output into datasets and surrogate models.
 
-### What is Pixi?
+PACE does not solve physics or couple solvers. Transport, heat conduction, fluid flow, etc belong to the solvers; field transfer and Picard iteration belong to Cardinal. PACE owns everything around a simulation: defining the model, versioning it, generating solver inputs, launching runs, and building datasets, surrogates and uncertainty quantification on the results.
 
-We use [Pixi](https://pixi.prefix.dev/) to manage PACE's dependencies and environments — one manifest (`pixi.toml`) resolving both conda-forge and PyPI packages together into fully reproducible, per-platform lockfiles. We're on Pixi rather than plain pip/venv because OpenMC is distributed primarily through conda-forge (it ships compiled C++ code and native libraries that pip wheels handle poorly), and Pixi is what lets us manage that alongside our pure-Python dependencies in one place.
+## PACE Scope
 
-Key terms used below:
+- **Reactor models.** Geometry, materials and a composition hierarchy: pellets → rods → pin cells → lattices → assemblies → cores. Each model holds the minimum complete input the solvers need.
+- **Versioning and provenance.** Every model object is versioned. A version derived from a simulation result records which ground-truth (GT) run produced it.
+- **Solver input generation.**
+  - OpenMC models (neutronics).
+  - MOOSE inputs, through Reactor module mesh generators: Heat Transfer for fuel and cladding, THM for the coolant.
+  - Cardinal inputs for coupled runs.
+- **Ground Truth run management.** Launch, track and store runs, each linked to the model version it ran.
+- **Datasets, surrogates and UQ.** Build datasets from GT runs, train surrogates on them, and quantify uncertainty across models, runs and surrogates.
+- **Workshop UI.** Design, browse and edit reactor models; manage each reactor's runs, datasets and surrogates.
 
-- **Workspace** — the project-level config at the top of `pixi.toml`: name, authors, channels, and the full set of platforms the repo could ever target.
-- **Feature** — a named, reusable bundle of dependencies (e.g. `pace-py`, `openmc`, `cpp-build`, `rust-build`). Inert on its own — only takes effect once included in an environment.
-- **Environment** — a named combination of one or more features; this is the actual thing you activate or run commands in (`dev`, `physics`, `default`). An environment's supported platforms are the *intersection* of every feature it includes, not the union — this is how `openmc`'s narrower platform list excludes Apple Silicon from any environment that includes it.
-- **Lockfile** (`pixi.lock`) — the fully resolved, exact-version record of every dependency, per environment and per platform. `pixi.toml` expresses intent ("some version of fastapi"); `pixi.lock` records the actual resolved outcome. Commit both together, always.
+**Validation:** initial POC models will be LWR's to run VERA problems [VERA core physics benchmark progression problems](https://corephysics.com/docs/CASL-U-2012-0131-004.pdf). More may be added from there.
 
-### Environment setup
+**Non-goals:**
+- writing solvers or coupling algorithms;
+- targeting proprietary or export-controlled codes (MCNP, BISON, Griffin) as primary solvers, so that results stay reproducible by anyone.
 
-1. Install Pixi: `curl -fsSL https://pixi.sh/install.sh | sh`, then restart your shell (or `source ~/.zshrc`).
-2. Clone the repo and `cd` into it.
-3. Run `pixi install -e dev` to build the local dev environment.
-4. Install the [Pixi VS Code extension](https://marketplace.visualstudio.com/items?itemName=renan-r-santos.pixi-code) — or rely on VS Code's built-in Python extension, which auto-detects Pixi environments natively as of mid-2024 and doesn't require a separate install.
-5. Open the repo root in VS Code (not a subfolder) — it should auto-detect the `dev` environment. If prompted, select it via `Python: Select Interpreter`.
+### Roadmap to v1
 
-No `conda activate` needed. Use `pixi shell -e dev` for a subshell with the environment active, or `pixi run -e dev <command>` for one-off commands without a persistent shell.
+1. **PACE → OpenMC.** Reproduce VERA problems 1 and 2.
+2. **Coupled pin cell.** OpenMC + MOOSE Heat Transfer + THM, coupled through Cardinal.
+
+### Roadmap to v2+
+1. **Parametric studies.**
+   - persisted GT runs, model variants and batch runs;
+   - datasets and surrogates, with hooks for the UQ layer;
+   - fast reactor modeling (lots of work needed here, and V&V datasets are limited).
+2. **Service and UI.** A FastAPI service with the Workshop on top.
+
+## Repository layout
+
+```
+python/
+  src/pace/
+    core/       domain model: geometry, material, components, lattices, blueprints
+    db/         persistence: SQLite registry, DAOs, reference index, object store
+    services/   registry rules: registration, validation, hydration
+    solvers/    solver translators (OpenMC, MOOSE, Cardinal) — in progress
+  tests/        unit and integration tests
+cpp/, rust/     reserved for compiled components
+docs/           project knowledge base
+```
+
+## Development
+
+PACE uses [Pixi](https://pixi.prefix.dev/) for dependencies, environments and tasks. Pixi is used instead of pip/venv because:
+
+- OpenMC and MOOSE are distributed through conda channels;
+- PACE's pure-Python dependencies come from PyPI;
+- Pixi resolves both together into one lockfile, per platform.
+
+`pixi.toml` declares what we want; `pixi.lock` records exactly what was resolved. Commit the two together.
+
+### Setup
+
+1. Install Pixi: `curl -fsSL https://pixi.sh/install.sh | sh`, then restart your shell.
+2. Clone the repo and run `pixi install -e no-phys-dev`.
+3. Open the repo root in VS Code. `.vscode/settings.json` points the Python interpreter at the `no-phys-dev` environment.
 
 ### Environments
 
-| Environment | Features                                       | Platforms                         | Use for                                                                                     |
-| ----------- | ---------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------- |
-| `dev`       | `pace-py`                                      | `osx-arm64`, `osx-64`, `linux-64` | Day-to-day service/API work. Native on Apple Silicon, no OpenMC.                            |
-| `physics`   | `pace-py`, `openmc`                            | `osx-64`, `linux-64` only         | Anything importing OpenMC or touching the GT pipeline. Runs under Rosetta on Apple Silicon. |
-| `default`   | `pace-py`, `openmc`, `cpp-build`, `rust-build` | `osx-64`, `linux-64` only         | Full contributor / CI setup — everything, all languages.                                    |
-
-> **Working on physics/GT code?** `.vscode/settings.json` defaults to the `dev` environment. If your work touches OpenMC or the GT pipeline, run `pixi install -e physics` first, then switch VS Code's interpreter to `.pixi/envs/physics/bin/python` via `Python: Select Interpreter` — `dev` won't have OpenMC and imports will fail. On Apple Silicon, `physics` runs under Rosetta (OpenMC has no native `osx-arm64` build), so expect a one-time Rosetta prompt and somewhat slower execution than `dev`.
-
-### Adding a new dependency
-
-Everything — Python packages included — is declared in `pixi.toml`, never in `src-py/pyproject.toml`. `pyproject.toml` holds only `pace`'s own package identity (name, version, build system); it is not a place to list dependencies.
-
-| Adding...                                                         | Command                                                |
-| ----------------------------------------------------------------- | ------------------------------------------------------ |
-| Anything available on conda-forge (preferred default)             | `pixi add --feature <feature-name> <package>`          |
-| Something PyPI-only, or needing PyPI extras syntax (`pkg[extra]`) | `pixi add --feature <feature-name> --pypi "<package>"` |
-
-Prefer conda-forge unless there's a specific reason not to (a PyPI-only package, or an extras syntax like `[standard]` that only PyPI supports) — that's the whole reason we're on Pixi over plain pip.
-
-After any dependency change, run `pixi install` to confirm the lockfile resolves cleanly, then commit `pixi.toml` and `pixi.lock` together. Lockfile diffs can be large even for a single added package — a new dependency ripples across every environment/platform combination that includes it, so a big diff for a small change is expected, not a red flag.
+| Environment | Adds | Platforms | Use for |
+| --- | --- | --- | --- |
+| `no-phys-dev` | dev tools, `pace-py` | `osx-arm64`, `osx-64`, `linux-64` | Everyday modeling, registry and service work. The only environment that runs natively on Apple Silicon. |
+| `py-phys-dev` | + OpenMC | `osx-64`, `linux-64` | Anything that imports OpenMC. Runs under Rosetta on Apple Silicon. |
+| `full-phys-dev` | + MOOSE, C++/Rust toolchains | `osx-64`, `linux-64` | Cardinal / MOOSE work. The only environment with the `moose-*` tasks. |
 
 ### Common commands
 
 ```bash
-pixi install                 # resolve + build environment(s), regenerate lockfile if stale
-pixi shell -e dev              # activated subshell for a given environment
-pixi run -e dev <command>       # run one command in an environment, no persistent shell
-pixi run <task>                  # run a defined task (e.g. `pixi run serve`), from inside an active shell
-exit                              # or Ctrl+D — leave a pixi shell
+pixi shell -e no-phys-dev                 # shell with the environment active
+pixi run -e no-phys-dev check             # everything CI runs: ruff, black, mypy, tests
+pixi run -e no-phys-dev format            # ruff --fix + black
+pixi add --feature <feature> <package>    # add a conda-forge dependency (preferred)
+pixi add --feature <feature> --pypi <pkg> # add a PyPI-only dependency
 ```
 
-`.pixi/` (the local environment cache) is gitignored — never commit it. If your environment ever looks stale or broken, `pixi update` forces a fresh re-solve.
+Dependencies go in `pixi.toml`, never in `python/pyproject.toml`; `pyproject.toml` only defines the `pace` package itself. After changing dependencies, run `pixi install` and commit `pixi.toml` and `pixi.lock` together.
+
+## License
+
+See [LICENSE](LICENSE).
