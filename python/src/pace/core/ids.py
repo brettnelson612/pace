@@ -40,11 +40,3 @@ ReactorBlueprintID = NewType("ReactorBlueprintID", str)
 
 # --- Simulation provenance ---
 GTRunID = NewType("GTRunID", str)
-
-# --- ComponentPlacement addressing ---
-# ComponentPlacement identity is path-style (relative to its parent CComponent),
-# not a flat opaque ID like the above — deliberately not aliased to a
-# plain NewType(str) yet. Revisit once the path/address representation
-# itself is designed; a flat-address lookup utility may warrant its own
-# type at that point (e.g. ComponentPlacementAddress), separate from the
-# individual per-level position keys that compose it.
