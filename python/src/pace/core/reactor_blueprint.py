@@ -38,8 +38,7 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
           bounds equal the Reactor's); needed for things like bypass
           flow around a core. It never reaches coolant inside the
           root's nested composites — each composite owns its own fill.
-    - root: the placed root component (a ComponentPlacement, so it carries a
-          ComponentRef plus a pose).
+    - root: the root ComponentPlacement (placement is relative to bounds).
     - neutron_bcs: one condition per face of the bounds. RegistryService
           checks the keys are exactly the faces of the bounds shape.
     - thermal_bcs: optional; any face not listed is adiabatic.
@@ -51,6 +50,7 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
             family_name="vera_problem_1",
             version_label="1",
             bounds=pin_cell_box.id,
+            fill=None,
             root=ComponentPlacement(
                 id=ComponentPlacementID("pin_cell"),
                 pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
