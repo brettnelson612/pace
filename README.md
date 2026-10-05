@@ -79,7 +79,6 @@ PACE uses [Pixi](https://pixi.prefix.dev/) for dependencies, environments and ta
 | Environment | Adds | Platforms | Use for |
 | --- | --- | --- | --- |
 | `no-phys-dev` | dev tools, `pace-py` | `osx-arm64`, `osx-64`, `linux-64` | Everyday modeling, registry and service work. The only environment that runs natively on Apple Silicon. |
-| `py-phys-dev` | + OpenMC | `osx-64`, `linux-64` | Anything that imports OpenMC. Runs under Rosetta on Apple Silicon. |
 | `full-phys-dev` | + MOOSE, C++/Rust toolchains | `osx-64`, `linux-64` | Cardinal / MOOSE work. The only environment with the `moose-*` tasks. |
 
 ### Common commands
