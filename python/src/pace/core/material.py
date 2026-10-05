@@ -586,9 +586,7 @@ class MMixture(Material):
         Rules enforced:
             - at least 2 constituent materials — a "mixture" of one
                   material isn't a mixture.
-            - every fraction strictly between 0 and 1 — a fraction of
-                  0 or 1 means that constituent isn't really part of a
-                  mix.
+            - every fraction strictly between 0 and 1
             - fractions sum to exactly 1 (within floating-point
                   tolerance) — mixing combines 100% of a shared volume;
                   no void/remainder concept is supported yet.
