@@ -38,7 +38,7 @@ class VersionedRow(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     family_name: Mapped[str] = mapped_column(String, nullable=False, index=True)
     version_label: Mapped[str] = mapped_column(String, nullable=False)
-    gt_run_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    simulation_job_id: Mapped[str | None] = mapped_column(String, nullable=True)
     user_edit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     data: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

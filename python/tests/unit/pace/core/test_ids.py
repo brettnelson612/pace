@@ -11,12 +11,12 @@ field before wrapping it).
 from pace.core.ids import (
     CComponentID,
     GeometryID,
-    GTRunID,
     LatticeID,
     LComponentID,
     MaterialID,
     ComponentPlacementID,
     ReactorBlueprintID,
+    SimulationJobID,
 )
 
 ALL_ID_TYPES = [
@@ -27,7 +27,7 @@ ALL_ID_TYPES = [
     CComponentID,
     LatticeID,
     ReactorBlueprintID,
-    GTRunID,
+    SimulationJobID,
 ]
 
 

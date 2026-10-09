@@ -175,7 +175,8 @@ class ResolvedComponent(PaceObject):
 @dataclass(frozen=True, kw_only=True, eq=False)
 class ResolvedReactorBlueprint(PaceObject):
     """A Reactor and the fully hydrated model it runs on — the single
-    input every solver adapter takes (alongside a run spec)."""
+    input every solver adapter takes (alongside the rest of the simulation
+    case)."""
 
     reactor_blueprint: ReactorBlueprint
     rc: ResolvedComponent

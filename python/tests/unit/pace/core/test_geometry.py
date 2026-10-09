@@ -28,7 +28,7 @@ from pace.core.geometry import (
     GSubtraction,
     geometry_from_dict,
 )
-from pace.core.ids import GeometryID, GTRunID
+from pace.core.ids import GeometryID, SimulationJobID
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -43,7 +43,7 @@ def _base_kwargs(
         "family_name": family_name,
         "version_label": version_label,
         "derived_from": None,
-        "gt_run_id": None,
+        "simulation_job_id": None,
         "user_edit": False,
     }
     kwargs.update(overrides)
@@ -126,31 +126,45 @@ class TestGeometryBase:
         with pytest.raises(TypeError):
             Incomplete(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
-    # (derived_from, gt_run_id, user_edit, should_raise), parametrized over
+    # (derived_from, simulation_job_id, user_edit, should_raise), parametrized over
     # all 8 lineage-rule cases
     LINEAGE_CASES: ClassVar[list] = [
         pytest.param(None, None, False, False, id="v1_valid"),
-        pytest.param(None, GTRunID("run-1"), False, True, id="v1_with_gt_run_id"),
-        pytest.param(None, None, True, True, id="v1_with_user_edit"),
-        pytest.param(None, GTRunID("run-1"), True, True, id="v1_with_both"),
         pytest.param(
-            GeometryID("gv-0"), GTRunID("run-1"), False, False, id="derived_gt_run_only"
+            None, SimulationJobID("job-1"), False, True, id="v1_with_simulation_job_id"
+        ),
+        pytest.param(None, None, True, True, id="v1_with_user_edit"),
+        pytest.param(None, SimulationJobID("job-1"), True, True, id="v1_with_both"),
+        pytest.param(
+            GeometryID("gv-0"),
+            SimulationJobID("job-1"),
+            False,
+            False,
+            id="derived_simulation_job_only",
         ),
         pytest.param(
             GeometryID("gv-0"), None, True, False, id="derived_user_edit_only"
         ),
         pytest.param(GeometryID("gv-0"), None, False, True, id="derived_with_neither"),
         pytest.param(
-            GeometryID("gv-0"), GTRunID("run-1"), True, True, id="derived_with_both"
+            GeometryID("gv-0"),
+            SimulationJobID("job-1"),
+            True,
+            True,
+            id="derived_with_both",
         ),
     ]
 
     @pytest.mark.parametrize(
-        "derived_from,gt_run_id,user_edit,should_raise", LINEAGE_CASES
+        "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
     )
-    def test_lineage_rule(self, derived_from, gt_run_id, user_edit, should_raise):
+    def test_lineage_rule(
+        self, derived_from, simulation_job_id, user_edit, should_raise
+    ):
         kwargs = _base_kwargs(
-            derived_from=derived_from, gt_run_id=gt_run_id, user_edit=user_edit
+            derived_from=derived_from,
+            simulation_job_id=simulation_job_id,
+            user_edit=user_edit,
         )
         kwargs.update(VALID_SHAPE_KWARGS[GCylinder])
         if should_raise:

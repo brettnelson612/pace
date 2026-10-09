@@ -5,7 +5,7 @@ Covers: Material identity (build_id/_validate_id), the three-state
 lineage rule, ABC enforcement, MaterialComponentEntry's all-or-none
 enrichment invariant, field constraints, enum-typed fields (PercentType,
 DensityUnit) rejecting plain strings and unknown values,
-MIsotopic's composition-level rules (non-empty, GT-run-derived
+MIsotopic's composition-level rules (non-empty, simulation-derived
 restricted to exact nuclides, enrichment-format keys restricted to bare
 elements), MMixture's composition-level rules (min constituents,
 fraction bounds, fractions summing to 1), ThermalScatteringLibrary and
@@ -17,7 +17,7 @@ import dataclasses
 from typing import ClassVar
 
 import pytest
-from pace.core.ids import GTRunID, MaterialID
+from pace.core.ids import MaterialID, SimulationJobID
 from pace.core.material import (
     DensityUnit,
     Material,
@@ -48,7 +48,7 @@ def _base_kwargs(
         "family_name": family_name,
         "version_label": version_label,
         "derived_from": None,
-        "gt_run_id": None,
+        "simulation_job_id": None,
         "user_edit": False,
     }
     kwargs.update(overrides)
@@ -280,37 +280,53 @@ class TestMaterialBase:
         with pytest.raises(TypeError):
             Incomplete(**_base_kwargs())  # pyright: ignore[reportAbstractUsage]
 
-    # (derived_from, gt_run_id, user_edit, should_raise), parametrized over
+    # (derived_from, simulation_job_id, user_edit, should_raise), parametrized over
     # all 8 lineage-rule cases
     LINEAGE_CASES: ClassVar[list] = [
         pytest.param(None, None, False, False, id="v1_valid"),
-        pytest.param(None, GTRunID("run-1"), False, True, id="v1_with_gt_run_id"),
-        pytest.param(None, None, True, True, id="v1_with_user_edit"),
-        pytest.param(None, GTRunID("run-1"), True, True, id="v1_with_both"),
         pytest.param(
-            MaterialID("mv-0"), GTRunID("run-1"), False, False, id="derived_gt_run_only"
+            None, SimulationJobID("job-1"), False, True, id="v1_with_simulation_job_id"
+        ),
+        pytest.param(None, None, True, True, id="v1_with_user_edit"),
+        pytest.param(None, SimulationJobID("job-1"), True, True, id="v1_with_both"),
+        pytest.param(
+            MaterialID("mv-0"),
+            SimulationJobID("job-1"),
+            False,
+            False,
+            id="derived_simulation_job_only",
         ),
         pytest.param(
             MaterialID("mv-0"), None, True, False, id="derived_user_edit_only"
         ),
         pytest.param(MaterialID("mv-0"), None, False, True, id="derived_with_neither"),
         pytest.param(
-            MaterialID("mv-0"), GTRunID("run-1"), True, True, id="derived_with_both"
+            MaterialID("mv-0"),
+            SimulationJobID("job-1"),
+            True,
+            True,
+            id="derived_with_both",
         ),
     ]
 
     @pytest.mark.parametrize(
-        "derived_from,gt_run_id,user_edit,should_raise", LINEAGE_CASES
+        "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
     )
-    def test_lineage_rule(self, derived_from, gt_run_id, user_edit, should_raise):
+    def test_lineage_rule(
+        self, derived_from, simulation_job_id, user_edit, should_raise
+    ):
         if should_raise:
             with pytest.raises(ValueError):
                 make_isotopic(
-                    derived_from=derived_from, gt_run_id=gt_run_id, user_edit=user_edit
+                    derived_from=derived_from,
+                    simulation_job_id=simulation_job_id,
+                    user_edit=user_edit,
                 )
         else:
             make_isotopic(
-                derived_from=derived_from, gt_run_id=gt_run_id, user_edit=user_edit
+                derived_from=derived_from,
+                simulation_job_id=simulation_job_id,
+                user_edit=user_edit,
             )  # should not raise
 
 
@@ -369,7 +385,7 @@ class TestMIsotopic:
     def test_v1_with_enrichment_is_allowed(self):
         make_isotopic(
             derived_from=None,
-            gt_run_id=None,
+            simulation_job_id=None,
             user_edit=False,
             components={
                 "U": MaterialComponentEntry(
@@ -382,12 +398,12 @@ class TestMIsotopic:
         )
 
     def test_user_edited_version_with_enrichment_is_allowed(self):
-        # a manual edit (user_edit=True) is not GT-run output, so it can
-        # still use enrichment shorthand — only gt_run_id restricts to
+        # a manual edit (user_edit=True) is not simulation output, so it can
+        # still use enrichment shorthand — only simulation_job_id restricts to
         # bare nuclides
         make_isotopic(
             derived_from=MaterialID("mv-0"),
-            gt_run_id=None,
+            simulation_job_id=None,
             user_edit=True,
             components={
                 "U": MaterialComponentEntry(
@@ -399,14 +415,14 @@ class TestMIsotopic:
             },
         )
 
-    def test_v2_plus_gt_derived_with_enrichment_rejected(self):
+    def test_v2_plus_simulation_derived_with_enrichment_rejected(self):
         # depletion output must be exact nuclide fractions — enrichment
-        # shorthand on a GT-run-derived version indicates an inconsistent
+        # shorthand on a simulation-derived version indicates an inconsistent
         # or incorrectly-constructed version
         with pytest.raises(ValueError):
             make_isotopic(
                 derived_from=MaterialID("mv-0"),
-                gt_run_id=GTRunID("run-1"),
+                simulation_job_id=SimulationJobID("job-1"),
                 user_edit=False,
                 components={
                     "U": MaterialComponentEntry(
@@ -418,10 +434,10 @@ class TestMIsotopic:
                 },
             )
 
-    def test_v2_plus_gt_derived_with_bare_nuclides_is_allowed(self):
+    def test_v2_plus_simulation_derived_with_bare_nuclides_is_allowed(self):
         make_isotopic(
             derived_from=MaterialID("mv-0"),
-            gt_run_id=GTRunID("run-1"),
+            simulation_job_id=SimulationJobID("job-1"),
             user_edit=False,
             components={
                 "U235": MaterialComponentEntry(percent=3.0),
@@ -445,7 +461,7 @@ class TestMIsotopic:
         assert rebuilt.family_name == original.family_name
         assert rebuilt.version_label == original.version_label
         assert rebuilt.derived_from == original.derived_from
-        assert rebuilt.gt_run_id == original.gt_run_id
+        assert rebuilt.simulation_job_id == original.simulation_job_id
         assert rebuilt.user_edit == original.user_edit
         assert rebuilt.percent_type == original.percent_type
         assert rebuilt.density_value == original.density_value
@@ -675,10 +691,12 @@ class TestMVoid:
     def test_lineage_rule_still_applies(self):
         # MVoid inherits Material's lineage validation same as
         # any other subclass — v1 (no derivation cause) is fine here
-        make_void(derived_from=None, gt_run_id=None, user_edit=False)
+        make_void(derived_from=None, simulation_job_id=None, user_edit=False)
         # derived with no cause is still rejected
         with pytest.raises(ValueError):
-            make_void(derived_from=MaterialID("mv-0"), gt_run_id=None, user_edit=False)
+            make_void(
+                derived_from=MaterialID("mv-0"), simulation_job_id=None, user_edit=False
+            )
 
     def test_frozen(self):
         instance = make_void()

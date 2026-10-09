@@ -155,7 +155,7 @@ class TabulatedProperty(PaceObject):
     """A temperature-dependent material property as (temperature_k,
     value) points for interpolation — thermal conductivity, specific
     heat, thermal expansion, elastic modulus. Distinct from a
-    Material's own gt_run_id/user_edit lineage: this describes how ONE
+    Material's own simulation_job_id/user_edit lineage: this describes how ONE
     physical property varies with temperature, not how the material's
     composition evolved over time.
 
@@ -195,7 +195,7 @@ class MaterialComponentEntry(PaceObject):
     1. Exact nuclide, no enrichment fields —
        e.g. {"percent": 3.2} under the key "U235". This states exactly
        how much of a specific isotope is present. No ambiguity, no
-       expansion needed. This is the ONLY form a GT-run-derived (v2+)
+       expansion needed. This is the ONLY form a simulation-derived (v2+)
        composition can take — depletion output is always exact
        per-isotope densities (see Material and
        MIsotopic._validate_composition).
@@ -294,7 +294,7 @@ class Material(Versioned[MaterialID]):
     MVoid).
 
     Identity/lineage (id/family_name/version_label/derived_from/
-    gt_run_id/user_edit, build_id(), create(), the three-state
+    simulation_job_id/user_edit, build_id(), create(), the three-state
     lineage rule) are inherited from Versioned — see that class's
     docstring. This class adds composition-related concerns: the
     type-tag dispatch mechanism, thermal-scattering tables, and
@@ -435,7 +435,7 @@ class Material(Versioned[MaterialID]):
 class MIsotopic(Material):
     """
     Direct nuclide/element composition — the common case, and the only
-    form GT-run-derived versions can take.
+    form simulation-derived versions can take.
 
     Physically: this is "what is this material actually made of" —
     a set of nuclides/elements (see MaterialComponentEntry for the two
@@ -476,7 +476,7 @@ class MIsotopic(Material):
         """Enforce the two composition-level physical rules:
 
         Rules enforced:
-            - a GT-run-derived (v2+) version's components must all be
+            - a simulation-derived (v2+) version's components must all be
                   exact nuclide fractions — depletion (the Bateman
                   equation) produces isotope-by-isotope densities, never
                   element-level enrichment shorthand, so any enrichment
@@ -500,10 +500,10 @@ class MIsotopic(Material):
 
         for name, entry in self.components.items():
             if entry.enrichment is not None:
-                if self.gt_run_id is not None:
+                if self.simulation_job_id is not None:
                     raise ValueError(
                         f"component '{name}' uses enrichment format, which "
-                        "is not valid on a GT-run-derived (v2+) Material "
+                        "is not valid on a simulation-derived (v2+) Material "
                         "— depletion output must be exact nuclide fractions"
                     )
                 if any(char.isdigit() for char in name):

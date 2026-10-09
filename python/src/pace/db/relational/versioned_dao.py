@@ -129,7 +129,7 @@ class VersionedDAO(Generic[RowT, ModelT, IDT]):
         """The most recently created version in this family. A display
         default only — never a substitute for explicit version
         selection where a user chooses which version to act on (e.g.
-        starting a GT run)."""
+        starting a simulation job)."""
         with self._db.session() as session:
             row = session.scalars(
                 select(self._row_type)
@@ -169,7 +169,7 @@ class VersionedDAO(Generic[RowT, ModelT, IDT]):
             family_name=model.family_name,
             version_label=model.version_label,
             derived_from=model.derived_from,
-            gt_run_id=model.gt_run_id,
+            simulation_job_id=model.simulation_job_id,
             user_edit=model.user_edit,
             data=data,
             **self._extra_columns(model, data),

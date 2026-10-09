@@ -8,7 +8,7 @@ database.
 
 Currently exposes only `.registry` (RegistryDB), which also holds
 Reactors — they're versioned model objects like any other. `.surrogates`,
-`.gt`, and `.data` are deliberately not stubbed in yet:
+`.simulation`, and `.data` are deliberately not stubbed in yet:
 each needs its own DAOs (and, for the hybrid ones, an ObjectStore)
 before there's anything real to compose. They get added here as those
 land, not before.
