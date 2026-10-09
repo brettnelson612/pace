@@ -5,7 +5,7 @@ Reactor structure objects:
     - LComponent — a leaf: one geometry paired with one material, no
           position of its own. Versioned like Geometry/Material/
           CComponent: family_name + version_label identity, and the
-          same three-state derived_from/gt_run_id/user_edit lineage
+          same three-state derived_from/simulation_job_id/user_edit lineage
           rule.
     - ComponentPlacement — a component placement: a pose plus a ComponentRef to one
           LComponent, CComponent, or Lattice. Only ever a member of a
@@ -179,7 +179,7 @@ class LComponent(Versioned[LComponentID]):
     position of its own.
 
     Identity/lineage (id/family_name/version_label/derived_from/
-    gt_run_id/user_edit, build_id(), create(), the three-state
+    simulation_job_id/user_edit, build_id(), create(), the three-state
     lineage rule) are inherited from Versioned — see that class's
     docstring.
 
@@ -193,10 +193,10 @@ class LComponent(Versioned[LComponentID]):
     propagating a change up through every reference path) carries the
     SAME cause as the root edit that triggered the cascade: if a human
     hand-edited the referenced geometry, the new LComponent version
-    this produces is also user_edit=True; if a GT run produced the
-    root change, the new LComponent version carries that same
-    gt_run_id. The human or the GT run is the root cause of the whole
-    chain, not just the one object they directly touched.
+    this produces is also user_edit=True; if a simulation job produced
+    the root change, the new LComponent version carries that same
+    simulation_job_id. The human or the simulation job is the root cause of the
+    whole chain, not just the one object they directly touched.
 
     Example — a UO2 fuel pellet, referencing an already-defined
     cylinder geometry and enriched-UO2 material:

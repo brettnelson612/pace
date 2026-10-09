@@ -6,7 +6,7 @@ lifecycle; every repository receives a SqlDB instance rather than
 constructing its own connection.
 
 Named distinctly from the higher-level PaceDB composition root
-(PaceDB.registry / .gt / .data / etc., per the datastore design) —
+(PaceDB.registry / .simulation / .data / etc., per the datastore design) —
 this class only knows about the raw SQLAlchemy engine/session, one
 layer below Registry and well below PaceDB itself.
 

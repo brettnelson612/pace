@@ -26,11 +26,11 @@ from pace.core.geometry import GPose
 from pace.core.ids import (
     CComponentID,
     GeometryID,
-    GTRunID,
     LatticeID,
     LComponentID,
     MaterialID,
     ComponentPlacementID,
+    SimulationJobID,
 )
 from pace.core.reference_types import ReferenceableType
 
@@ -127,22 +127,34 @@ def test_lcomponent_validate_id_mismatch_raises():
 # =============================================================================
 
 LINEAGE_CASES = [
-    # (derived_from, gt_run_id, user_edit, should_raise)
+    # (derived_from, simulation_job_id, user_edit, should_raise)
     pytest.param(None, None, False, False, id="v1_valid"),
-    pytest.param(None, GTRunID("gt-1"), False, True, id="v1_with_gt_run_id"),
-    pytest.param(None, None, True, True, id="v1_with_user_edit"),
-    pytest.param(None, GTRunID("gt-1"), True, True, id="v1_with_both"),
     pytest.param(
-        "fuel_pellet-1", GTRunID("gt-1"), False, False, id="derived_gt_run_only"
+        None, SimulationJobID("job-1"), False, True, id="v1_with_simulation_job_id"
+    ),
+    pytest.param(None, None, True, True, id="v1_with_user_edit"),
+    pytest.param(None, SimulationJobID("job-1"), True, True, id="v1_with_both"),
+    pytest.param(
+        "fuel_pellet-1",
+        SimulationJobID("job-1"),
+        False,
+        False,
+        id="derived_simulation_job_only",
     ),
     pytest.param("fuel_pellet-1", None, True, False, id="derived_user_edit_only"),
     pytest.param("fuel_pellet-1", None, False, True, id="derived_with_neither"),
-    pytest.param("fuel_pellet-1", GTRunID("gt-1"), True, True, id="derived_with_both"),
+    pytest.param(
+        "fuel_pellet-1", SimulationJobID("job-1"), True, True, id="derived_with_both"
+    ),
 ]
 
 
-@pytest.mark.parametrize("derived_from,gt_run_id,user_edit,should_raise", LINEAGE_CASES)
-def test_lcomponent_lineage_rule(derived_from, gt_run_id, user_edit, should_raise):
+@pytest.mark.parametrize(
+    "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+)
+def test_lcomponent_lineage_rule(
+    derived_from, simulation_job_id, user_edit, should_raise
+):
     version_label = "2" if derived_from else "1"
     derived_from_id = LComponentID(derived_from) if derived_from else None
 
@@ -153,7 +165,7 @@ def test_lcomponent_lineage_rule(derived_from, gt_run_id, user_edit, should_rais
             geometry=GeometryID("fuel_pellet_cyl-1"),
             material=MaterialID("uranium3.2_uo2-1"),
             derived_from=derived_from_id,
-            gt_run_id=gt_run_id,
+            simulation_job_id=simulation_job_id,
             user_edit=user_edit,
         )
 
@@ -313,8 +325,12 @@ def test_ccomponent_validate_id_mismatch_raises():
 # =============================================================================
 
 
-@pytest.mark.parametrize("derived_from,gt_run_id,user_edit,should_raise", LINEAGE_CASES)
-def test_ccomponent_lineage_rule(derived_from, gt_run_id, user_edit, should_raise):
+@pytest.mark.parametrize(
+    "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+)
+def test_ccomponent_lineage_rule(
+    derived_from, simulation_job_id, user_edit, should_raise
+):
     version_label = "2" if derived_from else "1"
     derived_from_id = (
         CComponentID(derived_from.replace("fuel_pellet", "fuel_pin"))
@@ -326,7 +342,7 @@ def test_ccomponent_lineage_rule(derived_from, gt_run_id, user_edit, should_rais
         return _ccomponent(
             version_label=version_label,
             derived_from=derived_from_id,
-            gt_run_id=gt_run_id,
+            simulation_job_id=simulation_job_id,
             user_edit=user_edit,
         )
 

@@ -12,7 +12,7 @@ validation; lattice_from_dict dispatch; id-based equality.
 
 import pytest
 from pace.core.component import ComponentRef, ComponentType
-from pace.core.ids import GTRunID, LatticeID, MaterialID
+from pace.core.ids import LatticeID, MaterialID, SimulationJobID
 from pace.core.lattice import (
     HexLattice,
     HexOrientation,
@@ -118,7 +118,7 @@ def test_pitch_must_be_positive(pitch_m):
 
 def test_lineage_rule_applies():
     with pytest.raises(ValueError):
-        _rect(gt_run_id=GTRunID("run-1"))
+        _rect(simulation_job_id=SimulationJobID("job-1"))
 
 
 # =============================================================================

@@ -18,9 +18,9 @@ from pace.core.ids import (
     CComponentID,
     ComponentPlacementID,
     GeometryID,
-    GTRunID,
     MaterialID,
     ReactorBlueprintID,
+    SimulationJobID,
 )
 from pace.core.reactor_blueprint import ReactorBlueprint
 
@@ -76,7 +76,7 @@ def test_validate_id_mismatch_raises():
 
 def test_lineage_rule_applies():
     with pytest.raises(ValueError):
-        _blueprint(gt_run_id=GTRunID("run-1"))
+        _blueprint(simulation_job_id=SimulationJobID("job-1"))
 
 
 # =============================================================================

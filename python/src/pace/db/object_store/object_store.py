@@ -2,19 +2,19 @@
 pace/db/object_store/object_store.py
 
 ObjectStore — a thin key/value client for large raw blobs that don't
-belong in a relational row (GT run checkpoints, raw solver output).
-Deliberately dumb: get/put/delete/list, keyed by an opaque string path,
-no querying, no schema. Anything that needs to be queried or joined on
-belongs in the relational store instead (see relational/); a repository
-composing both (e.g. GTRawRepository) is the hybrid case that decides
-what goes where.
+belong in a relational row (simulation job checkpoints, raw solver
+output). Deliberately dumb: get/put/delete/list, keyed by an opaque
+string path, no querying, no schema. Anything that needs to be queried
+or joined on belongs in the relational store instead (see relational/);
+a repository composing both (e.g. SimulationRawRepository) is the hybrid
+case that decides what goes where.
 
 v1 backs onto a plain local directory — one file per key, key segments
-("gt_runs/abc123/checkpoint-000.npz") map to nested subdirectories.
-Matches the same reasoning as SqlDB defaulting to SQLite: no server
-process to stand up for a solo build. The only thing that changes if/
-when this migrates to S3-compatible storage later is this class's
-internals — callers only ever see get/put/delete/list.
+("simulation_jobs/abc123/checkpoint-000.npz") map to nested
+subdirectories. Matches the same reasoning as SqlDB defaulting to
+SQLite: no server process to stand up for a solo build. The only thing
+that changes if/when this migrates to S3-compatible storage later is
+this class's internals — callers only ever see get/put/delete/list.
 """
 
 from __future__ import annotations

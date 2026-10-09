@@ -12,14 +12,14 @@ PACE does not solve physics or couple solvers. Transport, heat conduction, fluid
 ## PACE Scope
 
 - **Reactor models.** Geometry, materials and a composition hierarchy: pellets → rods → pin cells → lattices → assemblies → cores. Each model holds the minimum complete input the solvers need.
-- **Versioning and provenance.** Every model object is versioned. A version derived from a simulation result records which ground-truth (GT) run produced it.
+- **Versioning and provenance.** Every model object is versioned. A version derived from a simulation result records which simulation job produced it.
 - **Solver input generation.**
   - OpenMC models (neutronics).
   - MOOSE inputs, through Reactor module mesh generators: Heat Transfer for fuel and cladding, THM for the coolant.
   - Cardinal inputs for coupled runs.
-- **Ground Truth run management.** Launch, track and store runs, each linked to the model version it ran.
-- **Datasets, surrogates and UQ.** Build datasets from GT runs, train surrogates on them, and quantify uncertainty across models, runs and surrogates.
-- **Workshop UI.** Design, browse and edit reactor models; manage each reactor's runs, datasets and surrogates.
+- **Simulation job management.** Define simulation cases (a model plus operating conditions and solver settings), then launch, track and store simulation jobs, each linked to the case it executed.
+- **Datasets, surrogates and UQ.** Build datasets from simulation jobs, train surrogates on them, and quantify uncertainty across models, simulation jobs and surrogates.
+- **Workshop UI.** Design, browse and edit reactor models; manage each reactor's simulation cases, jobs, datasets and surrogates.
 
 **Validation:** initial POC models will be LWR's to run VERA problems [VERA core physics benchmark progression problems](https://corephysics.com/docs/CASL-U-2012-0131-004.pdf). More may be added from there.
 
@@ -34,12 +34,12 @@ PACE does not solve physics or couple solvers. Transport, heat conduction, fluid
 
 ### Roadmap to v2+
 1. **Parametric studies.**
-   - persisted GT runs, model variants and batch runs;
+   - persisted simulation jobs, model variants and batch jobs;
    - datasets and surrogates, with hooks for the UQ layer;
    - fast reactor modeling (lots of work needed here, and V&V datasets are limited/restricted).
 2. **Service and UI.**
    - Providing a "Reactor Workshop" to make design/visualization easier
-   - Providing a Reactors hub to compile everything a user cares about regarding a reactor (GT runs, datasets, surrogates, etc.)
+   - Providing a Reactors hub to compile everything a user cares about regarding a reactor (simulation jobs, datasets, surrogates, etc.)
 
 ### Knowledge Base / Resources to get us there
 [PACE Knowledge Base](https://brettnelson612.github.io/pace/knowledge-base.html) — a map of the different knowledge domains involved here along with helpful resources + anecdotes.

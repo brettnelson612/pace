@@ -23,8 +23,8 @@ def test_root_is_created(tmp_path):
 
 
 def test_put_then_get_nested_key(store: ObjectStore):
-    store.put("gt_runs/abc/checkpoint-000.npz", b"\x00\x01")
-    assert store.get("gt_runs/abc/checkpoint-000.npz") == b"\x00\x01"
+    store.put("simulation_jobs/abc/checkpoint-000.npz", b"\x00\x01")
+    assert store.get("simulation_jobs/abc/checkpoint-000.npz") == b"\x00\x01"
 
 
 def test_put_overwrites_an_existing_key(store: ObjectStore):

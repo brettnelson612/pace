@@ -9,18 +9,18 @@ Generic over the concrete NewType each subclass uses for its own id
 type per subclass via Versioned[GeometryID], etc.
 
 Versioning rule: a version is either v1 (derived_from=None, no
-gt_run_id, user_edit=False) or a derived version, in which case
-exactly one of gt_run_id or user_edit must also be set — never
+simulation_job_id, user_edit=False) or a derived version, in which case
+exactly one of simulation_job_id or user_edit must also be set — never
 neither, never both.
 
     - user_edit=True: a person (or code acting for them, e.g. variant
           generation) changed the object.
-    - gt_run_id set: the new version was produced from a GT run's
-          output — a deliberate, labeled promotion of run state into
+    - simulation_job_id set: the new version was produced from a simulation
+          job's output — a deliberate, labeled promotion of run state into
           the registry (e.g. averaging a depletion snapshot into one
           uniform material to reuse as a design input).
 
-What a GT-derived version is NOT: the default home of run state.
+What a simulation-derived version is NOT: the default home of run state.
 Spatially varying results (temperature/density fields, burned
 compositions per pin/layer/ring) live in run output as state
 snapshots keyed by region address. The registry holds designs that
@@ -39,7 +39,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Generic, Self, TypeVar, cast
 
-from pace.core.ids import GTRunID
+from pace.core.ids import SimulationJobID
 from pace.core.pace_object import PaceObject
 
 IDType = TypeVar("IDType")
@@ -51,7 +51,7 @@ class Versioned(PaceObject, Generic[IDType]):
     family_name: str
     version_label: str
     derived_from: IDType | None = None
-    gt_run_id: GTRunID | None = None
+    simulation_job_id: SimulationJobID | None = None
     user_edit: bool = False
 
     def __eq__(self, other: object) -> bool:
@@ -104,21 +104,21 @@ class Versioned(PaceObject, Generic[IDType]):
 
     def _validate_lineage(self) -> None:
         has_predecessor = self.derived_from is not None
-        has_gt_run = self.gt_run_id is not None
+        has_simulation_job = self.simulation_job_id is not None
 
         if not has_predecessor:
-            if has_gt_run or self.user_edit:
+            if has_simulation_job or self.user_edit:
                 raise ValueError(
-                    "gt_run_id must be unset and user_edit must be False "
+                    "simulation_job_id must be unset and user_edit must be False "
                     "when derived_from is unset (version 1 has no "
                     "derivation cause)"
                 )
-        elif has_gt_run == self.user_edit:
+        elif has_simulation_job == self.user_edit:
             # both set, or both unset — either way, invalid
             raise ValueError(
-                "when derived_from is set, exactly one of gt_run_id or "
-                "user_edit must also be set (got gt_run_id="
-                f"{self.gt_run_id!r}, user_edit={self.user_edit!r})"
+                "when derived_from is set, exactly one of simulation_job_id or "
+                "user_edit must also be set (got simulation_job_id="
+                f"{self.simulation_job_id!r}, user_edit={self.user_edit!r})"
             )
 
     def to_dict(self) -> dict:
@@ -127,7 +127,7 @@ class Versioned(PaceObject, Generic[IDType]):
             "family_name": self.family_name,
             "version_label": self.version_label,
             "derived_from": self.derived_from,
-            "gt_run_id": self.gt_run_id,
+            "simulation_job_id": self.simulation_job_id,
             "user_edit": self.user_edit,
         }
 
@@ -147,8 +147,10 @@ class Versioned(PaceObject, Generic[IDType]):
                 if data["derived_from"] is not None
                 else None
             ),
-            "gt_run_id": (
-                GTRunID(data["gt_run_id"]) if data["gt_run_id"] is not None else None
+            "simulation_job_id": (
+                SimulationJobID(data["simulation_job_id"])
+                if data["simulation_job_id"] is not None
+                else None
             ),
             "user_edit": data["user_edit"],
         }

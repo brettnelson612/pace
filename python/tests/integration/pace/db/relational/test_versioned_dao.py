@@ -149,7 +149,7 @@ def test_describe_returns_every_column_except_data(pace_db: PaceDB, insert):
     assert described["version_label"] == "1"
     assert described["type"] == "cylinder"
     assert described["derived_from"] is None
-    assert described["gt_run_id"] is None
+    assert described["simulation_job_id"] is None
     assert described["user_edit"] is False
     assert described["created_at"] is not None
 

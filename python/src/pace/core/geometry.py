@@ -106,7 +106,7 @@ class Geometry(Versioned[GeometryID]):
     """General interface for a specific geometry version.
 
     Identity and versioning (id/family_name/version_label/
-    derived_from/gt_run_id/user_edit, build_id(), create(), the
+    derived_from/simulation_job_id/user_edit, build_id(), create(), the
     three-state lineage rule) are inherited from Versioned — see that
     class's docstring. This class adds only what's specific to
     geometries: the type-tag dispatch mechanism and shape validation.

@@ -1,7 +1,7 @@
 """
 pace/core/operating_conditions.py
 
-The plant conditions a simulation starts from: power, system pressure,
+The plant conditions a simulation case starts from: power, system pressure,
 starting temperatures, and the coolant inlet.
 """
 
