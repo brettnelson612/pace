@@ -220,6 +220,7 @@ __marimo__/
 
 # scratch files
 scratch
+scratch.py
 
 # pixi environments
 .pixi/*
