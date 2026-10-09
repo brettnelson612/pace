@@ -12,7 +12,7 @@ PACE does not solve physics or couple solvers. Transport, heat conduction, fluid
 ## PACE Scope
 
 - **Reactor models.** Geometry, materials and a composition hierarchy: pellets → rods → pin cells → lattices → assemblies → cores. Each model holds the minimum complete input the solvers need.
-- **Versioning and provenance.** Every model object is versioned. A version derived from a simulation result records which ground-truth (GT) run produced it.
+- **Versioning and provenance.** Every model object is versioned. A version derived from a simulation result records which simulation run produced it.
 - **Solver input generation.**
   - OpenMC models (neutronics).
   - MOOSE inputs, through Reactor module mesh generators: Heat Transfer for fuel and cladding, THM for the coolant.
