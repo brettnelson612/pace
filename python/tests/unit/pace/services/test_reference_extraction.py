@@ -33,7 +33,7 @@ from pace.core.ids import (
 from pace.core.lattice import LatticeElement, RectLattice
 from pace.core.material import MMixture, MVoid, PercentType
 from pace.core.reactor_blueprint import ReactorBlueprint
-from pace.core.reference_types import ReferenceableType as RT
+from pace.core.reference_types import ReferenceableType
 from pace.db.relational.reference import Reference
 from pace.services.reference_extraction import (
     extract_ccomponent_references,
@@ -79,8 +79,8 @@ def test_gaddition_references_each_distinct_unit_once():
         ],
     )
     assert _edges(extract_geometry_references(addition)) == {
-        (RT.GEOMETRY, "joined-1", RT.GEOMETRY, "a-1"),
-        (RT.GEOMETRY, "joined-1", RT.GEOMETRY, "b-1"),
+        (ReferenceableType.GEOMETRY, "joined-1", ReferenceableType.GEOMETRY, "a-1"),
+        (ReferenceableType.GEOMETRY, "joined-1", ReferenceableType.GEOMETRY, "b-1"),
     }
 
 
@@ -92,8 +92,8 @@ def test_gsubtraction_references_base_and_cuts():
         cuts=[(GeometryID("cut-1"), ORIGIN)],
     )
     assert _edges(extract_geometry_references(subtraction)) == {
-        (RT.GEOMETRY, "notched-1", RT.GEOMETRY, "base-1"),
-        (RT.GEOMETRY, "notched-1", RT.GEOMETRY, "cut-1"),
+        (ReferenceableType.GEOMETRY, "notched-1", ReferenceableType.GEOMETRY, "base-1"),
+        (ReferenceableType.GEOMETRY, "notched-1", ReferenceableType.GEOMETRY, "cut-1"),
     }
 
 
@@ -112,8 +112,8 @@ def test_mixture_references_its_constituents():
         percent_type=PercentType.AO,
     )
     assert _edges(extract_material_references(mixture)) == {
-        (RT.MATERIAL, "blend-1", RT.MATERIAL, "a-1"),
-        (RT.MATERIAL, "blend-1", RT.MATERIAL, "b-1"),
+        (ReferenceableType.MATERIAL, "blend-1", ReferenceableType.MATERIAL, "a-1"),
+        (ReferenceableType.MATERIAL, "blend-1", ReferenceableType.MATERIAL, "b-1"),
     }
 
 
@@ -125,8 +125,8 @@ def test_lcomponent_references_geometry_and_material():
         material=MaterialID("uo2-1"),
     )
     assert _edges(extract_lcomponent_references(pellet)) == {
-        (RT.LCOMPONENT, "pellet-1", RT.GEOMETRY, "cyl-1"),
-        (RT.LCOMPONENT, "pellet-1", RT.MATERIAL, "uo2-1"),
+        (ReferenceableType.LCOMPONENT, "pellet-1", ReferenceableType.GEOMETRY, "cyl-1"),
+        (ReferenceableType.LCOMPONENT, "pellet-1", ReferenceableType.MATERIAL, "uo2-1"),
     }
 
 
@@ -147,10 +147,20 @@ def test_ccomponent_references_bounds_fill_and_each_distinct_member():
         ],
     )
     assert _edges(extract_ccomponent_references(rod)) == {
-        (RT.CCOMPONENT, "rod-1", RT.GEOMETRY, "rod_cyl-1"),
-        (RT.CCOMPONENT, "rod-1", RT.MATERIAL, "helium-1"),
-        (RT.CCOMPONENT, "rod-1", RT.LCOMPONENT, "pellet-1"),
-        (RT.CCOMPONENT, "rod-1", RT.LATTICE, "grid-1"),
+        (
+            ReferenceableType.CCOMPONENT,
+            "rod-1",
+            ReferenceableType.GEOMETRY,
+            "rod_cyl-1",
+        ),
+        (ReferenceableType.CCOMPONENT, "rod-1", ReferenceableType.MATERIAL, "helium-1"),
+        (
+            ReferenceableType.CCOMPONENT,
+            "rod-1",
+            ReferenceableType.LCOMPONENT,
+            "pellet-1",
+        ),
+        (ReferenceableType.CCOMPONENT, "rod-1", ReferenceableType.LATTICE, "grid-1"),
     }
 
 
@@ -167,8 +177,8 @@ def test_ccomponent_without_fill_has_no_material_edge():
         ],
     )
     assert {r.target_type for r in extract_ccomponent_references(rod)} == {
-        RT.GEOMETRY,
-        RT.LCOMPONENT,
+        ReferenceableType.GEOMETRY,
+        ReferenceableType.LCOMPONENT,
     }
 
 
@@ -183,8 +193,8 @@ def test_lattice_edges_are_sourced_from_the_lattice():
         elements=[LatticeElement(ref=pin_ref, addresses=((0, 0), (1, 1)))],
     )
     assert _edges(extract_lattice_references(lattice)) == {
-        (RT.LATTICE, "grid-1", RT.MATERIAL, "water-1"),
-        (RT.LATTICE, "grid-1", RT.CCOMPONENT, "pin-1"),
+        (ReferenceableType.LATTICE, "grid-1", ReferenceableType.MATERIAL, "water-1"),
+        (ReferenceableType.LATTICE, "grid-1", ReferenceableType.CCOMPONENT, "pin-1"),
     }
 
 
@@ -202,7 +212,22 @@ def test_reactor_blueprint_references_bounds_fill_and_root():
         ),
     )
     assert _edges(extract_reactor_blueprint_references(blueprint)) == {
-        (RT.REACTOR_BLUEPRINT, "core-1", RT.GEOMETRY, "core_box-1"),
-        (RT.REACTOR_BLUEPRINT, "core-1", RT.MATERIAL, "water-1"),
-        (RT.REACTOR_BLUEPRINT, "core-1", RT.LATTICE, "grid-1"),
+        (
+            ReferenceableType.REACTOR_BLUEPRINT,
+            "core-1",
+            ReferenceableType.GEOMETRY,
+            "core_box-1",
+        ),
+        (
+            ReferenceableType.REACTOR_BLUEPRINT,
+            "core-1",
+            ReferenceableType.MATERIAL,
+            "water-1",
+        ),
+        (
+            ReferenceableType.REACTOR_BLUEPRINT,
+            "core-1",
+            ReferenceableType.LATTICE,
+            "grid-1",
+        ),
     }

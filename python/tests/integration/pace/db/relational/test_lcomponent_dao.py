@@ -78,7 +78,7 @@ def test_describe_includes_geometry_and_material_columns(
 
 
 @pytest.mark.parametrize(
-    "geometry_id,material_id",
+    ("geometry_id", "material_id"),
     [("missing_cyl-1", "test_uo2-1"), ("test_cyl-1", "missing_uo2-1")],
 )
 def test_insert_pointing_at_a_missing_part_violates_foreign_key(

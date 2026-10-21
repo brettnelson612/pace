@@ -799,9 +799,9 @@ def test_get_resolved_reactor_blueprint_includes_blueprint_only_references(
     resolved = registry_service.get_resolved_reactor_blueprint(blueprint.id)
 
     assert resolved.reactor_blueprint.to_dict() == blueprint.to_dict()
-    assert reactor_box.id in resolved.rc.geometries
-    assert resolved.rc.root == blueprint.root.ref
-    assert resolved.rc.lattices.keys() == {mini.lattice.id}
+    assert reactor_box.id in resolved.resolved_component.geometries
+    assert resolved.resolved_component.root == blueprint.root.ref
+    assert resolved.resolved_component.lattices.keys() == {mini.lattice.id}
 
 
 def test_get_resolved_reactor_blueprint_raises_for_nonexistent_blueprint(

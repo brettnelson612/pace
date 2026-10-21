@@ -31,3 +31,12 @@ select = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["pace"]
+
+[tool.ruff.lint.pep8-naming]
+classmethod-decorators = ["sqlalchemy.orm.declared_attr"]
+
+[tool.ruff.lint.per-file-ignores]
+# ignore PT012 to allow us to more easily write tests with rolled back
+# failed transactions against SQLAlchemy db
+"tests/integration/**" = ["PT012"]
+"tests/**" = ["PT011"]

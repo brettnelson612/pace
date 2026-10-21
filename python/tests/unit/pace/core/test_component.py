@@ -47,7 +47,7 @@ def test_component_ref_round_trip_every_type(component_type):
 
 
 @pytest.mark.parametrize(
-    "component_type,expected",
+    ("component_type", "expected"),
     [
         (ComponentType.LCOMPONENT, ReferenceableType.LCOMPONENT),
         (ComponentType.CCOMPONENT, ReferenceableType.CCOMPONENT),
@@ -151,7 +151,7 @@ LINEAGE_CASES = [
 
 
 @pytest.mark.parametrize(
-    "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+    ("derived_from", "simulation_job_id", "user_edit", "should_raise"), LINEAGE_CASES
 )
 def test_lcomponent_lineage_rule(
     derived_from, simulation_job_id, user_edit, should_raise
@@ -327,7 +327,7 @@ def test_ccomponent_validate_id_mismatch_raises():
 
 
 @pytest.mark.parametrize(
-    "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+    ("derived_from", "simulation_job_id", "user_edit", "should_raise"), LINEAGE_CASES
 )
 def test_ccomponent_lineage_rule(
     derived_from, simulation_job_id, user_edit, should_raise

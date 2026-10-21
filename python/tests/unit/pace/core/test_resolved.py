@@ -173,7 +173,7 @@ def test_valid_bundle_round_trips():
 
 
 @pytest.mark.parametrize(
-    "component_type,target_id",
+    ("component_type", "target_id"),
     [
         (ComponentType.CCOMPONENT, "pin_cell-1"),
         (ComponentType.LATTICE, "lattice_2x2-1"),
@@ -202,7 +202,7 @@ def test_mismatched_key_raises():
 
 
 @pytest.mark.parametrize(
-    "map_name,key",
+    ("map_name", "key"),
     [
         ("geometries", "pin_box-1"),  # a CComponent's bounds
         ("geometries", "pellet_cyl-1"),  # an LComponent's geometry
@@ -266,7 +266,7 @@ def test_gsubtraction_base_and_cuts_must_be_present():
 
 
 @pytest.mark.parametrize(
-    "component_type,target_id,expected",
+    ("component_type", "target_id", "expected"),
     [
         (ComponentType.CCOMPONENT, "rod-1", True),
         (ComponentType.LCOMPONENT, "clad-1", True),
@@ -304,7 +304,8 @@ def _blueprint(**overrides) -> ReactorBlueprint:
 
 def _resolve(blueprint: ReactorBlueprint) -> ResolvedReactorBlueprint:
     return ResolvedReactorBlueprint(
-        reactor_blueprint=blueprint, rc=ResolvedComponent(**_bundle_parts())
+        reactor_blueprint=blueprint,
+        resolved_component=ResolvedComponent(**_bundle_parts()),
     )
 
 

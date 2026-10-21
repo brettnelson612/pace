@@ -157,7 +157,8 @@ class TestGeometryBase:
     ]
 
     @pytest.mark.parametrize(
-        "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+        ("derived_from", "simulation_job_id", "user_edit", "should_raise"),
+        LINEAGE_CASES,
     )
     def test_lineage_rule(
         self, derived_from, simulation_job_id, user_edit, should_raise
@@ -192,26 +193,26 @@ SIMPLE_SHAPES_AND_FIELDS = [
 
 
 class TestShapeConstraints:
-    @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    @pytest.mark.parametrize(("cls", "field_name"), SIMPLE_SHAPES_AND_FIELDS)
     def test_valid_construction(self, cls, field_name):
         make(cls)  # sanity check — default valid kwargs should not raise
 
-    @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    @pytest.mark.parametrize(("cls", "field_name"), SIMPLE_SHAPES_AND_FIELDS)
     def test_zero_is_rejected(self, cls, field_name):
         with pytest.raises(ValueError):
             make_with_field_override(cls, field_name, 0.0)
 
-    @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    @pytest.mark.parametrize(("cls", "field_name"), SIMPLE_SHAPES_AND_FIELDS)
     def test_negative_is_rejected(self, cls, field_name):
         with pytest.raises(ValueError):
             make_with_field_override(cls, field_name, -1.0)
 
-    @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    @pytest.mark.parametrize(("cls", "field_name"), SIMPLE_SHAPES_AND_FIELDS)
     def test_above_max_is_rejected(self, cls, field_name):
         with pytest.raises(ValueError):
             make_with_field_override(cls, field_name, MAX_GEO_LENGTH_M + 1)
 
-    @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    @pytest.mark.parametrize(("cls", "field_name"), SIMPLE_SHAPES_AND_FIELDS)
     def test_at_max_is_allowed(self, cls, field_name):
         make_with_field_override(cls, field_name, MAX_GEO_LENGTH_M)
 

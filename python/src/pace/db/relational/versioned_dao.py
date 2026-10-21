@@ -18,7 +18,7 @@ to rebuild a domain object from a row's `data` column.
 from __future__ import annotations
 
 from collections.abc import Callable, Collection
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -32,7 +32,7 @@ ModelT = TypeVar("ModelT", bound=Versioned)
 IDT = TypeVar("IDT", bound=str)
 
 
-class VersionedDAO(Generic[RowT, ModelT, IDT]):
+class VersionedDAO[RowT: VersionedRow, ModelT: Versioned, IDT: str]:
     """Storage for one versioned table.
 
     - row_type: the concrete row class (one table).

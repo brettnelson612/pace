@@ -52,7 +52,7 @@ def _hex() -> HexLattice:
     )
 
 
-@pytest.mark.parametrize("build,cls", [(_rect, RectLattice), (_hex, HexLattice)])
+@pytest.mark.parametrize(("build", "cls"), [(_rect, RectLattice), (_hex, HexLattice)])
 def test_insert_then_get_dispatches_to_concrete_type(
     pace_db: PaceDB, insert, build, cls
 ):

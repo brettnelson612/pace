@@ -59,7 +59,7 @@ def _hex(**overrides) -> HexLattice:
         "orientation": HexOrientation.FLAT_TOP,
         "elements": [
             LatticeElement(
-                ref=PIN, addresses=((0, 0),) + tuple((1, i) for i in range(6))
+                ref=PIN, addresses=((0, 0), *tuple((1, i) for i in range(6)))
             )
         ],
     }
@@ -266,7 +266,7 @@ def test_rect_round_trip():
 # =============================================================================
 
 
-@pytest.mark.parametrize("ring,size", [(0, 1), (1, 6), (2, 12), (8, 48)])
+@pytest.mark.parametrize(("ring", "size"), [(0, 1), (1, 6), (2, 12), (8, 48)])
 def test_hex_ring_size(ring, size):
     assert HexLattice.ring_size(ring) == size
 
@@ -317,7 +317,7 @@ def test_hex_round_trip():
 # =============================================================================
 
 
-@pytest.mark.parametrize("build,cls", [(_rect, RectLattice), (_hex, HexLattice)])
+@pytest.mark.parametrize(("build", "cls"), [(_rect, RectLattice), (_hex, HexLattice)])
 def test_lattice_from_dict_dispatches_on_type(build, cls):
     lattice = build()
     restored = lattice_from_dict(lattice.to_dict())

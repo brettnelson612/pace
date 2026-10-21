@@ -25,7 +25,7 @@ def test_bounds_shapes_are_box_hex_and_cylinder():
 
 
 @pytest.mark.parametrize(
-    "geometry_type,count",
+    ("geometry_type", "count"),
     [
         (GeometryType.RECT_PRISM, 6),
         (GeometryType.HEX_PRISM, 8),

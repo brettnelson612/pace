@@ -37,7 +37,7 @@ replaces this one.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, Self, TypeVar, cast
+from typing import Self, TypeVar, cast
 
 from pace.core.ids import SimulationJobID
 from pace.core.pace_object import PaceObject
@@ -46,7 +46,7 @@ IDType = TypeVar("IDType")
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
-class Versioned(PaceObject, Generic[IDType]):
+class Versioned[IDType](PaceObject):
     id: IDType
     family_name: str
     version_label: str

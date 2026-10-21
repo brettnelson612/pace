@@ -42,7 +42,7 @@ def test_all_daos_share_one_sql_db(pace_db: PaceDB):
 
 
 @pytest.mark.parametrize(
-    "referenceable_type,attribute",
+    ("referenceable_type", "attribute"),
     [
         (ReferenceableType.GEOMETRY, "geometries"),
         (ReferenceableType.MATERIAL, "materials"),

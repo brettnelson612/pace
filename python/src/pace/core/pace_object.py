@@ -35,6 +35,5 @@ class PaceObject(ABC):
         Raises on missing or malformed fields — no partial/best-effort
         reconstruction."""
 
-    @abstractmethod
-    def validate(self):
+    def validate(self):  # noqa: B027
         """Override this class to add class-specific validation logic."""

@@ -79,6 +79,7 @@ def test_insert_never_overwrites_an_existing_id(pace_db: PaceDB, insert):
         insert(pace_db.registry.geometries, _cylinder(radius_m=0.009))
     fetched = pace_db.registry.geometries.get(original.id)
     assert fetched is not None
+    assert isinstance(fetched, GCylinder)
     assert fetched.radius_m == 0.005
 
 
