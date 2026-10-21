@@ -270,7 +270,9 @@ class RegistryService:
         )
         return ResolvedReactorBlueprint(
             reactor_blueprint=reactor_blueprint,
-            rc=self._build_resolved_component(reactor_blueprint.root.ref, needed),
+            resolved_component=self._build_resolved_component(
+                reactor_blueprint.root.ref, needed
+            ),
         )
 
     def _walk_references(

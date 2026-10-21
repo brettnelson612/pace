@@ -403,7 +403,7 @@ class Material(Versioned[MaterialID]):
         through via **cls._material_fields_from_dict(data) rather than
         repeating the same parsing block three times."""
         return {
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             "thermal_scattering": tuple(
                 ThermalScatteringLibrary.from_dict(entry)
                 for entry in data.get("thermal_scattering", [])
@@ -671,13 +671,7 @@ class MVoid(Material):
 
 
 def material_from_dict(data: dict) -> Material:
-    """Reconstruct the correct concrete Material subclass from a dict
-    produced by any subclass's to_dict() — dispatches on the "type"
-    key rather than requiring the caller to already know which
-    concrete class they're deserializing. Material.from_dict() is
-    abstract, so it can never be called directly on the base class;
-    this is the supported way to deserialize a Material of unknown
-    concrete type."""
+    """Reconstruct the correct Material subclass from its to_dict obj."""
     cls = MATERIAL_TYPE_TO_CLASS.get(data["type"])
     if cls is None:
         raise ValueError(f"unknown material type: {data['type']!r}")

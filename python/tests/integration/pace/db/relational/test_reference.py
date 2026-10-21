@@ -10,10 +10,11 @@ reference extraction's own deduplication).
 from __future__ import annotations
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+
 from pace.core.reference_types import ReferenceableType
 from pace.db.pace_db import PaceDB
 from pace.db.relational.reference import Reference
-from sqlalchemy.exc import IntegrityError
 
 
 def _add(pace_db: PaceDB, references: list[Reference]) -> None:
@@ -140,10 +141,9 @@ def test_add_writes_a_single_edge(pace_db: PaceDB):
 
 
 def test_edges_from_a_failed_transaction_are_not_kept(pace_db: PaceDB):
-    with pytest.raises(RuntimeError):
-        with pace_db.registry.transaction() as session:
-            pace_db.registry.references.add_many(session, [_edge()])
-            raise RuntimeError("abort")
+    with pytest.raises(RuntimeError), pace_db.registry.transaction() as session:
+        pace_db.registry.references.add_many(session, [_edge()])
+        raise RuntimeError("abort")
     assert (
         pace_db.registry.references.count_incoming(
             ReferenceableType.LCOMPONENT, "pellet-1"

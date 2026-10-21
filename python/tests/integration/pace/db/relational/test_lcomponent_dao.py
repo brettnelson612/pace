@@ -12,6 +12,8 @@ are covered in test_versioned_dao.py.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+
 from pace.core.component import LComponent
 from pace.core.geometry import GCylinder
 from pace.core.ids import GeometryID, MaterialID
@@ -22,7 +24,6 @@ from pace.core.material import (
     PercentType,
 )
 from pace.db.pace_db import PaceDB
-from sqlalchemy.exc import IntegrityError
 
 
 def _geometry() -> GCylinder:
@@ -93,7 +94,6 @@ def test_deleting_a_referenced_geometry_violates_foreign_key(
     pace_db: PaceDB, insert, registered_parts
 ):
     insert(pace_db.registry.lcomponents, _pellet())
-    with pytest.raises(IntegrityError):
-        with pace_db.registry.transaction() as session:
-            pace_db.registry.geometries.delete(session, GeometryID("test_cyl-1"))
+    with pytest.raises(IntegrityError), pace_db.registry.transaction() as session:
+        pace_db.registry.geometries.delete(session, GeometryID("test_cyl-1"))
     assert pace_db.registry.geometries.exists(GeometryID("test_cyl-1"))

@@ -15,6 +15,7 @@ import dataclasses
 from typing import ClassVar
 
 import pytest
+
 from pace.core.geometry import (
     MAX_GEO_LENGTH_M,
     GAddition,

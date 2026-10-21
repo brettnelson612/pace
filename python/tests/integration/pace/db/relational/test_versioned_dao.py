@@ -12,6 +12,8 @@ its own type.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+
 from pace.core.boundary_conditions import NeutronBC
 from pace.core.bounds import faces_for_geometry_type
 from pace.core.component import (
@@ -32,7 +34,6 @@ from pace.core.material import (
 )
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.db.pace_db import PaceDB
-from sqlalchemy.exc import IntegrityError
 
 
 def _cylinder(
@@ -99,10 +100,9 @@ def test_insert_revalidates_the_object(pace_db: PaceDB, insert):
 
 def test_failed_transaction_writes_nothing(pace_db: PaceDB):
     geometry = _cylinder()
-    with pytest.raises(RuntimeError):
-        with pace_db.registry.transaction() as session:
-            pace_db.registry.geometries.insert(session, geometry)
-            raise RuntimeError("abort")
+    with pytest.raises(RuntimeError), pace_db.registry.transaction() as session:
+        pace_db.registry.geometries.insert(session, geometry)
+        raise RuntimeError("abort")
     assert not pace_db.registry.geometries.exists(geometry.id)
 
 
@@ -237,9 +237,8 @@ def test_delete_of_a_predecessor_violates_foreign_key(pace_db: PaceDB, insert):
     v1 = _cylinder()
     insert(pace_db.registry.geometries, v1)
     insert(pace_db.registry.geometries, _v2(v1))
-    with pytest.raises(IntegrityError):
-        with pace_db.registry.transaction() as session:
-            pace_db.registry.geometries.delete(session, v1.id)
+    with pytest.raises(IntegrityError), pace_db.registry.transaction() as session:
+        pace_db.registry.geometries.delete(session, v1.id)
     assert pace_db.registry.geometries.exists(v1.id)
 
 

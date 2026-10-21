@@ -24,7 +24,7 @@ own table.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
@@ -42,7 +42,7 @@ class VersionedRow(Base):
     user_edit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     data: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=lambda: datetime.now(UTC)
     )
 
     @declared_attr

@@ -10,6 +10,7 @@ integration tests.
 """
 
 import pytest
+
 from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
 from pace.core.component import ComponentPlacement, ComponentRef, ComponentType

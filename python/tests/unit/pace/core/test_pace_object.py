@@ -11,6 +11,7 @@ something" case extensively elsewhere.
 from dataclasses import FrozenInstanceError, dataclass
 
 import pytest
+
 from pace.core.pace_object import PaceObject
 
 

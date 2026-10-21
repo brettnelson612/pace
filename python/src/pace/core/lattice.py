@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pace.core.component import ComponentType, ComponentRef
+from pace.core.component import ComponentRef, ComponentType
 from pace.core.constraints import Constraint, validate_fields
 from pace.core.ids import LatticeID, MaterialID
 from pace.core.pace_object import PaceObject
@@ -224,7 +224,7 @@ class Lattice(Versioned[LatticeID]):
         """Shared parsing for every field Lattice adds on top of
         Versioned."""
         return {
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             "pitch_m": data["pitch_m"],
             "fill": MaterialID(data["fill"]),
             "elements": [LatticeElement.from_dict(p) for p in data["elements"]],

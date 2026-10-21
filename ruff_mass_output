@@ -1,0 +1,310 @@
+B027 `PaceObject.validate` is an empty method in an abstract base class, but has no abstract decorator
+  --> python/src/pace/core/pace_object.py:38:5
+   |
+36 |           reconstruction."""
+37 |
+38 | /     def validate(self):
+39 | |         """Override this class to add class-specific validation logic."""
+   | |_________________________________________________________________________^
+   |
+
+UP046 Generic class `Versioned` uses `Generic` subclass instead of type parameters
+  --> python/src/pace/core/versioned.py:49:29
+   |
+48 | @dataclass(frozen=True, kw_only=True, eq=False)
+49 | class Versioned(PaceObject, Generic[IDType]):
+   |                             ^^^^^^^^^^^^^^^
+50 |     id: IDType
+51 |     family_name: str
+   |
+help: Use type parameters
+
+UP046 Generic class `VersionedDAO` uses `Generic` subclass instead of type parameters
+  --> python/src/pace/db/relational/versioned_dao.py:35:20
+   |
+35 | class VersionedDAO(Generic[RowT, ModelT, IDT]):
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+36 |     """Storage for one versioned table.
+   |
+help: Use type parameters
+
+N805 First argument of a method should be named `self`
+  --> python/src/pace/db/relational/versioned_row.py:49:22
+   |
+48 |     @declared_attr
+49 |     def derived_from(cls) -> Mapped[str | None]:
+   |                      ^^^
+50 |         return mapped_column(ForeignKey(f"{cls.__tablename__}.id"), nullable=True)
+   |
+help: Rename `cls` to `self`
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+  --> python/tests/integration/pace/db/relational/test_lattice_dao.py:55:26
+   |
+55 | @pytest.mark.parametrize("build,cls", [(_rect, RectLattice), (_hex, HexLattice)])
+   |                          ^^^^^^^^^^^
+56 | def test_insert_then_get_dispatches_to_concrete_type(
+57 |     pace_db: PaceDB, insert, build, cls
+   |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+  --> python/tests/integration/pace/db/relational/test_lcomponent_dao.py:81:5
+   |
+80 | @pytest.mark.parametrize(
+81 |     "geometry_id,material_id",
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+82 |     [("missing_cyl-1", "test_uo2-1"), ("test_cyl-1", "missing_uo2-1")],
+83 | )
+   |
+help: Use a `tuple` for the first argument
+
+PT012 `pytest.raises()` block should contain a single simple statement
+   --> python/tests/integration/pace/db/relational/test_reference.py:144:5
+    |
+143 |   def test_edges_from_a_failed_transaction_are_not_kept(pace_db: PaceDB):
+144 | /     with pytest.raises(RuntimeError), pace_db.registry.transaction() as session:
+145 | |         pace_db.registry.references.add_many(session, [_edge()])
+146 | |         raise RuntimeError("abort")
+    | |___________________________________^
+147 |       assert (
+148 |           pace_db.registry.references.count_incoming(
+    |
+
+PT012 `pytest.raises()` block should contain a single simple statement
+   --> python/tests/integration/pace/db/relational/test_versioned_dao.py:103:5
+    |
+101 |   def test_failed_transaction_writes_nothing(pace_db: PaceDB):
+102 |       geometry = _cylinder()
+103 | /     with pytest.raises(RuntimeError), pace_db.registry.transaction() as session:
+104 | |         pace_db.registry.geometries.insert(session, geometry)
+105 | |         raise RuntimeError("abort")
+    | |___________________________________^
+106 |       assert not pace_db.registry.geometries.exists(geometry.id)
+    |
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+  --> python/tests/integration/pace/db/test_pace_db.py:45:5
+   |
+44 | @pytest.mark.parametrize(
+45 |     "referenceable_type,attribute",
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+46 |     [
+47 |         (ReferenceableType.GEOMETRY, "geometries"),
+   |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+  --> python/tests/unit/pace/core/test_bounds.py:28:5
+   |
+27 | @pytest.mark.parametrize(
+28 |     "geometry_type,count",
+   |     ^^^^^^^^^^^^^^^^^^^^^
+29 |     [
+30 |         (GeometryType.RECT_PRISM, 6),
+   |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+  --> python/tests/unit/pace/core/test_component.py:50:5
+   |
+49 | @pytest.mark.parametrize(
+50 |     "component_type,expected",
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+51 |     [
+52 |         (ComponentType.LCOMPONENT, ReferenceableType.LCOMPONENT),
+   |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_component.py:154:5
+    |
+153 | @pytest.mark.parametrize(
+154 |     "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+155 | )
+156 | def test_lcomponent_lineage_rule(
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_component.py:330:5
+    |
+329 | @pytest.mark.parametrize(
+330 |     "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+331 | )
+332 | def test_ccomponent_lineage_rule(
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_geometry.py:160:9
+    |
+159 |     @pytest.mark.parametrize(
+160 |         "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+161 |     )
+162 |     def test_lineage_rule(
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_geometry.py:195:30
+    |
+194 | class TestShapeConstraints:
+195 |     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    |                              ^^^^^^^^^^^^^^^^
+196 |     def test_valid_construction(self, cls, field_name):
+197 |         make(cls)  # sanity check — default valid kwargs should not raise
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_geometry.py:199:30
+    |
+197 |         make(cls)  # sanity check — default valid kwargs should not raise
+198 |
+199 |     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    |                              ^^^^^^^^^^^^^^^^
+200 |     def test_zero_is_rejected(self, cls, field_name):
+201 |         with pytest.raises(ValueError):
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_geometry.py:204:30
+    |
+202 |             make_with_field_override(cls, field_name, 0.0)
+203 |
+204 |     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    |                              ^^^^^^^^^^^^^^^^
+205 |     def test_negative_is_rejected(self, cls, field_name):
+206 |         with pytest.raises(ValueError):
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_geometry.py:209:30
+    |
+207 |             make_with_field_override(cls, field_name, -1.0)
+208 |
+209 |     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    |                              ^^^^^^^^^^^^^^^^
+210 |     def test_above_max_is_rejected(self, cls, field_name):
+211 |         with pytest.raises(ValueError):
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_geometry.py:214:30
+    |
+212 |             make_with_field_override(cls, field_name, MAX_GEO_LENGTH_M + 1)
+213 |
+214 |     @pytest.mark.parametrize("cls,field_name", SIMPLE_SHAPES_AND_FIELDS)
+    |                              ^^^^^^^^^^^^^^^^
+215 |     def test_at_max_is_allowed(self, cls, field_name):
+216 |         make_with_field_override(cls, field_name, MAX_GEO_LENGTH_M)
+    |
+help: Use a `tuple` for the first argument
+
+RUF005 Consider `((0, 0), *tuple((1, i) for i in range(6)))` instead of concatenation
+  --> python/tests/unit/pace/core/test_lattice.py:62:36
+   |
+60 |         "elements": [
+61 |             LatticeElement(
+62 |                 ref=PIN, addresses=((0, 0),) + tuple((1, i) for i in range(6))
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+63 |             )
+64 |         ],
+   |
+help: Replace with `((0, 0), *tuple((1, i) for i in range(6)))`
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_lattice.py:269:26
+    |
+269 | @pytest.mark.parametrize("ring,size", [(0, 1), (1, 6), (2, 12), (8, 48)])
+    |                          ^^^^^^^^^^^
+270 | def test_hex_ring_size(ring, size):
+271 |     assert HexLattice.ring_size(ring) == size
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_lattice.py:320:26
+    |
+320 | @pytest.mark.parametrize("build,cls", [(_rect, RectLattice), (_hex, HexLattice)])
+    |                          ^^^^^^^^^^^
+321 | def test_lattice_from_dict_dispatches_on_type(build, cls):
+322 |     lattice = build()
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_material.py:314:9
+    |
+313 |     @pytest.mark.parametrize(
+314 |         "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+315 |     )
+316 |     def test_lineage_rule(
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_material.py:489:9
+    |
+488 |     @pytest.mark.parametrize(
+489 |         "key,bad_value", [("percent_type", "vo"), ("density_unit", "lb/ft3")]
+    |         ^^^^^^^^^^^^^^^
+490 |     )
+491 |     def test_from_dict_rejects_unknown_enum_value(self, key, bad_value):
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_resolved.py:176:5
+    |
+175 | @pytest.mark.parametrize(
+176 |     "component_type,target_id",
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+177 |     [
+178 |         (ComponentType.CCOMPONENT, "pin_cell-1"),
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_resolved.py:205:5
+    |
+204 | @pytest.mark.parametrize(
+205 |     "map_name,key",
+    |     ^^^^^^^^^^^^^^
+206 |     [
+207 |         ("geometries", "pin_box-1"),  # a CComponent's bounds
+    |
+help: Use a `tuple` for the first argument
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> python/tests/unit/pace/core/test_resolved.py:269:5
+    |
+268 | @pytest.mark.parametrize(
+269 |     "component_type,target_id,expected",
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+270 |     [
+271 |         (ComponentType.CCOMPONENT, "rod-1", True),
+    |
+help: Use a `tuple` for the first argument
+
+N817 CamelCase `ReferenceableType` imported as acronym `RT`
+  --> python/tests/unit/pace/services/test_reference_extraction.py:36:39
+   |
+34 | from pace.core.material import MMixture, MVoid, PercentType
+35 | from pace.core.reactor_blueprint import ReactorBlueprint
+36 | from pace.core.reference_types import ReferenceableType as RT
+   |                                       ^^^^^^^^^^^^^^^^^^^^^^^
+37 | from pace.db.relational.reference import Reference
+38 | from pace.services.reference_extraction import (
+   |
+
+Found 28 errors.
+No fixes available (24 hidden fixes can be enabled with the `--unsafe-fixes` option).

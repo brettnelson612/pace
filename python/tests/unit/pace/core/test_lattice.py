@@ -11,6 +11,7 @@ validation; lattice_from_dict dispatch; id-based equality.
 """
 
 import pytest
+
 from pace.core.component import ComponentRef, ComponentType
 from pace.core.ids import LatticeID, MaterialID, SimulationJobID
 from pace.core.lattice import (

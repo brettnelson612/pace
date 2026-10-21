@@ -8,6 +8,7 @@ omitting eq=False from its @dataclass decorator.
 """
 
 import pytest
+
 from pace.core.geometry import GCylinder
 from pace.core.material import MVoid
 from pace.core.versioned import Versioned

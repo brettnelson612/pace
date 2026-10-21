@@ -6,6 +6,7 @@ shape has, and the periodic face pairing.
 """
 
 import pytest
+
 from pace.core.bounds import (
     BOUNDS_GEOMETRY_TYPES,
     PERIODIC_PARTNER,
@@ -16,11 +17,11 @@ from pace.core.geometry import GeometryType
 
 
 def test_bounds_shapes_are_box_hex_and_cylinder():
-    assert BOUNDS_GEOMETRY_TYPES == {
+    assert {
         GeometryType.RECT_PRISM,
         GeometryType.HEX_PRISM,
         GeometryType.CYLINDER,
-    }
+    } == BOUNDS_GEOMETRY_TYPES
 
 
 @pytest.mark.parametrize(

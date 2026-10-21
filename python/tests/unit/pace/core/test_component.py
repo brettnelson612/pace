@@ -15,6 +15,7 @@ ResolvedComponent/ResolvedReactorBlueprint are covered in test_resolved.py.
 from dataclasses import FrozenInstanceError
 
 import pytest
+
 from pace.core.component import (
     CComponent,
     ComponentPlacement,
@@ -25,11 +26,11 @@ from pace.core.component import (
 from pace.core.geometry import GPose
 from pace.core.ids import (
     CComponentID,
+    ComponentPlacementID,
     GeometryID,
     LatticeID,
     LComponentID,
     MaterialID,
-    ComponentPlacementID,
     SimulationJobID,
 )
 from pace.core.reference_types import ReferenceableType

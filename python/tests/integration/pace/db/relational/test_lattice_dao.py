@@ -11,6 +11,8 @@ test_versioned_dao.py.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+
 from pace.core.component import ComponentRef, ComponentType
 from pace.core.ids import CComponentID, LatticeID, MaterialID
 from pace.core.lattice import (
@@ -21,7 +23,6 @@ from pace.core.lattice import (
     RectLattice,
 )
 from pace.db.pace_db import PaceDB
-from sqlalchemy.exc import IntegrityError
 
 PIN = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("pin_cell-1"))
 WATER = MaterialID("water-1")

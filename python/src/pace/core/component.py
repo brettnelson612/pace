@@ -53,25 +53,25 @@ ComponentPlacement objects directly.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
-from pace.core.reference_types import ReferenceableType
 from pace.core.geometry import GPose
 from pace.core.ids import (
     CComponentID,
+    ComponentID,
+    ComponentPlacementID,
     GeometryID,
+    LatticeID,
     LComponentID,
     MaterialID,
-    ComponentPlacementID,
-    LatticeID,
-    ComponentID,
 )
 from pace.core.pace_object import PaceObject
+from pace.core.reference_types import ReferenceableType
 from pace.core.versioned import Versioned
-from enum import StrEnum
 
 
 class ComponentType(StrEnum):
-    """The kinds of object a composite or lattice can place.
+    """Component types.
 
     Values match ReferenceableType's, so converting between the two is a
     lookup by value (see ComponentRef.referenceable_type).
@@ -221,7 +221,7 @@ class LComponent(Versioned[LComponentID]):
     @classmethod
     def from_dict(cls, data: dict) -> LComponent:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             geometry=GeometryID(data["geometry"]),
             material=MaterialID(data["material"]),
         )
@@ -336,7 +336,7 @@ class CComponent(Versioned[CComponentID]):
     @classmethod
     def from_dict(cls, data: dict) -> CComponent:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             bounds=GeometryID(data["bounds"]),
             fill=MaterialID(data["fill"]) if data["fill"] is not None else None,
             placements=[

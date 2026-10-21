@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pace.core.component import CComponent, LComponent, ComponentType, ComponentRef
+from pace.core.component import CComponent, ComponentRef, ComponentType, LComponent
 from pace.core.geometry import GAddition, Geometry, GSubtraction, geometry_from_dict
 from pace.core.ids import CComponentID, GeometryID, LatticeID, LComponentID, MaterialID
 from pace.core.lattice import Lattice, lattice_from_dict
@@ -179,28 +179,30 @@ class ResolvedReactorBlueprint(PaceObject):
     case)."""
 
     reactor_blueprint: ReactorBlueprint
-    rc: ResolvedComponent
+    resolved_component: ResolvedComponent
 
     def validate(self) -> None:
         owner = f"Reactor {self.reactor_blueprint.id!r}"
-        if self.reactor_blueprint.root.ref != self.rc.root:
+        if self.reactor_blueprint.root.ref != self.resolved_component.root:
             raise ValueError(
                 f"{owner} root {self.reactor_blueprint.root.ref.id!r} does not match the "
-                f"model root {self.rc.root.id!r}"
+                f"model root {self.resolved_component.root.id!r}"
             )
-        self.rc._require_geometry(owner, self.reactor_blueprint.bounds)
+        self.resolved_component._require_geometry(owner, self.reactor_blueprint.bounds)
         if self.reactor_blueprint.fill is not None:
-            self.rc._require_material(owner, self.reactor_blueprint.fill)
+            self.resolved_component._require_material(
+                owner, self.reactor_blueprint.fill
+            )
 
     def to_dict(self) -> dict:
         return {
             "reactor_blueprint": self.reactor_blueprint.to_dict(),
-            "rc": self.rc.to_dict(),
+            "resolved_component": self.resolved_component.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> ResolvedReactorBlueprint:
         return cls(
             reactor_blueprint=ReactorBlueprint.from_dict(data["reactor_blueprint"]),
-            rc=ResolvedComponent.from_dict(data["rc"]),
+            resolved_component=ResolvedComponent.from_dict(data["resolved_component"]),
         )

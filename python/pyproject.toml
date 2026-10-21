@@ -12,3 +12,22 @@ requires-python = ">=3.12,<3.13"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["pace*"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E4", "E7", "E9", "F",  # ruff defaults: syntax errors, undefined names, unused imports
+    "I",    # import sorting
+    "B",    # flake8-bugbear: likely bugs
+    "UP",   # pyupgrade: modern syntax for the target Python
+    "N",    # pep8-naming
+    "SIM",  # simplifications
+    "C4",   # comprehension cleanups
+    "PT",   # pytest style
+    "RUF",  # ruff's own rules
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pace"]

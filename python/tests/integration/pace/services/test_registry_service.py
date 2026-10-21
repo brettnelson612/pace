@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+
 from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
 from pace.core.component import (
@@ -53,7 +55,6 @@ from pace.services.registry_service import (
     RegistryService,
     VersionAlreadyExistsError,
 )
-from sqlalchemy.exc import IntegrityError
 
 ORIGIN = GPose(x_m=0.0, y_m=0.0, z_m=0.0)
 BOX_FACES = faces_for_geometry_type(GeometryType.RECT_PRISM)

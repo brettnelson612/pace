@@ -10,10 +10,11 @@ back as a unit, and SQLite connections enforce foreign keys.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import text
+
 from pace.core.reference_types import ReferenceableType
 from pace.db.pace_db import PaceDB
 from pace.db.relational.sql_db import SqlDB
-from sqlalchemy import text
 
 
 def test_create_all_succeeds(pace_db: PaceDB):

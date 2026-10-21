@@ -10,11 +10,11 @@ field before wrapping it).
 
 from pace.core.ids import (
     CComponentID,
+    ComponentPlacementID,
     GeometryID,
     LatticeID,
     LComponentID,
     MaterialID,
-    ComponentPlacementID,
     ReactorBlueprintID,
     SimulationJobID,
 )

@@ -179,7 +179,7 @@ class GCylinder(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GCylinder:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             radius_m=data["radius_m"],
             height_m=data["height_m"],
         )
@@ -225,7 +225,7 @@ class GAnnulus(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GAnnulus:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             inner_radius_m=data["inner_radius_m"],
             outer_radius_m=data["outer_radius_m"],
             height_m=data["height_m"],
@@ -281,7 +281,7 @@ class GHexPrism(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GHexPrism:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             circumradius_m=data["circumradius_m"],
             height_m=data["height_m"],
         )
@@ -312,7 +312,7 @@ class GSphere(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GSphere:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             radius_m=data["radius_m"],
         )
 
@@ -356,7 +356,7 @@ class GRectanglePrism(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GRectanglePrism:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             length_m=data["length_m"],
             width_m=data["width_m"],
             height_m=data["height_m"],
@@ -453,7 +453,7 @@ class GAddition(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GAddition:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             units=[
                 (GeometryID(unit["geometry_id"]), GPose.from_dict(unit["position"]))
                 for unit in data["units"]
@@ -528,7 +528,7 @@ class GSubtraction(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GSubtraction:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             base=(
                 GeometryID(data["base"]["geometry_id"]),
                 GPose.from_dict(data["base"]["position"]),

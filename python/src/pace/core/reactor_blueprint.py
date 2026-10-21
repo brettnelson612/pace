@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import PERIODIC_PARTNER, BoundsFace
 from pace.core.component import ComponentPlacement
 from pace.core.ids import GeometryID, MaterialID, ReactorBlueprintID
 from pace.core.versioned import Versioned
-from pace.core.boundary_conditions import NeutronBC, ThermalBC, FlowBC
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
@@ -144,7 +144,7 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
     @classmethod
     def from_dict(cls, data: dict) -> ReactorBlueprint:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             description=data["description"],
             bounds=GeometryID(data["bounds"]),
             fill=MaterialID(data["fill"]) if data["fill"] is not None else None,

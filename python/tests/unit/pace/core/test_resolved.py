@@ -17,8 +17,9 @@ assembly composite holding the lattice.
 from typing import Any
 
 import pytest
-from pace.core.bounds import faces_for_geometry_type
+
 from pace.core.boundary_conditions import NeutronBC
+from pace.core.bounds import faces_for_geometry_type
 from pace.core.component import (
     CComponent,
     ComponentPlacement,
@@ -35,7 +36,7 @@ from pace.core.geometry import (
     GRectanglePrism,
     GSubtraction,
 )
-from pace.core.ids import GeometryID, MaterialID, ComponentPlacementID
+from pace.core.ids import ComponentPlacementID, GeometryID, MaterialID
 from pace.core.lattice import LatticeElement, RectLattice
 from pace.core.material import (
     DensityUnit,

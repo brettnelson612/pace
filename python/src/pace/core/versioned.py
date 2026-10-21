@@ -132,9 +132,9 @@ class Versioned(PaceObject, Generic[IDType]):
         }
 
     @classmethod
-    def _base_fields_from_dict(cls, data: dict) -> dict:
+    def _base_versioned_fields_from_dict(cls, data: dict) -> dict:
         """Shared identity/lineage parsing — every leaf class's
-        from_dict() splices this in via **cls._base_fields_from_dict(data)
+        from_dict() splices this in via **cls._base_versioned_fields_from_dict(data)
         (or, for Geometry/Material, via a subclass-level extension of
         it — see Material._material_fields_from_dict), then adds only
         its own type-specific fields on top."""

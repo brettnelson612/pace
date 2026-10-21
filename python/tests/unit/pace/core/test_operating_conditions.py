@@ -7,6 +7,7 @@ equality (neither is a versioned object).
 """
 
 import pytest
+
 from pace.core.ids import MaterialID
 from pace.core.operating_conditions import CoolantInlet, OperatingConditions
 
