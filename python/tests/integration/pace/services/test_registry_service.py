@@ -13,6 +13,7 @@ get_resolved_reactor_blueprint().
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import pytest
@@ -20,7 +21,15 @@ from sqlalchemy.exc import IntegrityError
 
 from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.geometry import GAnnulus, GCylinder, GeometryType, GPose, GRectanglePrism
+from pace.core.enclosure import Enclosure
+from pace.core.geometry import (
+    GAnnulus,
+    GCylinder,
+    GeometryType,
+    GHexPrism,
+    GPose,
+    GRectanglePrism,
+)
 from pace.core.ids import (
     EnclosureID,
     GeometryID,
@@ -29,7 +38,7 @@ from pace.core.ids import (
     PlacementID,
     ReactorBlueprintID,
 )
-from pace.core.lattice import LatticeOccupant, RectLattice
+from pace.core.lattice import HexLattice, HexOrientation, LatticeOccupant, RectLattice
 from pace.core.material import (
     DensityUnit,
     MaterialComponentEntry,
@@ -37,13 +46,9 @@ from pace.core.material import (
     MVoid,
     PercentType,
 )
-from pace.core.placeable import (
-    Enclosure,
-    Part,
-    PlaceableRef,
-    PlaceableType,
-    Placement,
-)
+from pace.core.part import Part
+from pace.core.placeable import PlaceableRef, PlaceableType
+from pace.core.placement import Placement
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
 from pace.db.pace_db import PaceDB
@@ -119,13 +124,14 @@ class MiniAssembly:
     water: MIsotopic
     pellet: Part
     pin_cell: Enclosure
+    water_cell: Enclosure
     lattice: RectLattice
     assembly: Enclosure
 
 
 def _register_mini_assembly(service: RegistryService) -> MiniAssembly:
-    """pellet -> pin cell (box + water) -> 2x2 lattice (one empty slot,
-    water fill) -> assembly (box + water margin)."""
+    """pellet -> pin cell (box + water) -> 2x2 lattice (three pin cells
+    and one coolant-only water cell) -> assembly (box + water margin)."""
     pellet_cyl = service.register_geometry(_make_cylinder("pellet_cyl"))
     pin_box = service.register_geometry(_make_box("pin_box", 0.0126))
     assembly_box = service.register_geometry(_make_box("assembly_box", 0.026))
@@ -148,18 +154,26 @@ def _register_mini_assembly(service: RegistryService) -> MiniAssembly:
             placements=[_place("pellet", PlaceableType.PART, pellet.id)],
         )
     )
+    water_cell = service.register_enclosure(
+        Enclosure.create(
+            family_name="water_cell",
+            version_label="1",
+            bounds=pin_box.id,
+            fill=water.id,
+            placements=[],
+        )
+    )
     lattice = service.register_lattice(
         RectLattice.create(
             family_name="lattice_2x2",
             version_label="1",
             pitch_m=0.0126,
-            fill=water.id,
             shape=(2, 2),
             occupants=[
                 LatticeOccupant(
-                    ref=PlaceableRef(type=PlaceableType.ENCLOSURE, id=pin_cell.id),
-                    addresses=((0, 0), (0, 1), (1, 0)),
-                )
+                    enclosure=pin_cell.id, addresses=((0, 0), (0, 1), (1, 0))
+                ),
+                LatticeOccupant(enclosure=water_cell.id, addresses=((1, 1),)),
             ],
         )
     )
@@ -180,6 +194,7 @@ def _register_mini_assembly(service: RegistryService) -> MiniAssembly:
         water=water,
         pellet=pellet,
         pin_cell=pin_cell,
+        water_cell=water_cell,
         lattice=lattice,
         assembly=assembly,
     )
@@ -189,8 +204,7 @@ def _make_blueprint(mini: MiniAssembly, **overrides) -> ReactorBlueprint:
     kwargs = {
         "family_name": "mini_assembly_2d",
         "version_label": "1",
-        "bounds": mini.assembly_box.id,
-        "root": _place("assembly", PlaceableType.ENCLOSURE, mini.assembly.id),
+        "root": mini.assembly.id,
         "neutron_bcs": dict.fromkeys(BOX_FACES, NeutronBC.REFLECTIVE),
     }
     kwargs.update(overrides)
@@ -551,7 +565,9 @@ def test_validate_enclosure_does_not_persist(pace_db, registry_service):
 # =============================================================================
 
 
-def test_register_lattice_round_trips_with_one_edge_per_ref(pace_db, registry_service):
+def test_register_lattice_round_trips_with_one_edge_per_occupant(
+    pace_db, registry_service
+):
     mini = _register_mini_assembly(registry_service)
     fetched = pace_db.registry.lattices.get(mini.lattice.id)
     assert fetched.to_dict() == mini.lattice.to_dict()
@@ -560,31 +576,135 @@ def test_register_lattice_round_trips_with_one_edge_per_ref(pace_db, registry_se
     )
     # three slots of the same pin cell collapse to one edge
     assert outgoing == {
-        (ReferenceableType.MATERIAL, mini.water.id),
         (ReferenceableType.ENCLOSURE, mini.pin_cell.id),
+        (ReferenceableType.ENCLOSURE, mini.water_cell.id),
     }
 
 
-def test_register_lattice_rejects_dangling_element(pace_db, registry_service):
-    mini = _register_mini_assembly(registry_service)
+def test_register_lattice_rejects_dangling_occupant(pace_db, registry_service):
+    _register_mini_assembly(registry_service)
     lattice = RectLattice.create(
         family_name="bad_lattice",
         version_label="1",
         pitch_m=0.0126,
-        fill=mini.water.id,
         shape=(1, 1),
         occupants=[
-            LatticeOccupant(
-                ref=PlaceableRef(
-                    type=PlaceableType.ENCLOSURE, id=EnclosureID("nope-1")
-                ),
-                addresses=((0, 0),),
-            )
+            LatticeOccupant(enclosure=EnclosureID("nope-1"), addresses=((0, 0),))
         ],
     )
-    with pytest.raises(DanglingReferenceError):
+    with pytest.raises(DanglingReferenceError, match="nope-1"):
         registry_service.register_lattice(lattice)
     assert pace_db.registry.lattices.get(lattice.id) is None
+
+
+def _single_slot_lattice(occupant: EnclosureID, pitch_m: float = 0.0126) -> RectLattice:
+    return RectLattice.create(
+        family_name="single_slot",
+        version_label="1",
+        pitch_m=pitch_m,
+        shape=(1, 1),
+        occupants=[LatticeOccupant(enclosure=occupant, addresses=((0, 0),))],
+    )
+
+
+def test_register_lattice_rejects_occupant_bounds_of_the_wrong_size(
+    pace_db, registry_service
+):
+    mini = _register_mini_assembly(registry_service)
+    lattice = _single_slot_lattice(mini.assembly.id)
+    with pytest.raises(InvalidBoundsError, match="not the lattice's slot shape"):
+        registry_service.register_lattice(lattice)
+    assert pace_db.registry.lattices.get(lattice.id) is None
+
+
+def test_register_lattice_rejects_occupant_bounds_of_the_wrong_shape(
+    registry_service,
+):
+    mini = _register_mini_assembly(registry_service)
+    round_cell = registry_service.register_enclosure(
+        Enclosure.create(
+            family_name="round_cell",
+            version_label="1",
+            bounds=registry_service.register_geometry(
+                _make_cylinder("round_bounds", radius_m=0.0063)
+            ).id,
+            fill=mini.water.id,
+            placements=[],
+        )
+    )
+    with pytest.raises(InvalidBoundsError, match="cylinder"):
+        registry_service.register_lattice(_single_slot_lattice(round_cell.id))
+
+
+def test_register_lattice_rejects_occupants_of_different_heights(registry_service):
+    mini = _register_mini_assembly(registry_service)
+    tall_box = registry_service.register_geometry(
+        GRectanglePrism.create(
+            family_name="tall_pin_box",
+            version_label="1",
+            length_m=0.0126,
+            width_m=0.0126,
+            height_m=0.02,
+        )
+    )
+    tall_cell = registry_service.register_enclosure(
+        Enclosure.create(
+            family_name="tall_water_cell",
+            version_label="1",
+            bounds=tall_box.id,
+            fill=mini.water.id,
+            placements=[],
+        )
+    )
+    lattice = RectLattice.create(
+        family_name="mixed_heights",
+        version_label="1",
+        pitch_m=0.0126,
+        shape=(1, 2),
+        occupants=[
+            LatticeOccupant(enclosure=mini.water_cell.id, addresses=((0, 0),)),
+            LatticeOccupant(enclosure=tall_cell.id, addresses=((0, 1),)),
+        ],
+    )
+    with pytest.raises(InvalidBoundsError, match="must share one height"):
+        registry_service.register_lattice(lattice)
+
+
+def test_register_hex_lattice_accepts_hex_cells_of_the_pitch(registry_service):
+    mini = _register_mini_assembly(registry_service)
+    pitch_m = 0.009
+    hex_cell = registry_service.register_enclosure(
+        Enclosure.create(
+            family_name="hex_water_cell",
+            version_label="1",
+            bounds=registry_service.register_geometry(
+                GHexPrism.create(
+                    family_name="hex_slot",
+                    version_label="1",
+                    circumradius_m=pitch_m / math.sqrt(3),
+                    height_m=0.01,
+                )
+            ).id,
+            fill=mini.water.id,
+            placements=[],
+        )
+    )
+    lattice = registry_service.register_lattice(
+        HexLattice.create(
+            family_name="hex_bundle",
+            version_label="1",
+            pitch_m=pitch_m,
+            num_rings=2,
+            orientation=HexOrientation.FLAT_TOP,
+            occupants=[
+                LatticeOccupant(
+                    enclosure=hex_cell.id,
+                    addresses=((0, 0), *((1, i) for i in range(6))),
+                )
+            ],
+        )
+    )
+    assert registry_service.get_lattice(lattice.id) is not None
 
 
 def test_reregistering_a_lattice_is_rejected(registry_service):
@@ -600,9 +720,7 @@ def test_reregistering_a_lattice_is_rejected(registry_service):
 
 def test_register_reactor_blueprint_round_trips(pace_db, registry_service):
     mini = _register_mini_assembly(registry_service)
-    blueprint = registry_service.register_reactor_blueprint(
-        _make_blueprint(mini, fill=mini.water.id)
-    )
+    blueprint = registry_service.register_reactor_blueprint(_make_blueprint(mini))
     fetched = pace_db.registry.reactor_blueprints.get(blueprint.id)
     assert fetched.to_dict() == blueprint.to_dict()
     outgoing = set(
@@ -610,11 +728,7 @@ def test_register_reactor_blueprint_round_trips(pace_db, registry_service):
             ReferenceableType.REACTOR_BLUEPRINT, blueprint.id
         )
     )
-    assert outgoing == {
-        (ReferenceableType.GEOMETRY, mini.assembly_box.id),
-        (ReferenceableType.ENCLOSURE, mini.assembly.id),
-        (ReferenceableType.MATERIAL, mini.water.id),
-    }
+    assert outgoing == {(ReferenceableType.ENCLOSURE, mini.assembly.id)}
 
 
 def test_register_reactor_blueprint_accepts_flow_on_its_faces(registry_service):
@@ -672,29 +786,43 @@ def test_register_reactor_blueprint_rejects_conditions_on_missing_faces(
         registry_service.register_reactor_blueprint(_make_blueprint(mini, **overrides))
 
 
-def test_register_reactor_blueprint_rejects_non_bounds_shape(registry_service):
+def test_register_reactor_blueprint_uses_the_faces_of_its_roots_bounds(
+    registry_service,
+):
     mini = _register_mini_assembly(registry_service)
-    ring = registry_service.register_geometry(
-        GAnnulus.create(
-            family_name="ring",
+    round_root = registry_service.register_enclosure(
+        Enclosure.create(
+            family_name="round_root",
             version_label="1",
-            inner_radius_m=0.001,
-            outer_radius_m=0.002,
-            height_m=0.01,
+            bounds=registry_service.register_geometry(
+                _make_cylinder("round_root_bounds", radius_m=0.02)
+            ).id,
+            fill=mini.water.id,
+            placements=[_place("pin", PlaceableType.ENCLOSURE, mini.pin_cell.id)],
         )
     )
-    with pytest.raises(InvalidBoundsError):
+    cylinder_faces = faces_for_geometry_type(GeometryType.CYLINDER)
+    blueprint = registry_service.register_reactor_blueprint(
+        _make_blueprint(
+            mini,
+            root=round_root.id,
+            neutron_bcs=dict.fromkeys(cylinder_faces, NeutronBC.VACUUM),
+        )
+    )
+    assert set(blueprint.neutron_bcs) == set(cylinder_faces)
+
+    with pytest.raises(InvalidBoundsError, match="faces of its root's bounds"):
         registry_service.register_reactor_blueprint(
-            _make_blueprint(mini, bounds=ring.id)
+            _make_blueprint(
+                mini, family_name="box_faces_on_cylinder", root=round_root.id
+            )
         )
 
 
 def test_register_reactor_blueprint_rejects_dangling_root(registry_service):
     mini = _register_mini_assembly(registry_service)
-    blueprint = _make_blueprint(
-        mini, root=_place("x", PlaceableType.ENCLOSURE, EnclosureID("nope-1"))
-    )
-    with pytest.raises(DanglingReferenceError):
+    blueprint = _make_blueprint(mini, root=EnclosureID("nope-1"))
+    with pytest.raises(DanglingReferenceError, match="nope-1"):
         registry_service.register_reactor_blueprint(blueprint)
 
 
@@ -741,14 +869,19 @@ def test_get_lattice_returns_persisted_row(registry_service):
 
 
 def test_get_resolved_placeable_hydrates_full_tree_once_per_object(registry_service):
-    """assembly -> lattice -> pin cell (3 slots) -> pellet: every
-    distinct object appears exactly once, however often it's placed."""
+    """assembly -> lattice -> pin cell (3 slots) and water cell ->
+    pellet: every distinct object appears exactly once, however often
+    it's placed."""
     mini = _register_mini_assembly(registry_service)
     root = PlaceableRef(type=PlaceableType.ENCLOSURE, id=mini.assembly.id)
     resolved = registry_service.get_resolved_placeable(root)
 
     assert resolved.root == root
-    assert resolved.enclosures.keys() == {mini.assembly.id, mini.pin_cell.id}
+    assert resolved.enclosures.keys() == {
+        mini.assembly.id,
+        mini.pin_cell.id,
+        mini.water_cell.id,
+    }
     assert resolved.lattices.keys() == {mini.lattice.id}
     assert resolved.parts.keys() == {mini.pellet.id}
     assert resolved.geometries.keys() == {
@@ -763,7 +896,7 @@ def test_get_resolved_placeable_with_lattice_root(registry_service):
     mini = _register_mini_assembly(registry_service)
     root = PlaceableRef(type=PlaceableType.LATTICE, id=mini.lattice.id)
     resolved = registry_service.get_resolved_placeable(root)
-    assert resolved.enclosures.keys() == {mini.pin_cell.id}
+    assert resolved.enclosures.keys() == {mini.pin_cell.id, mini.water_cell.id}
     assert resolved.parts.keys() == {mini.pellet.id}
     assert mini.assembly_box.id not in resolved.geometries
 
@@ -784,21 +917,18 @@ def test_get_resolved_placeable_raises_for_nonexistent_root(registry_service):
         )
 
 
-def test_get_resolved_reactor_blueprint_includes_blueprint_only_references(
+def test_get_resolved_reactor_blueprint_hydrates_the_root_enclosures_tree(
     registry_service,
 ):
-    """A blueprint bounds geometry that nothing in the root's tree uses
-    must still be hydrated."""
     mini = _register_mini_assembly(registry_service)
-    reactor_box = registry_service.register_geometry(_make_box("reactor_box", 0.03))
-    blueprint = registry_service.register_reactor_blueprint(
-        _make_blueprint(mini, bounds=reactor_box.id, fill=mini.water.id)
-    )
+    blueprint = registry_service.register_reactor_blueprint(_make_blueprint(mini))
     resolved = registry_service.get_resolved_reactor_blueprint(blueprint.id)
 
     assert resolved.reactor_blueprint.to_dict() == blueprint.to_dict()
-    assert reactor_box.id in resolved.resolved_placeable.geometries
-    assert resolved.resolved_placeable.root == blueprint.root.ref
+    assert resolved.resolved_placeable.root == PlaceableRef(
+        type=PlaceableType.ENCLOSURE, id=mini.assembly.id
+    )
+    assert mini.assembly_box.id in resolved.resolved_placeable.geometries
     assert resolved.resolved_placeable.lattices.keys() == {mini.lattice.id}
 
 

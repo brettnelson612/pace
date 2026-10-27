@@ -6,8 +6,8 @@ EnclosureRow (the `enclosures` table) and EnclosureDAO.
 
 from __future__ import annotations
 
+from pace.core.enclosure import Enclosure
 from pace.core.ids import EnclosureID
-from pace.core.placeable import Enclosure
 from pace.db.relational.sql_db import SqlDB
 from pace.db.relational.table_names import ENCLOSURES_TABLE_NAME
 from pace.db.relational.versioned_dao import VersionedDAO

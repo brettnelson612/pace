@@ -18,7 +18,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pace.core.ids import PartID
-from pace.core.placeable import Part
+from pace.core.part import Part
 from pace.db.relational.sql_db import SqlDB
 from pace.db.relational.table_names import (
     GEOMETRIES_TABLE_NAME,

@@ -12,8 +12,8 @@ registry that a DAO can't enforce on its own.
          family_name; a v2+ must derive from an existing version of the
          same type and family;
       3. the object's validate_*() checks (dangling references, plus
-         bounds shape and face coverage for Enclosures and
-         ReactorBlueprints).
+         bounds shape for Enclosures, the tiling rule for Lattices, and
+         face coverage of the root's bounds for ReactorBlueprints).
 - validate_*(): step 3 on its own, for a check-before-save flow (e.g. a
   draft UI that shouldn't persist on every keystroke).
 - get_*(): fetch one object, unhydrated (embedded refs stay as bare
@@ -25,19 +25,20 @@ registry that a DAO can't enforce on its own.
   the stored objects fails loudly instead of returning a partial tree.
 
 Not handled here yet: multi-hop cycles, geometric containment (members
-inside bounds, lattice occupants inside their slot), edit/delete,
-batch mode.
+inside bounds), edit/delete, batch mode.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Collection
 from typing import Any, TypeVar
 
 from sqlalchemy.exc import IntegrityError
 
 from pace.core.bounds import BOUNDS_GEOMETRY_TYPES, faces_for_geometry_type
-from pace.core.geometry import Geometry
+from pace.core.enclosure import Enclosure
+from pace.core.geometry import Geometry, GHexPrism, GRectanglePrism
 from pace.core.ids import (
     EnclosureID,
     GeometryID,
@@ -48,7 +49,8 @@ from pace.core.ids import (
 )
 from pace.core.lattice import Lattice
 from pace.core.material import Material
-from pace.core.placeable import Enclosure, Part, PlaceableRef
+from pace.core.part import Part
+from pace.core.placeable import PlaceableRef, PlaceableType
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
 from pace.core.resolved import ResolvedPlaceable, ResolvedReactorBlueprint
@@ -90,8 +92,9 @@ class DanglingReferenceError(ValueError):
 
 class InvalidBoundsError(ValueError):
     """Raised when a bounds geometry is a shape that can't serve as
-    bounds, or a ReactorBlueprint's boundary conditions don't match the
-    faces of its bounds shape."""
+    bounds, a lattice occupant's bounds don't match its slot, or a
+    ReactorBlueprint's boundary conditions don't match the faces of its
+    root's bounds shape."""
 
 
 class RegistryService:
@@ -257,8 +260,8 @@ class RegistryService:
         self, reactor_blueprint_id: ReactorBlueprintID
     ) -> ResolvedReactorBlueprint:
         """Hydrate a ReactorBlueprint and everything it transitively
-        references — its root's whole tree plus its own bounds and
-        fill. This is the model input the solver adapters take.
+        references — its root Enclosure's whole tree. This is the model
+        input the solver adapters take.
         """
         reactor_blueprint = self._registry.reactor_blueprints.get(reactor_blueprint_id)
         if reactor_blueprint is None:
@@ -271,7 +274,8 @@ class RegistryService:
         return ResolvedReactorBlueprint(
             reactor_blueprint=reactor_blueprint,
             resolved_placeable=self._build_resolved_placeable(
-                reactor_blueprint.root.ref, needed
+                PlaceableRef(type=PlaceableType.ENCLOSURE, id=reactor_blueprint.root),
+                needed,
             ),
         )
 
@@ -339,18 +343,54 @@ class RegistryService:
         self._require_bounds_shape(enclosure.bounds)
 
     def validate_lattice(self, lattice: Lattice) -> None:
-        """Confirm the fill and every occupant resolve."""
+        """Confirm every occupant resolves, then the tiling rule: each
+        occupant Enclosure's bounds are exactly the lattice's slot shape
+        (see Lattice.matches_slot), and all occupants share one
+        height."""
         self.validate_references(extract_lattice_references(lattice))
+        owner = f"Lattice {lattice.id!r}"
+        enclosures = self._registry.enclosures.get_many(
+            {occupant.enclosure for occupant in lattice.occupants}
+        )
+        bounds_by_id = self._registry.geometries.get_many(
+            {enclosure.bounds for enclosure in enclosures.values()}
+        )
+
+        heights: dict[EnclosureID, float] = {}
+        for enclosure in enclosures.values():
+            bounds = bounds_by_id[enclosure.bounds]
+            if not isinstance(
+                bounds, GRectanglePrism | GHexPrism
+            ) or not lattice.matches_slot(bounds):
+                raise InvalidBoundsError(
+                    f"{owner} occupant {enclosure.id!r} has bounds "
+                    f"{bounds.id!r} ({bounds.geometry_type.value}), which is not "
+                    f"the lattice's slot shape (pitch {lattice.pitch_m} m)"
+                )
+            heights[enclosure.id] = bounds.height_m
+
+        first_id, first_height = next(iter(heights.items()))
+        for enclosure_id, height in heights.items():
+            if not math.isclose(height, first_height):
+                raise InvalidBoundsError(
+                    f"{owner} occupants must share one height: {first_id!r} is "
+                    f"{first_height} m but {enclosure_id!r} is {height} m"
+                )
 
     def validate_reactor_blueprint(self, reactor_blueprint: ReactorBlueprint) -> None:
-        """Confirm every reference resolves, the bounds geometry is a
-        valid bounds shape, and the boundary conditions match its faces:
-        neutron conditions on exactly the shape's faces; thermal and
-        flow conditions only on faces the shape has."""
+        """Confirm the root Enclosure exists, then that the boundary
+        conditions match the faces of the root's bounds: neutron
+        conditions on exactly the shape's faces; thermal and flow
+        conditions only on faces the shape has."""
         self.validate_references(
             extract_reactor_blueprint_references(reactor_blueprint)
         )
-        geometry = self._require_bounds_shape(reactor_blueprint.bounds)
+        root = self._registry.enclosures.get(reactor_blueprint.root)
+        if root is None:
+            raise DanglingReferenceError(
+                f"root enclosure {reactor_blueprint.root!r} does not exist"
+            )
+        geometry = self._require_bounds_shape(root.bounds)
         bounds_faces = set(faces_for_geometry_type(geometry.geometry_type))
         owner = f"ReactorBlueprint {reactor_blueprint.id!r}"
 
@@ -360,7 +400,7 @@ class RegistryService:
             extra = sorted(face.value for face in neutron_faces - bounds_faces)
             raise InvalidBoundsError(
                 f"{owner} neutron conditions must cover exactly the faces of "
-                f"its bounds: missing {missing}, not a face {extra}"
+                f"its root's bounds: missing {missing}, not a face {extra}"
             )
         for label, conditions in (
             ("thermal", reactor_blueprint.thermal_bcs),
@@ -369,8 +409,8 @@ class RegistryService:
             extra_faces = set(conditions) - bounds_faces
             if extra_faces:
                 raise InvalidBoundsError(
-                    f"{owner} has {label} conditions on faces its bounds don't "
-                    f"have: {sorted(face.value for face in extra_faces)}"
+                    f"{owner} has {label} conditions on faces its root's bounds "
+                    f"don't have: {sorted(face.value for face in extra_faces)}"
                 )
 
     def _require_bounds_shape(self, geometry_id: GeometryID) -> Geometry:

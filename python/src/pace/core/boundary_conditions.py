@@ -6,7 +6,7 @@ from enum import StrEnum
 
 
 class NeutronBC(StrEnum):
-    """What happens to a neutron reaching a face of the Reactor's bounds.
+    """What happens to a neutron reaching a face of the root Enclosure's bounds.
 
     Values (OpenMC's boundary types, minus 'transmission', which is the
     interior-surface default and never valid on the outer boundary):
@@ -30,7 +30,7 @@ class NeutronBC(StrEnum):
 
 
 class ThermalBC(StrEnum):
-    """Heat-conduction condition on a face of the Reactor's bounds.
+    """Heat-conduction condition on a face of the root Enclosure's bounds.
 
     Values:
         - adiabatic: no heat crosses the face. Also the symmetry-plane
@@ -44,7 +44,7 @@ class ThermalBC(StrEnum):
 
 
 class FlowBC(StrEnum):
-    """Flow condition on a face of the ReactorBlueprint's bounds.
+    """Flow condition on a face of the root Enclosure's bounds.
 
     Marks a face as the inlet or the outlet. Flow rate, inlet
     temperature and system pressure are operating conditions (see

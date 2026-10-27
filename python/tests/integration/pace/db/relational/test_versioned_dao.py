@@ -16,8 +16,9 @@ from sqlalchemy.exc import IntegrityError
 
 from pace.core.boundary_conditions import NeutronBC
 from pace.core.bounds import faces_for_geometry_type
+from pace.core.enclosure import Enclosure
 from pace.core.geometry import GCylinder, GeometryType, GPose
-from pace.core.ids import EnclosureID, GeometryID, PlacementID
+from pace.core.ids import GeometryID, PlacementID
 from pace.core.lattice import LatticeOccupant, RectLattice
 from pace.core.material import (
     DensityUnit,
@@ -25,13 +26,9 @@ from pace.core.material import (
     MIsotopic,
     PercentType,
 )
-from pace.core.placeable import (
-    Enclosure,
-    Part,
-    PlaceableRef,
-    PlaceableType,
-    Placement,
-)
+from pace.core.part import Part
+from pace.core.placeable import PlaceableRef, PlaceableType
+from pace.core.placement import Placement
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.db.pace_db import PaceDB
 
@@ -277,24 +274,17 @@ def test_every_dao_round_trips(pace_db: PaceDB, insert):
             )
         ],
     )
-    pin_ref = PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID(pin_cell.id))
     lattice = RectLattice.create(
         family_name="grid",
         version_label="1",
         pitch_m=0.0126,
-        fill=fuel.id,
         shape=(1, 1),
-        occupants=[LatticeOccupant(ref=pin_ref, addresses=((0, 0),))],
+        occupants=[LatticeOccupant(enclosure=pin_cell.id, addresses=((0, 0),))],
     )
     blueprint = ReactorBlueprint.create(
         family_name="core",
         version_label="1",
-        bounds=cylinder.id,
-        root=Placement(
-            id=PlacementID("root"),
-            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-            ref=pin_ref,
-        ),
+        root=pin_cell.id,
         neutron_bcs=dict.fromkeys(
             faces_for_geometry_type(GeometryType.CYLINDER), NeutronBC.VACUUM
         ),

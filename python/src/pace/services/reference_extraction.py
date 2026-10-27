@@ -18,10 +18,11 @@ does it appear inside it."
 
 from __future__ import annotations
 
+from pace.core.enclosure import Enclosure
 from pace.core.geometry import GAddition, Geometry, GSubtraction
 from pace.core.lattice import Lattice
 from pace.core.material import Material, MMixture
-from pace.core.placeable import Enclosure, Part
+from pace.core.part import Part
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
 from pace.db.relational.reference import Reference
@@ -126,55 +127,29 @@ def extract_enclosure_references(enclosure: Enclosure) -> set[Reference]:
 
 
 def extract_lattice_references(lattice: Lattice) -> set[Reference]:
-    """A Lattice references its fill Material and every placeable it
-    places — one edge per occupant, however many addresses it
-    occupies."""
-    references = {
+    """A Lattice references every Enclosure that occupies its slots —
+    one edge per occupant, however many addresses it occupies."""
+    return {
         Reference(
             source_type=ReferenceableType.LATTICE,
             source_id=lattice.id,
-            target_type=ReferenceableType.MATERIAL,
-            target_id=lattice.fill,
-        )
-    }
-    references.update(
-        Reference(
-            source_type=ReferenceableType.LATTICE,
-            source_id=lattice.id,
-            target_type=occupant.ref.referenceable_type,
-            target_id=occupant.ref.id,
+            target_type=ReferenceableType.ENCLOSURE,
+            target_id=occupant.enclosure,
         )
         for occupant in lattice.occupants
-    )
-    return references
+    }
 
 
 def extract_reactor_blueprint_references(
     reactor_blueprint: ReactorBlueprint,
 ) -> set[Reference]:
-    """A ReactorBlueprint references its bounds Geometry, its fill
-    Material (if any), and its root placeable."""
-    references = {
+    """A ReactorBlueprint references exactly one object: its root
+    Enclosure."""
+    return {
         Reference(
             source_type=ReferenceableType.REACTOR_BLUEPRINT,
             source_id=reactor_blueprint.id,
-            target_type=ReferenceableType.GEOMETRY,
-            target_id=reactor_blueprint.bounds,
-        ),
-        Reference(
-            source_type=ReferenceableType.REACTOR_BLUEPRINT,
-            source_id=reactor_blueprint.id,
-            target_type=reactor_blueprint.root.ref.referenceable_type,
-            target_id=reactor_blueprint.root.ref.id,
-        ),
-    }
-    if reactor_blueprint.fill is not None:
-        references.add(
-            Reference(
-                source_type=ReferenceableType.REACTOR_BLUEPRINT,
-                source_id=reactor_blueprint.id,
-                target_type=ReferenceableType.MATERIAL,
-                target_id=reactor_blueprint.fill,
-            )
+            target_type=ReferenceableType.ENCLOSURE,
+            target_id=reactor_blueprint.root,
         )
-    return references
+    }

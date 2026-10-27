@@ -28,6 +28,18 @@ pairing gets placed, elsewhere in the model — GAddition/GSubtraction's
 internal unit positions are the one exception, needed to define the
 shape itself).
 
+Local frame. Every shape is defined in its own local frame, centered on
+the origin with its axis along +z: a GCylinder of height h spans
+z in [-h/2, h/2], a GRectanglePrism is centered on the origin with its
+length along x and width along y, and a GSphere is centered on the
+origin. A GHexPrism at zero rotation is flat-top: two of its faces are
+perpendicular to the y-axis (rotate it by pi/6 about z for point-top).
+A GPose — in a Placement, or inside a GAddition/GSubtraction — puts
+that local origin at (x_m, y_m, z_m) in the parent's frame, rotated by
+z_rotation_rad about z. GAddition and GSubtraction are themselves
+centered on their own local origin, which their units' poses are
+relative to.
+
 Several shapes here (GAddition, GSubtraction) are PACE's version of
 Constructive Solid Geometry (CSG) — building complex shapes out of
 boolean combinations of simpler ones. This mirrors how OpenMC itself
@@ -255,7 +267,10 @@ class GHexPrism(Geometry):
     hexagon's center to one of its six corners (the circumscribed
     circle's radius) — the standard way a regular hexagon's size is
     specified, since it fully determines the hexagon's dimensions
-    including its flat-to-flat width."""
+    including its flat-to-flat width (sqrt(3) * circumradius_m).
+
+    At zero rotation the hexagon is flat-top: two of its faces are
+    perpendicular to the y-axis, the top face centered on +y."""
 
     geometry_type: ClassVar[GeometryType] = GeometryType.HEX_PRISM
     circumradius_m: float = field(

@@ -22,7 +22,7 @@ from pace.core.material import (
     MIsotopic,
     PercentType,
 )
-from pace.core.placeable import Part
+from pace.core.part import Part
 from pace.db.pace_db import PaceDB
 
 

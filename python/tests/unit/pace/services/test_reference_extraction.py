@@ -8,6 +8,7 @@ types, and deduplication when the same target is used several times.
 
 from pace.core.boundary_conditions import NeutronBC
 from pace.core.bounds import faces_for_geometry_type
+from pace.core.enclosure import Enclosure
 from pace.core.geometry import (
     GAddition,
     GCylinder,
@@ -25,13 +26,9 @@ from pace.core.ids import (
 )
 from pace.core.lattice import LatticeOccupant, RectLattice
 from pace.core.material import MMixture, MVoid, PercentType
-from pace.core.placeable import (
-    Enclosure,
-    Part,
-    PlaceableRef,
-    PlaceableType,
-    Placement,
-)
+from pace.core.part import Part
+from pace.core.placeable import PlaceableRef, PlaceableType
+from pace.core.placement import Placement
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
 from pace.db.relational.reference import Reference
@@ -180,31 +177,35 @@ def test_enclosure_without_fill_has_no_material_edge():
     }
 
 
-def test_lattice_edges_are_sourced_from_the_lattice():
-    pin_ref = PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID("pin-1"))
+def test_lattice_references_each_occupant_enclosure_once():
     lattice = RectLattice.create(
         family_name="grid",
         version_label="1",
         pitch_m=0.0126,
-        fill=MaterialID("water-1"),
         shape=(2, 2),
-        occupants=[LatticeOccupant(ref=pin_ref, addresses=((0, 0), (1, 1)))],
+        occupants=[
+            LatticeOccupant(
+                enclosure=EnclosureID("pin-1"), addresses=((0, 0), (1, 1), (0, 1))
+            ),
+            LatticeOccupant(enclosure=EnclosureID("water_cell-1"), addresses=((1, 0),)),
+        ],
     )
     assert _edges(extract_lattice_references(lattice)) == {
-        (ReferenceableType.LATTICE, "grid-1", ReferenceableType.MATERIAL, "water-1"),
         (ReferenceableType.LATTICE, "grid-1", ReferenceableType.ENCLOSURE, "pin-1"),
+        (
+            ReferenceableType.LATTICE,
+            "grid-1",
+            ReferenceableType.ENCLOSURE,
+            "water_cell-1",
+        ),
     }
 
 
-def test_reactor_blueprint_references_bounds_fill_and_root():
+def test_reactor_blueprint_references_only_its_root_enclosure():
     blueprint = ReactorBlueprint.create(
         family_name="core",
         version_label="1",
-        bounds=GeometryID("core_box-1"),
-        fill=MaterialID("water-1"),
-        root=_placement(
-            "root", PlaceableRef(type=PlaceableType.LATTICE, id=LatticeID("grid-1"))
-        ),
+        root=EnclosureID("assembly-1"),
         neutron_bcs=dict.fromkeys(
             faces_for_geometry_type(GeometryType.RECT_PRISM), NeutronBC.VACUUM
         ),
@@ -213,19 +214,7 @@ def test_reactor_blueprint_references_bounds_fill_and_root():
         (
             ReferenceableType.REACTOR_BLUEPRINT,
             "core-1",
-            ReferenceableType.GEOMETRY,
-            "core_box-1",
-        ),
-        (
-            ReferenceableType.REACTOR_BLUEPRINT,
-            "core-1",
-            ReferenceableType.MATERIAL,
-            "water-1",
-        ),
-        (
-            ReferenceableType.REACTOR_BLUEPRINT,
-            "core-1",
-            ReferenceableType.LATTICE,
-            "grid-1",
+            ReferenceableType.ENCLOSURE,
+            "assembly-1",
         ),
     }

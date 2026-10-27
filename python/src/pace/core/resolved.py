@@ -10,8 +10,7 @@ adapters consume:
           positions (one pin cell in 264 lattice slots) appears once in
           its map, referenced by id from wherever it's used.
     - ResolvedReactorBlueprint — a ReactorBlueprint plus the
-          ResolvedPlaceable of its root, whose maps also hold the
-          blueprint's own bounds geometry and fill material.
+          ResolvedPlaceable of its root Enclosure.
 
 Neither is registered or versioned: they're derived, transient views
 over already-persisted data. Both self-validate on construction
@@ -23,12 +22,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pace.core.enclosure import Enclosure
 from pace.core.geometry import GAddition, Geometry, GSubtraction, geometry_from_dict
 from pace.core.ids import EnclosureID, GeometryID, LatticeID, MaterialID, PartID
 from pace.core.lattice import Lattice, lattice_from_dict
 from pace.core.material import Material, MMixture, material_from_dict
 from pace.core.pace_object import PaceObject
-from pace.core.placeable import Enclosure, Part, PlaceableRef, PlaceableType
+from pace.core.part import Part
+from pace.core.placeable import PlaceableRef, PlaceableType
 from pace.core.reactor_blueprint import ReactorBlueprint
 
 
@@ -111,9 +112,11 @@ class ResolvedPlaceable(PaceObject):
 
         for lattice in self.lattices.values():
             owner = f"Lattice {lattice.id!r}"
-            self._require_material(owner, lattice.fill)
             for occupant in lattice.occupants:
-                self._require_placeable(owner, occupant.ref)
+                self._require_placeable(
+                    owner,
+                    PlaceableRef(type=PlaceableType.ENCLOSURE, id=occupant.enclosure),
+                )
 
         for part in self.parts.values():
             owner = f"Part {part.id!r}"
@@ -179,16 +182,14 @@ class ResolvedReactorBlueprint(PaceObject):
     resolved_placeable: ResolvedPlaceable
 
     def validate(self) -> None:
-        owner = f"Reactor {self.reactor_blueprint.id!r}"
-        if self.reactor_blueprint.root.ref != self.resolved_placeable.root:
+        expected_root = PlaceableRef(
+            type=PlaceableType.ENCLOSURE, id=self.reactor_blueprint.root
+        )
+        if self.resolved_placeable.root != expected_root:
             raise ValueError(
-                f"{owner} root {self.reactor_blueprint.root.ref.id!r} does not match the "
-                f"model root {self.resolved_placeable.root.id!r}"
-            )
-        self.resolved_placeable._require_geometry(owner, self.reactor_blueprint.bounds)
-        if self.reactor_blueprint.fill is not None:
-            self.resolved_placeable._require_material(
-                owner, self.reactor_blueprint.fill
+                f"Reactor {self.reactor_blueprint.id!r} root "
+                f"{self.reactor_blueprint.root!r} does not match the model root "
+                f"{self.resolved_placeable.root.id!r}"
             )
 
     def to_dict(self) -> dict:

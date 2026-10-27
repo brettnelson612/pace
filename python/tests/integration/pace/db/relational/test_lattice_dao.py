@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from pace.core.ids import EnclosureID, LatticeID, MaterialID
+from pace.core.ids import EnclosureID, LatticeID
 from pace.core.lattice import (
     HexLattice,
     HexOrientation,
@@ -21,11 +21,9 @@ from pace.core.lattice import (
     LatticeOccupant,
     RectLattice,
 )
-from pace.core.placeable import PlaceableRef, PlaceableType
 from pace.db.pace_db import PaceDB
 
-PIN = PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID("pin_cell-1"))
-WATER = MaterialID("water-1")
+PIN = EnclosureID("pin_cell-1")
 
 
 def _rect(family_name: str = "rect_lattice", version_label: str = "1", **kwargs):
@@ -33,9 +31,10 @@ def _rect(family_name: str = "rect_lattice", version_label: str = "1", **kwargs)
         family_name=family_name,
         version_label=version_label,
         pitch_m=0.0126,
-        fill=WATER,
         shape=(2, 2),
-        occupants=[LatticeOccupant(ref=PIN, addresses=((0, 0), (1, 1)))],
+        occupants=[
+            LatticeOccupant(enclosure=PIN, addresses=((0, 0), (0, 1), (1, 0), (1, 1)))
+        ],
         **kwargs,
     )
 
@@ -45,10 +44,13 @@ def _hex() -> HexLattice:
         family_name="hex_lattice",
         version_label="1",
         pitch_m=0.009,
-        fill=WATER,
         num_rings=2,
         orientation=HexOrientation.FLAT_TOP,
-        occupants=[LatticeOccupant(ref=PIN, addresses=((0, 0), (1, 3)))],
+        occupants=[
+            LatticeOccupant(
+                enclosure=PIN, addresses=((0, 0), *((1, i) for i in range(6)))
+            )
+        ],
     )
 
 

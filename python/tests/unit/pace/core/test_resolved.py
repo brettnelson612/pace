@@ -4,14 +4,14 @@ tests/unit/pace/core/test_resolved.py
 Covers: ResolvedPlaceable's internal-consistency validation — id-mapping,
 root presence for every root type, and completeness for every kind of
 reference a bundle can hold (Enclosure bounds/fill/members, Lattice
-fill/occupants, Part geometry/material, GAddition units,
-GSubtraction base/cuts, MMixture constituents) — plus round-trip;
-ResolvedReactorBlueprint's checks that the blueprint's root, bounds and
-fill are all in the model, plus round-trip.
+occupants, Part geometry/material, GAddition units, GSubtraction
+base/cuts, MMixture constituents) — plus round-trip;
+ResolvedReactorBlueprint's check that the blueprint's root Enclosure is
+the model root, plus round-trip.
 
-The fixture is a miniature VERA-style assembly: a pellet+gap+clad rod in
-a pin cell, a 2x2 lattice of pin cells with one empty slot, and an
-assembly Enclosure holding the lattice.
+The fixture is a miniature VERA-style assembly: a pellet+clad rod in a
+pin cell, a 2x2 lattice of three pin cells and one coolant-only cell,
+and an assembly Enclosure holding the lattice.
 """
 
 from typing import Any
@@ -20,6 +20,7 @@ import pytest
 
 from pace.core.boundary_conditions import NeutronBC
 from pace.core.bounds import faces_for_geometry_type
+from pace.core.enclosure import Enclosure
 from pace.core.geometry import (
     GAddition,
     GAnnulus,
@@ -29,7 +30,7 @@ from pace.core.geometry import (
     GRectanglePrism,
     GSubtraction,
 )
-from pace.core.ids import GeometryID, MaterialID, PlacementID
+from pace.core.ids import EnclosureID, GeometryID, MaterialID, PlacementID
 from pace.core.lattice import LatticeOccupant, RectLattice
 from pace.core.material import (
     DensityUnit,
@@ -38,13 +39,9 @@ from pace.core.material import (
     MMixture,
     PercentType,
 )
-from pace.core.placeable import (
-    Enclosure,
-    Part,
-    PlaceableRef,
-    PlaceableType,
-    Placement,
-)
+from pace.core.part import Part
+from pace.core.placeable import PlaceableRef, PlaceableType
+from pace.core.placement import Placement
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.resolved import ResolvedPlaceable, ResolvedReactorBlueprint
 
@@ -124,17 +121,21 @@ def _bundle_fields() -> dict[str, Any]:
         fill=water.id,
         placements=[_place("rod", PlaceableType.ENCLOSURE, rod.id)],
     )
+    water_cell = Enclosure.create(
+        family_name="water_cell",
+        version_label="1",
+        bounds=pin_box.id,
+        fill=water.id,
+        placements=[],
+    )
     lattice = RectLattice.create(
         family_name="lattice_2x2",
         version_label="1",
         pitch_m=0.0126,
-        fill=water.id,
         shape=(2, 2),
         occupants=[
-            LatticeOccupant(
-                ref=PlaceableRef(type=PlaceableType.ENCLOSURE, id=pin_cell.id),
-                addresses=((0, 0), (0, 1), (1, 0)),
-            )
+            LatticeOccupant(enclosure=pin_cell.id, addresses=((0, 0), (0, 1), (1, 0))),
+            LatticeOccupant(enclosure=water_cell.id, addresses=((1, 1),)),
         ],
     )
     assembly = Enclosure.create(
@@ -146,7 +147,7 @@ def _bundle_fields() -> dict[str, Any]:
     )
     return {
         "root": PlaceableRef(type=PlaceableType.ENCLOSURE, id=assembly.id),
-        "enclosures": {c.id: c for c in (rod, pin_cell, assembly)},
+        "enclosures": {c.id: c for c in (rod, pin_cell, water_cell, assembly)},
         "parts": {c.id: c for c in (pellet, clad)},
         "lattices": {lattice.id: lattice},
         "geometries": {
@@ -209,7 +210,8 @@ def test_mismatched_key_raises():
         ("materials", "uo2-1"),  # a Part's material
         ("enclosures", "rod-1"),  # an Enclosure member
         ("parts", "clad-1"),  # a Part member
-        ("enclosures", "pin_cell-1"),  # a lattice occupant target
+        ("enclosures", "pin_cell-1"),  # a lattice occupant
+        ("enclosures", "water_cell-1"),  # a coolant-only lattice occupant
         ("lattices", "lattice_2x2-1"),  # a lattice placed in an Enclosure
     ],
 )
@@ -219,7 +221,7 @@ def test_missing_dependency_raises(map_name, key):
 
 
 def test_missing_fill_material_raises():
-    """water is only referenced as fill (pin cell, lattice, assembly)."""
+    """water is only referenced as fill (pin cell, water cell, assembly)."""
     with pytest.raises(ValueError):
         ResolvedPlaceable(**_without(_bundle_fields(), "materials", "water-1"))
 
@@ -292,8 +294,7 @@ def _blueprint(**overrides) -> ReactorBlueprint:
     kwargs: dict[str, Any] = {
         "family_name": "mini_assembly",
         "version_label": "1",
-        "bounds": GeometryID("assembly_box-1"),
-        "root": _place("assembly", PlaceableType.ENCLOSURE, "assembly-1"),
+        "root": EnclosureID("assembly-1"),
         "neutron_bcs": dict.fromkeys(
             faces_for_geometry_type(GeometryType.RECT_PRISM), NeutronBC.REFLECTIVE
         ),
@@ -310,22 +311,12 @@ def _resolve(blueprint: ReactorBlueprint) -> ResolvedReactorBlueprint:
 
 
 def test_resolved_reactor_blueprint_valid_round_trip():
-    resolved = _resolve(_blueprint(fill=MaterialID("water-1")))
+    resolved = _resolve(_blueprint())
     restored = ResolvedReactorBlueprint.from_dict(resolved.to_dict())
     assert restored.to_dict() == resolved.to_dict()
 
 
 def test_resolved_reactor_blueprint_root_must_match_model_root():
-    blueprint = _blueprint(root=_place("pin", PlaceableType.ENCLOSURE, "pin_cell-1"))
-    with pytest.raises(ValueError):
+    blueprint = _blueprint(root=EnclosureID("pin_cell-1"))
+    with pytest.raises(ValueError, match="does not match the model root"):
         _resolve(blueprint)
-
-
-def test_resolved_reactor_blueprint_bounds_must_be_present():
-    with pytest.raises(ValueError):
-        _resolve(_blueprint(bounds=GeometryID("missing_box-1")))
-
-
-def test_resolved_reactor_blueprint_fill_must_be_present():
-    with pytest.raises(ValueError):
-        _resolve(_blueprint(fill=MaterialID("missing_water-1")))

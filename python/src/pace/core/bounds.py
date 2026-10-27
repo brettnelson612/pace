@@ -3,14 +3,15 @@ pace/core/bounds.py
 
 What may serve as bounds, and the named faces of each bounds shape.
 
-Bounds — the region of space an Enclosure or Reactor owns (a lattice's
-slots are implicitly bounded by its pitch) — are limited to the three
-shapes every translator can turn into a clipping region and the MOOSE
-Reactor module can mesh: a rectangular prism, a hexagonal prism, or a
-cylinder.
+Bounds — the region of space an Enclosure owns — are limited to the
+three shapes every translator can turn into a clipping region and the
+MOOSE Reactor module can mesh: a rectangular prism, a hexagonal prism,
+or a cylinder. A ReactorBlueprint's problem boundary is its root
+Enclosure's bounds, and a lattice occupant's bounds must be exactly its
+slot (a square or hexagonal prism of the lattice's pitch).
 
 BoundsFace names each face of those shapes. Boundary conditions on a
-Reactor are keyed by face (see reactor.py).
+ReactorBlueprint are keyed by face (see reactor_blueprint.py).
 """
 
 from __future__ import annotations
@@ -26,8 +27,9 @@ class BoundsFace(StrEnum):
     Which faces exist depends on the bounds geometry type — see
     faces_for_geometry_type():
         - rect prism: x_min, x_max, y_min, y_max, z_min, z_max
-        - hex prism: side_0 ... side_5 (clockwise, side_0 the first face
-              clockwise from 12 o'clock), plus z_min, z_max
+        - hex prism: side_0 ... side_5, plus z_min, z_max. side_0 is
+              the top face (centered on +y, since a GHexPrism is
+              flat-top at zero rotation); the rest follow clockwise.
         - cylinder: radial, z_min, z_max
     """
 
@@ -67,8 +69,8 @@ _FACES_BY_GEOMETRY_TYPE: dict[GeometryType, tuple[BoundsFace, ...]] = {
     GeometryType.CYLINDER: (BoundsFace.RADIAL, *_AXIAL_FACES),
 }
 
-# The geometry types allowed as bounds — of a Reactor, an Enclosure, or
-# (implicitly, via its slot shape) a Lattice occupant.
+# The geometry types allowed as an Enclosure's bounds (including a
+# ReactorBlueprint's root and every Lattice occupant).
 BOUNDS_GEOMETRY_TYPES = frozenset(_FACES_BY_GEOMETRY_TYPE)
 
 # The face each face is paired with under a PERIODIC condition.

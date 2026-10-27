@@ -1,44 +1,30 @@
 """
 tests/unit/pace/core/test_reactor_blueprint.py
 
-Covers: ReactorBlueprint construction and defaults, lineage,
-boundary-condition rules (at least one neutron condition, periodic faces
-paired, flow conditions absent or exactly one inlet and one outlet),
-round-trip of every field, and id-based equality. Checks that need the
-bounds geometry (faces match the shape) live in the RegistryService
-integration tests.
+Covers: ReactorBlueprint construction and defaults, the root id,
+lineage, boundary-condition rules (at least one neutron condition,
+periodic faces paired, flow conditions absent or exactly one inlet and
+one outlet), round-trip of every field, and id-based equality. Checks
+that need the root Enclosure's bounds geometry (faces match the shape)
+live in the RegistryService integration tests.
 """
 
 import pytest
 
 from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.geometry import GeometryType, GPose
-from pace.core.ids import (
-    EnclosureID,
-    GeometryID,
-    MaterialID,
-    PlacementID,
-    ReactorBlueprintID,
-    SimulationJobID,
-)
-from pace.core.placeable import PlaceableRef, PlaceableType, Placement
+from pace.core.geometry import GeometryType
+from pace.core.ids import EnclosureID, ReactorBlueprintID, SimulationJobID
 from pace.core.reactor_blueprint import ReactorBlueprint
 
 BOX_FACES = faces_for_geometry_type(GeometryType.RECT_PRISM)
-WATER = MaterialID("borated_water-1")
-ROOT = Placement(
-    id=PlacementID("pin_cell"),
-    pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-    ref=PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID("pin_cell-1")),
-)
+ROOT = EnclosureID("pin_cell-1")
 
 
 def _blueprint(**overrides) -> ReactorBlueprint:
     kwargs = {
         "family_name": "vera_problem_1",
         "version_label": "1",
-        "bounds": GeometryID("pin_cell_box-1"),
         "root": ROOT,
         "neutron_bcs": dict.fromkeys(BOX_FACES, NeutronBC.REFLECTIVE),
     }
@@ -57,10 +43,14 @@ def test_create_derives_id():
 
 def test_defaults():
     blueprint = _blueprint()
-    assert blueprint.fill is None
     assert blueprint.description == ""
     assert blueprint.thermal_bcs == {}
     assert blueprint.flow_bcs == {}
+
+
+def test_root_must_be_non_empty():
+    with pytest.raises(ValueError, match="root must be a non-empty id"):
+        _blueprint(root=EnclosureID(""))
 
 
 def test_validate_id_mismatch_raises():
@@ -69,7 +59,6 @@ def test_validate_id_mismatch_raises():
             id=ReactorBlueprintID("wrong-1"),
             family_name="vera_problem_1",
             version_label="1",
-            bounds=GeometryID("pin_cell_box-1"),
             root=ROOT,
             neutron_bcs=dict.fromkeys(BOX_FACES, NeutronBC.REFLECTIVE),
         )
@@ -150,7 +139,6 @@ def test_full_round_trip():
     bcs[BoundsFace.Z_MAX] = NeutronBC.VACUUM
     blueprint = _blueprint(
         description="3D pin cell with axial leakage",
-        fill=WATER,
         neutron_bcs=bcs,
         thermal_bcs={BoundsFace.Z_MIN: ThermalBC.ADIABATIC},
         flow_bcs={BoundsFace.Z_MIN: FlowBC.INLET, BoundsFace.Z_MAX: FlowBC.OUTLET},

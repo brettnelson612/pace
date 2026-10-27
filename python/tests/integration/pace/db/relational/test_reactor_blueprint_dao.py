@@ -12,15 +12,8 @@ from __future__ import annotations
 
 from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.geometry import GeometryType, GPose
-from pace.core.ids import (
-    EnclosureID,
-    GeometryID,
-    MaterialID,
-    PlacementID,
-    ReactorBlueprintID,
-)
-from pace.core.placeable import PlaceableRef, PlaceableType, Placement
+from pace.core.geometry import GeometryType
+from pace.core.ids import EnclosureID, ReactorBlueprintID
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.db.pace_db import PaceDB
 
@@ -35,15 +28,7 @@ def _blueprint(version_label: str = "1", **kwargs) -> ReactorBlueprint:
         family_name="pin_3d",
         version_label=version_label,
         description="3D pin cell",
-        bounds=GeometryID("pin_box-1"),
-        fill=MaterialID("water-1"),
-        root=Placement(
-            id=PlacementID("pin"),
-            pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-            ref=PlaceableRef(
-                type=PlaceableType.ENCLOSURE, id=EnclosureID("pin_cell-1")
-            ),
-        ),
+        root=EnclosureID("pin_cell-1"),
         neutron_bcs=bcs,
         thermal_bcs={BoundsFace.X_MIN: ThermalBC.ADIABATIC},
         flow_bcs={BoundsFace.Z_MIN: FlowBC.INLET, BoundsFace.Z_MAX: FlowBC.OUTLET},
