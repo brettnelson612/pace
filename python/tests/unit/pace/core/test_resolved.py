@@ -1,17 +1,17 @@
 """
 tests/unit/pace/core/test_resolved.py
 
-Covers: ResolvedComponent's internal-consistency validation — id-mapping,
+Covers: ResolvedPlaceable's internal-consistency validation — id-mapping,
 root presence for every root type, and completeness for every kind of
-reference a bundle can hold (CComponent bounds/fill/members, Lattice
-fill/elements, LComponent geometry/material, GAddition units,
+reference a bundle can hold (Enclosure bounds/fill/members, Lattice
+fill/occupants, Part geometry/material, GAddition units,
 GSubtraction base/cuts, MMixture constituents) — plus round-trip;
 ResolvedReactorBlueprint's checks that the blueprint's root, bounds and
 fill are all in the model, plus round-trip.
 
 The fixture is a miniature VERA-style assembly: a pellet+gap+clad rod in
 a pin cell, a 2x2 lattice of pin cells with one empty slot, and an
-assembly composite holding the lattice.
+assembly Enclosure holding the lattice.
 """
 
 from typing import Any
@@ -20,13 +20,6 @@ import pytest
 
 from pace.core.boundary_conditions import NeutronBC
 from pace.core.bounds import faces_for_geometry_type
-from pace.core.component import (
-    CComponent,
-    ComponentPlacement,
-    ComponentRef,
-    ComponentType,
-    LComponent,
-)
 from pace.core.geometry import (
     GAddition,
     GAnnulus,
@@ -36,8 +29,8 @@ from pace.core.geometry import (
     GRectanglePrism,
     GSubtraction,
 )
-from pace.core.ids import ComponentPlacementID, GeometryID, MaterialID
-from pace.core.lattice import LatticeElement, RectLattice
+from pace.core.ids import GeometryID, MaterialID, PlacementID
+from pace.core.lattice import LatticeOccupant, RectLattice
 from pace.core.material import (
     DensityUnit,
     MaterialComponentEntry,
@@ -45,8 +38,15 @@ from pace.core.material import (
     MMixture,
     PercentType,
 )
+from pace.core.placeable import (
+    Enclosure,
+    Part,
+    PlaceableRef,
+    PlaceableType,
+    Placement,
+)
 from pace.core.reactor_blueprint import ReactorBlueprint
-from pace.core.resolved import ResolvedComponent, ResolvedReactorBlueprint
+from pace.core.resolved import ResolvedPlaceable, ResolvedReactorBlueprint
 
 ORIGIN = GPose(x_m=0.0, y_m=0.0, z_m=0.0)
 
@@ -63,16 +63,16 @@ def _material(name: str) -> MIsotopic:
 
 
 def _place(
-    placement_id: str, component_type: ComponentType, target_id: str
-) -> ComponentPlacement:
-    return ComponentPlacement(
-        id=ComponentPlacementID(placement_id),
+    placement_id: str, placeable_type: PlaceableType, target_id: str
+) -> Placement:
+    return Placement(
+        id=PlacementID(placement_id),
         pose=ORIGIN,
-        ref=ComponentRef(type=component_type, id=target_id),
+        ref=PlaceableRef(type=placeable_type, id=target_id),
     )
 
 
-def _bundle_parts() -> dict[str, Any]:
+def _bundle_fields() -> dict[str, Any]:
     uo2, zirc, water = _material("uo2"), _material("zirc"), _material("water")
     pellet_cyl = GCylinder.create(
         family_name="pellet_cyl", version_label="1", radius_m=0.004, height_m=1.0
@@ -101,28 +101,28 @@ def _bundle_parts() -> dict[str, Any]:
         width_m=0.026,
         height_m=1.0,
     )
-    pellet = LComponent.create(
+    pellet = Part.create(
         family_name="pellet", version_label="1", geometry=pellet_cyl.id, material=uo2.id
     )
-    clad = LComponent.create(
+    clad = Part.create(
         family_name="clad", version_label="1", geometry=clad_ring.id, material=zirc.id
     )
-    rod = CComponent.create(
+    rod = Enclosure.create(
         family_name="rod",
         version_label="1",
         bounds=rod_cyl.id,
         fill=zirc.id,
         placements=[
-            _place("pellet", ComponentType.LCOMPONENT, pellet.id),
-            _place("clad", ComponentType.LCOMPONENT, clad.id),
+            _place("pellet", PlaceableType.PART, pellet.id),
+            _place("clad", PlaceableType.PART, clad.id),
         ],
     )
-    pin_cell = CComponent.create(
+    pin_cell = Enclosure.create(
         family_name="pin_cell",
         version_label="1",
         bounds=pin_box.id,
         fill=water.id,
-        placements=[_place("rod", ComponentType.CCOMPONENT, rod.id)],
+        placements=[_place("rod", PlaceableType.ENCLOSURE, rod.id)],
     )
     lattice = RectLattice.create(
         family_name="lattice_2x2",
@@ -130,24 +130,24 @@ def _bundle_parts() -> dict[str, Any]:
         pitch_m=0.0126,
         fill=water.id,
         shape=(2, 2),
-        elements=[
-            LatticeElement(
-                ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id),
+        occupants=[
+            LatticeOccupant(
+                ref=PlaceableRef(type=PlaceableType.ENCLOSURE, id=pin_cell.id),
                 addresses=((0, 0), (0, 1), (1, 0)),
             )
         ],
     )
-    assembly = CComponent.create(
+    assembly = Enclosure.create(
         family_name="assembly",
         version_label="1",
         bounds=assembly_box.id,
         fill=water.id,
-        placements=[_place("lattice", ComponentType.LATTICE, lattice.id)],
+        placements=[_place("lattice", PlaceableType.LATTICE, lattice.id)],
     )
     return {
-        "root": ComponentRef(type=ComponentType.CCOMPONENT, id=assembly.id),
-        "ccomponents": {c.id: c for c in (rod, pin_cell, assembly)},
-        "lcomponents": {c.id: c for c in (pellet, clad)},
+        "root": PlaceableRef(type=PlaceableType.ENCLOSURE, id=assembly.id),
+        "enclosures": {c.id: c for c in (rod, pin_cell, assembly)},
+        "parts": {c.id: c for c in (pellet, clad)},
         "lattices": {lattice.id: lattice},
         "geometries": {
             g.id: g for g in (pellet_cyl, clad_ring, rod_cyl, pin_box, assembly_box)
@@ -156,76 +156,76 @@ def _bundle_parts() -> dict[str, Any]:
     }
 
 
-def _without(parts: dict[str, Any], map_name: str, key: str) -> dict[str, Any]:
-    trimmed = dict(parts)
-    trimmed[map_name] = {k: v for k, v in parts[map_name].items() if k != key}
+def _without(fields: dict[str, Any], map_name: str, key: str) -> dict[str, Any]:
+    trimmed = dict(fields)
+    trimmed[map_name] = {k: v for k, v in fields[map_name].items() if k != key}
     return trimmed
 
 
 # =============================================================================
-# ResolvedComponent
+# ResolvedPlaceable
 # =============================================================================
 
 
 def test_valid_bundle_round_trips():
-    bundle = ResolvedComponent(**_bundle_parts())
-    assert ResolvedComponent.from_dict(bundle.to_dict()).to_dict() == bundle.to_dict()
+    bundle = ResolvedPlaceable(**_bundle_fields())
+    assert ResolvedPlaceable.from_dict(bundle.to_dict()).to_dict() == bundle.to_dict()
 
 
 @pytest.mark.parametrize(
-    ("component_type", "target_id"),
+    ("placeable_type", "target_id"),
     [
-        (ComponentType.CCOMPONENT, "pin_cell-1"),
-        (ComponentType.LATTICE, "lattice_2x2-1"),
-        (ComponentType.LCOMPONENT, "pellet-1"),
+        (PlaceableType.ENCLOSURE, "pin_cell-1"),
+        (PlaceableType.LATTICE, "lattice_2x2-1"),
+        (PlaceableType.PART, "pellet-1"),
     ],
 )
-def test_any_placeable_type_can_be_root(component_type, target_id):
-    parts = _bundle_parts()
-    parts["root"] = ComponentRef(type=component_type, id=target_id)
-    assert ResolvedComponent(**parts).root.id == target_id
+def test_any_placeable_type_can_be_root(placeable_type, target_id):
+    fields = _bundle_fields()
+    fields["root"] = PlaceableRef(type=placeable_type, id=target_id)
+    assert ResolvedPlaceable(**fields).root.id == target_id
 
 
 def test_root_missing_raises():
-    parts = _bundle_parts()
-    parts["root"] = ComponentRef(type=ComponentType.CCOMPONENT, id="nope-1")
+    fields = _bundle_fields()
+    fields["root"] = PlaceableRef(type=PlaceableType.ENCLOSURE, id="nope-1")
     with pytest.raises(ValueError):
-        ResolvedComponent(**parts)
+        ResolvedPlaceable(**fields)
 
 
 def test_mismatched_key_raises():
-    parts = _bundle_parts()
-    uo2 = parts["materials"][MaterialID("uo2-1")]
-    parts["materials"] = {**parts["materials"], MaterialID("wrong-1"): uo2}
+    fields = _bundle_fields()
+    uo2 = fields["materials"][MaterialID("uo2-1")]
+    fields["materials"] = {**fields["materials"], MaterialID("wrong-1"): uo2}
     with pytest.raises(ValueError):
-        ResolvedComponent(**parts)
+        ResolvedPlaceable(**fields)
 
 
 @pytest.mark.parametrize(
     ("map_name", "key"),
     [
-        ("geometries", "pin_box-1"),  # a CComponent's bounds
-        ("geometries", "pellet_cyl-1"),  # an LComponent's geometry
-        ("materials", "uo2-1"),  # an LComponent's material
-        ("ccomponents", "rod-1"),  # a CComponent member
-        ("lcomponents", "clad-1"),  # an LComponent member
-        ("ccomponents", "pin_cell-1"),  # a lattice element target
-        ("lattices", "lattice_2x2-1"),  # a lattice placed in a CComponent
+        ("geometries", "pin_box-1"),  # an Enclosure's bounds
+        ("geometries", "pellet_cyl-1"),  # a Part's geometry
+        ("materials", "uo2-1"),  # a Part's material
+        ("enclosures", "rod-1"),  # an Enclosure member
+        ("parts", "clad-1"),  # a Part member
+        ("enclosures", "pin_cell-1"),  # a lattice occupant target
+        ("lattices", "lattice_2x2-1"),  # a lattice placed in an Enclosure
     ],
 )
 def test_missing_dependency_raises(map_name, key):
     with pytest.raises(ValueError):
-        ResolvedComponent(**_without(_bundle_parts(), map_name, key))
+        ResolvedPlaceable(**_without(_bundle_fields(), map_name, key))
 
 
 def test_missing_fill_material_raises():
     """water is only referenced as fill (pin cell, lattice, assembly)."""
     with pytest.raises(ValueError):
-        ResolvedComponent(**_without(_bundle_parts(), "materials", "water-1"))
+        ResolvedPlaceable(**_without(_bundle_fields(), "materials", "water-1"))
 
 
 def test_gaddition_unit_must_be_present():
-    parts = _bundle_parts()
+    fields = _bundle_fields()
     addition = GAddition.create(
         family_name="joined",
         version_label="1",
@@ -234,53 +234,53 @@ def test_gaddition_unit_must_be_present():
             (GeometryID("missing_cyl-1"), GPose(x_m=0.0, y_m=0.0, z_m=1.0)),
         ],
     )
-    parts["geometries"] = {**parts["geometries"], addition.id: addition}
+    fields["geometries"] = {**fields["geometries"], addition.id: addition}
     with pytest.raises(ValueError):
-        ResolvedComponent(**parts)
+        ResolvedPlaceable(**fields)
 
 
 def test_mmixture_constituent_must_be_present():
-    parts = _bundle_parts()
+    fields = _bundle_fields()
     mixture = MMixture.create(
         family_name="blend",
         version_label="1",
         components=[(MaterialID("uo2-1"), 0.5), (MaterialID("missing-1"), 0.5)],
         percent_type=PercentType.AO,
     )
-    parts["materials"] = {**parts["materials"], mixture.id: mixture}
+    fields["materials"] = {**fields["materials"], mixture.id: mixture}
     with pytest.raises(ValueError):
-        ResolvedComponent(**parts)
+        ResolvedPlaceable(**fields)
 
 
 def test_gsubtraction_base_and_cuts_must_be_present():
-    parts = _bundle_parts()
+    fields = _bundle_fields()
     subtraction = GSubtraction.create(
         family_name="notched",
         version_label="1",
         base=(GeometryID("rod_cyl-1"), ORIGIN),
         cuts=[(GeometryID("missing_cut-1"), ORIGIN)],
     )
-    parts["geometries"] = {**parts["geometries"], subtraction.id: subtraction}
+    fields["geometries"] = {**fields["geometries"], subtraction.id: subtraction}
     with pytest.raises(ValueError):
-        ResolvedComponent(**parts)
+        ResolvedPlaceable(**fields)
 
 
 @pytest.mark.parametrize(
-    ("component_type", "target_id", "expected"),
+    ("placeable_type", "target_id", "expected"),
     [
-        (ComponentType.CCOMPONENT, "rod-1", True),
-        (ComponentType.LCOMPONENT, "clad-1", True),
-        (ComponentType.LATTICE, "lattice_2x2-1", True),
-        (ComponentType.LCOMPONENT, "rod-1", False),
-        (ComponentType.CCOMPONENT, "missing-1", False),
+        (PlaceableType.ENCLOSURE, "rod-1", True),
+        (PlaceableType.PART, "clad-1", True),
+        (PlaceableType.LATTICE, "lattice_2x2-1", True),
+        (PlaceableType.PART, "rod-1", False),
+        (PlaceableType.ENCLOSURE, "missing-1", False),
     ],
 )
-def test_contains_component_checks_the_map_for_the_ref_type(
-    component_type, target_id, expected
+def test_contains_placeable_checks_the_map_for_the_ref_type(
+    placeable_type, target_id, expected
 ):
-    bundle = ResolvedComponent(**_bundle_parts())
-    ref = ComponentRef(type=component_type, id=target_id)
-    assert bundle.contains_component(ref) is expected
+    bundle = ResolvedPlaceable(**_bundle_fields())
+    ref = PlaceableRef(type=placeable_type, id=target_id)
+    assert bundle.contains_placeable(ref) is expected
 
 
 # =============================================================================
@@ -293,7 +293,7 @@ def _blueprint(**overrides) -> ReactorBlueprint:
         "family_name": "mini_assembly",
         "version_label": "1",
         "bounds": GeometryID("assembly_box-1"),
-        "root": _place("assembly", ComponentType.CCOMPONENT, "assembly-1"),
+        "root": _place("assembly", PlaceableType.ENCLOSURE, "assembly-1"),
         "neutron_bcs": dict.fromkeys(
             faces_for_geometry_type(GeometryType.RECT_PRISM), NeutronBC.REFLECTIVE
         ),
@@ -305,7 +305,7 @@ def _blueprint(**overrides) -> ReactorBlueprint:
 def _resolve(blueprint: ReactorBlueprint) -> ResolvedReactorBlueprint:
     return ResolvedReactorBlueprint(
         reactor_blueprint=blueprint,
-        resolved_component=ResolvedComponent(**_bundle_parts()),
+        resolved_placeable=ResolvedPlaceable(**_bundle_fields()),
     )
 
 
@@ -316,7 +316,7 @@ def test_resolved_reactor_blueprint_valid_round_trip():
 
 
 def test_resolved_reactor_blueprint_root_must_match_model_root():
-    blueprint = _blueprint(root=_place("pin", ComponentType.CCOMPONENT, "pin_cell-1"))
+    blueprint = _blueprint(root=_place("pin", PlaceableType.ENCLOSURE, "pin_cell-1"))
     with pytest.raises(ValueError):
         _resolve(blueprint)
 

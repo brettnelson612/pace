@@ -9,12 +9,12 @@ field before wrapping it).
 """
 
 from pace.core.ids import (
-    CComponentID,
-    ComponentPlacementID,
+    EnclosureID,
     GeometryID,
     LatticeID,
-    LComponentID,
     MaterialID,
+    PartID,
+    PlacementID,
     ReactorBlueprintID,
     SimulationJobID,
 )
@@ -22,9 +22,9 @@ from pace.core.ids import (
 ALL_ID_TYPES = [
     GeometryID,
     MaterialID,
-    LComponentID,
-    ComponentPlacementID,
-    CComponentID,
+    PartID,
+    PlacementID,
+    EnclosureID,
     LatticeID,
     ReactorBlueprintID,
     SimulationJobID,

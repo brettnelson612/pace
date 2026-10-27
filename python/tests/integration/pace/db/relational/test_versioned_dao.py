@@ -16,21 +16,21 @@ from sqlalchemy.exc import IntegrityError
 
 from pace.core.boundary_conditions import NeutronBC
 from pace.core.bounds import faces_for_geometry_type
-from pace.core.component import (
-    CComponent,
-    ComponentPlacement,
-    ComponentRef,
-    ComponentType,
-    LComponent,
-)
 from pace.core.geometry import GCylinder, GeometryType, GPose
-from pace.core.ids import CComponentID, ComponentPlacementID, GeometryID
-from pace.core.lattice import LatticeElement, RectLattice
+from pace.core.ids import EnclosureID, GeometryID, PlacementID
+from pace.core.lattice import LatticeOccupant, RectLattice
 from pace.core.material import (
     DensityUnit,
     MaterialComponentEntry,
     MIsotopic,
     PercentType,
+)
+from pace.core.placeable import (
+    Enclosure,
+    Part,
+    PlaceableRef,
+    PlaceableType,
+    Placement,
 )
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.db.pace_db import PaceDB
@@ -259,39 +259,39 @@ def test_every_dao_round_trips(pace_db: PaceDB, insert):
         density_value=10.257,
         density_unit=DensityUnit.G_PER_CM3,
     )
-    pellet = LComponent.create(
+    pellet = Part.create(
         family_name="pellet",
         version_label="1",
         geometry=cylinder.id,
         material=fuel.id,
     )
-    pin_cell = CComponent.create(
+    pin_cell = Enclosure.create(
         family_name="pin_cell",
         version_label="1",
         bounds=cylinder.id,
         placements=[
-            ComponentPlacement(
-                id=ComponentPlacementID("pellet"),
+            Placement(
+                id=PlacementID("pellet"),
                 pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-                ref=ComponentRef(type=ComponentType.LCOMPONENT, id=pellet.id),
+                ref=PlaceableRef(type=PlaceableType.PART, id=pellet.id),
             )
         ],
     )
-    pin_ref = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID(pin_cell.id))
+    pin_ref = PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID(pin_cell.id))
     lattice = RectLattice.create(
         family_name="grid",
         version_label="1",
         pitch_m=0.0126,
         fill=fuel.id,
         shape=(1, 1),
-        elements=[LatticeElement(ref=pin_ref, addresses=((0, 0),))],
+        occupants=[LatticeOccupant(ref=pin_ref, addresses=((0, 0),))],
     )
     blueprint = ReactorBlueprint.create(
         family_name="core",
         version_label="1",
         bounds=cylinder.id,
-        root=ComponentPlacement(
-            id=ComponentPlacementID("root"),
+        root=Placement(
+            id=PlacementID("root"),
             pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
             ref=pin_ref,
         ),
@@ -302,8 +302,8 @@ def test_every_dao_round_trips(pace_db: PaceDB, insert):
     pairs = [
         (registry.geometries, cylinder),
         (registry.materials, fuel),
-        (registry.lcomponents, pellet),
-        (registry.ccomponents, pin_cell),
+        (registry.parts, pellet),
+        (registry.enclosures, pin_cell),
         (registry.lattices, lattice),
         (registry.reactor_blueprints, blueprint),
     ]

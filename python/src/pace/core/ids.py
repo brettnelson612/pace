@@ -8,7 +8,7 @@ Each is a typing.NewType wrapping str — zero runtime cost (a GeometryID
 but mypy will flag passing e.g. a MaterialID where a
 GeometryID is expected. Kept in one shared file (rather than
 colocated with each class) specifically to avoid circular imports, since
-several classes (LComponent, Geometry, ...) need ID types from
+several classes (Part, Geometry, ...) need ID types from
 more than one domain area at once.
 
 NOTE: NewType wrappers are purely static; calling one on None returns
@@ -25,15 +25,15 @@ GeometryID = NewType("GeometryID", str)
 # --- Material ---
 MaterialID = NewType("MaterialID", str)
 
-# --- Components ---
-LComponentID = NewType("LComponentID", str)
-CComponentID = NewType("CComponentID", str)
+# --- Placeables ---
+PartID = NewType("PartID", str)
+EnclosureID = NewType("EnclosureID", str)
 LatticeID = NewType("LatticeID", str)
 
-type ComponentID = LComponentID | CComponentID | LatticeID
+type PlaceableID = PartID | EnclosureID | LatticeID
 
-# --- ComponentPlacement ---
-ComponentPlacementID = NewType("ComponentPlacementID", str)
+# --- Placement ---
+PlacementID = NewType("PlacementID", str)
 
 # --- Reactor ---
 ReactorBlueprintID = NewType("ReactorBlueprintID", str)

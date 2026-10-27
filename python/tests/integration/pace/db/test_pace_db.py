@@ -32,8 +32,8 @@ def test_all_daos_share_one_sql_db(pace_db: PaceDB):
     sql_dbs = {
         registry.geometries._db,
         registry.materials._db,
-        registry.lcomponents._db,
-        registry.ccomponents._db,
+        registry.parts._db,
+        registry.enclosures._db,
         registry.lattices._db,
         registry.reactor_blueprints._db,
         registry.references._db,
@@ -46,8 +46,8 @@ def test_all_daos_share_one_sql_db(pace_db: PaceDB):
     [
         (ReferenceableType.GEOMETRY, "geometries"),
         (ReferenceableType.MATERIAL, "materials"),
-        (ReferenceableType.LCOMPONENT, "lcomponents"),
-        (ReferenceableType.CCOMPONENT, "ccomponents"),
+        (ReferenceableType.PART, "parts"),
+        (ReferenceableType.ENCLOSURE, "enclosures"),
         (ReferenceableType.LATTICE, "lattices"),
         (ReferenceableType.REACTOR_BLUEPRINT, "reactor_blueprints"),
     ],

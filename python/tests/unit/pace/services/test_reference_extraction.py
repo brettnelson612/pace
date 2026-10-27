@@ -8,13 +8,6 @@ types, and deduplication when the same target is used several times.
 
 from pace.core.boundary_conditions import NeutronBC
 from pace.core.bounds import faces_for_geometry_type
-from pace.core.component import (
-    CComponent,
-    ComponentPlacement,
-    ComponentRef,
-    ComponentType,
-    LComponent,
-)
 from pace.core.geometry import (
     GAddition,
     GCylinder,
@@ -23,24 +16,31 @@ from pace.core.geometry import (
     GSubtraction,
 )
 from pace.core.ids import (
-    CComponentID,
-    ComponentPlacementID,
+    EnclosureID,
     GeometryID,
     LatticeID,
-    LComponentID,
     MaterialID,
+    PartID,
+    PlacementID,
 )
-from pace.core.lattice import LatticeElement, RectLattice
+from pace.core.lattice import LatticeOccupant, RectLattice
 from pace.core.material import MMixture, MVoid, PercentType
+from pace.core.placeable import (
+    Enclosure,
+    Part,
+    PlaceableRef,
+    PlaceableType,
+    Placement,
+)
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
 from pace.db.relational.reference import Reference
 from pace.services.reference_extraction import (
-    extract_ccomponent_references,
+    extract_enclosure_references,
     extract_geometry_references,
     extract_lattice_references,
-    extract_lcomponent_references,
     extract_material_references,
+    extract_part_references,
     extract_reactor_blueprint_references,
 )
 
@@ -53,9 +53,9 @@ def _edges(references: set[Reference]) -> set[tuple]:
     }
 
 
-def _placement(placement_id: str, ref: ComponentRef, z_m: float = 0.0):
-    return ComponentPlacement(
-        id=ComponentPlacementID(placement_id),
+def _placement(placement_id: str, ref: PlaceableRef, z_m: float = 0.0):
+    return Placement(
+        id=PlacementID(placement_id),
         pose=GPose(x_m=0.0, y_m=0.0, z_m=z_m),
         ref=ref,
     )
@@ -117,25 +117,23 @@ def test_mixture_references_its_constituents():
     }
 
 
-def test_lcomponent_references_geometry_and_material():
-    pellet = LComponent.create(
+def test_part_references_geometry_and_material():
+    pellet = Part.create(
         family_name="pellet",
         version_label="1",
         geometry=GeometryID("cyl-1"),
         material=MaterialID("uo2-1"),
     )
-    assert _edges(extract_lcomponent_references(pellet)) == {
-        (ReferenceableType.LCOMPONENT, "pellet-1", ReferenceableType.GEOMETRY, "cyl-1"),
-        (ReferenceableType.LCOMPONENT, "pellet-1", ReferenceableType.MATERIAL, "uo2-1"),
+    assert _edges(extract_part_references(pellet)) == {
+        (ReferenceableType.PART, "pellet-1", ReferenceableType.GEOMETRY, "cyl-1"),
+        (ReferenceableType.PART, "pellet-1", ReferenceableType.MATERIAL, "uo2-1"),
     }
 
 
-def test_ccomponent_references_bounds_fill_and_each_distinct_member():
-    pellet_ref = ComponentRef(
-        type=ComponentType.LCOMPONENT, id=LComponentID("pellet-1")
-    )
-    lattice_ref = ComponentRef(type=ComponentType.LATTICE, id=LatticeID("grid-1"))
-    rod = CComponent.create(
+def test_enclosure_references_bounds_fill_and_each_distinct_member():
+    pellet_ref = PlaceableRef(type=PlaceableType.PART, id=PartID("pellet-1"))
+    lattice_ref = PlaceableRef(type=PlaceableType.LATTICE, id=LatticeID("grid-1"))
+    rod = Enclosure.create(
         family_name="rod",
         version_label="1",
         bounds=GeometryID("rod_cyl-1"),
@@ -146,55 +144,55 @@ def test_ccomponent_references_bounds_fill_and_each_distinct_member():
             _placement("grid", lattice_ref),
         ],
     )
-    assert _edges(extract_ccomponent_references(rod)) == {
+    assert _edges(extract_enclosure_references(rod)) == {
         (
-            ReferenceableType.CCOMPONENT,
+            ReferenceableType.ENCLOSURE,
             "rod-1",
             ReferenceableType.GEOMETRY,
             "rod_cyl-1",
         ),
-        (ReferenceableType.CCOMPONENT, "rod-1", ReferenceableType.MATERIAL, "helium-1"),
+        (ReferenceableType.ENCLOSURE, "rod-1", ReferenceableType.MATERIAL, "helium-1"),
         (
-            ReferenceableType.CCOMPONENT,
+            ReferenceableType.ENCLOSURE,
             "rod-1",
-            ReferenceableType.LCOMPONENT,
+            ReferenceableType.PART,
             "pellet-1",
         ),
-        (ReferenceableType.CCOMPONENT, "rod-1", ReferenceableType.LATTICE, "grid-1"),
+        (ReferenceableType.ENCLOSURE, "rod-1", ReferenceableType.LATTICE, "grid-1"),
     }
 
 
-def test_ccomponent_without_fill_has_no_material_edge():
-    rod = CComponent.create(
+def test_enclosure_without_fill_has_no_material_edge():
+    rod = Enclosure.create(
         family_name="rod",
         version_label="1",
         bounds=GeometryID("rod_cyl-1"),
         placements=[
             _placement(
                 "pellet",
-                ComponentRef(type=ComponentType.LCOMPONENT, id=LComponentID("p-1")),
+                PlaceableRef(type=PlaceableType.PART, id=PartID("p-1")),
             )
         ],
     )
-    assert {r.target_type for r in extract_ccomponent_references(rod)} == {
+    assert {r.target_type for r in extract_enclosure_references(rod)} == {
         ReferenceableType.GEOMETRY,
-        ReferenceableType.LCOMPONENT,
+        ReferenceableType.PART,
     }
 
 
 def test_lattice_edges_are_sourced_from_the_lattice():
-    pin_ref = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("pin-1"))
+    pin_ref = PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID("pin-1"))
     lattice = RectLattice.create(
         family_name="grid",
         version_label="1",
         pitch_m=0.0126,
         fill=MaterialID("water-1"),
         shape=(2, 2),
-        elements=[LatticeElement(ref=pin_ref, addresses=((0, 0), (1, 1)))],
+        occupants=[LatticeOccupant(ref=pin_ref, addresses=((0, 0), (1, 1)))],
     )
     assert _edges(extract_lattice_references(lattice)) == {
         (ReferenceableType.LATTICE, "grid-1", ReferenceableType.MATERIAL, "water-1"),
-        (ReferenceableType.LATTICE, "grid-1", ReferenceableType.CCOMPONENT, "pin-1"),
+        (ReferenceableType.LATTICE, "grid-1", ReferenceableType.ENCLOSURE, "pin-1"),
     }
 
 
@@ -205,7 +203,7 @@ def test_reactor_blueprint_references_bounds_fill_and_root():
         bounds=GeometryID("core_box-1"),
         fill=MaterialID("water-1"),
         root=_placement(
-            "root", ComponentRef(type=ComponentType.LATTICE, id=LatticeID("grid-1"))
+            "root", PlaceableRef(type=PlaceableType.LATTICE, id=LatticeID("grid-1"))
         ),
         neutron_bcs=dict.fromkeys(
             faces_for_geometry_type(GeometryType.RECT_PRISM), NeutronBC.VACUUM

@@ -13,18 +13,18 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from pace.core.component import ComponentRef, ComponentType
-from pace.core.ids import CComponentID, LatticeID, MaterialID
+from pace.core.ids import EnclosureID, LatticeID, MaterialID
 from pace.core.lattice import (
     HexLattice,
     HexOrientation,
     Lattice,
-    LatticeElement,
+    LatticeOccupant,
     RectLattice,
 )
+from pace.core.placeable import PlaceableRef, PlaceableType
 from pace.db.pace_db import PaceDB
 
-PIN = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("pin_cell-1"))
+PIN = PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID("pin_cell-1"))
 WATER = MaterialID("water-1")
 
 
@@ -35,7 +35,7 @@ def _rect(family_name: str = "rect_lattice", version_label: str = "1", **kwargs)
         pitch_m=0.0126,
         fill=WATER,
         shape=(2, 2),
-        elements=[LatticeElement(ref=PIN, addresses=((0, 0), (1, 1)))],
+        occupants=[LatticeOccupant(ref=PIN, addresses=((0, 0), (1, 1)))],
         **kwargs,
     )
 
@@ -48,7 +48,7 @@ def _hex() -> HexLattice:
         fill=WATER,
         num_rings=2,
         orientation=HexOrientation.FLAT_TOP,
-        elements=[LatticeElement(ref=PIN, addresses=((0, 0), (1, 3)))],
+        occupants=[LatticeOccupant(ref=PIN, addresses=((0, 0), (1, 3)))],
     )
 
 

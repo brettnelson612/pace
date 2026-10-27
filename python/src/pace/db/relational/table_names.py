@@ -14,8 +14,8 @@ a circular import.
 
 GEOMETRIES_TABLE_NAME = "geometries"
 MATERIALS_TABLE_NAME = "materials"
-LCOMPONENTS_TABLE_NAME = "lcomponents"
-CCOMPONENTS_TABLE_NAME = "ccomponents"
+PARTS_TABLE_NAME = "parts"
+ENCLOSURES_TABLE_NAME = "enclosures"
 LATTICES_TABLE_NAME = "lattices"
 REACTOR_BLUEPRINTS_TABLE_NAME = "reactor_blueprints"
 REFERENCES_TABLE_NAME = "references"

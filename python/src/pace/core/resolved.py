@@ -4,13 +4,13 @@ pace/core/resolved.py
 Fully hydrated views over registered objects — what the solver
 adapters consume:
 
-    - ResolvedComponent — a root component (any placeable kind) plus every
-          CComponent/LComponent/Lattice/Geometry/Material it transitively
-          references, as flat id-keyed maps. A component reused at many
+    - ResolvedPlaceable — a root placeable (any kind) plus every
+          Enclosure/Part/Lattice/Geometry/Material it transitively
+          references, as flat id-keyed maps. A placeable reused at many
           positions (one pin cell in 264 lattice slots) appears once in
           its map, referenced by id from wherever it's used.
     - ResolvedReactorBlueprint — a ReactorBlueprint plus the
-          ResolvedComponent of its root, whose maps also hold the
+          ResolvedPlaceable of its root, whose maps also hold the
           blueprint's own bounds geometry and fill material.
 
 Neither is registered or versioned: they're derived, transient views
@@ -23,40 +23,40 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pace.core.component import CComponent, ComponentRef, ComponentType, LComponent
 from pace.core.geometry import GAddition, Geometry, GSubtraction, geometry_from_dict
-from pace.core.ids import CComponentID, GeometryID, LatticeID, LComponentID, MaterialID
+from pace.core.ids import EnclosureID, GeometryID, LatticeID, MaterialID, PartID
 from pace.core.lattice import Lattice, lattice_from_dict
 from pace.core.material import Material, MMixture, material_from_dict
 from pace.core.pace_object import PaceObject
+from pace.core.placeable import Enclosure, Part, PlaceableRef, PlaceableType
 from pace.core.reactor_blueprint import ReactorBlueprint
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
-class ResolvedComponent(PaceObject):
-    """A root component and everything it transitively references."""
+class ResolvedPlaceable(PaceObject):
+    """A root placeable and everything it transitively references."""
 
-    root: ComponentRef
-    ccomponents: dict[CComponentID, CComponent]
-    lcomponents: dict[LComponentID, LComponent]
+    root: PlaceableRef
+    enclosures: dict[EnclosureID, Enclosure]
+    parts: dict[PartID, Part]
     lattices: dict[LatticeID, Lattice]
     geometries: dict[GeometryID, Geometry]
     materials: dict[MaterialID, Material]
 
-    def contains_component(self, ref: ComponentRef) -> bool:
+    def contains_placeable(self, ref: PlaceableRef) -> bool:
         """Whether the placeable object `ref` points at is in this
         bundle."""
-        if ref.type == ComponentType.LCOMPONENT:
-            return ref.id in self.lcomponents
-        if ref.type == ComponentType.CCOMPONENT:
-            return ref.id in self.ccomponents
-        if ref.type == ComponentType.LATTICE:
+        if ref.type == PlaceableType.PART:
+            return ref.id in self.parts
+        if ref.type == PlaceableType.ENCLOSURE:
+            return ref.id in self.enclosures
+        if ref.type == PlaceableType.LATTICE:
             return ref.id in self.lattices
-        raise ValueError(f"Invalid ComponentType provided: {ref.type}")
+        raise ValueError(f"Invalid PlaceableType provided: {ref.type}")
 
     def validate(self) -> None:
         self._validate_id_mapping()
-        if not self.contains_component(self.root):
+        if not self.contains_placeable(self.root):
             raise ValueError(f"root {self.root.id!r} is not present in this bundle")
         self._validate_completeness()
 
@@ -64,8 +64,8 @@ class ResolvedComponent(PaceObject):
         """Every dict key must match the id of the object stored under
         it."""
         maps: dict[str, dict] = {
-            "ccomponents": self.ccomponents,
-            "lcomponents": self.lcomponents,
+            "enclosures": self.enclosures,
+            "parts": self.parts,
             "lattices": self.lattices,
             "geometries": self.geometries,
             "materials": self.materials,
@@ -91,8 +91,8 @@ class ResolvedComponent(PaceObject):
                 "present in this bundle."
             )
 
-    def _require_component(self, owner: str, ref: ComponentRef) -> None:
-        if not self.contains_component(ref):
+    def _require_placeable(self, owner: str, ref: PlaceableRef) -> None:
+        if not self.contains_placeable(ref):
             raise ValueError(
                 f"{owner} references {ref.type.value} {ref.id!r}, which is not "
                 "present in this bundle."
@@ -101,24 +101,24 @@ class ResolvedComponent(PaceObject):
     def _validate_completeness(self) -> None:
         """Every reference held by an object in this bundle must resolve
         within the bundle."""
-        for ccomponent in self.ccomponents.values():
-            owner = f"CComponent {ccomponent.id!r}"
-            self._require_geometry(owner, ccomponent.bounds)
-            if ccomponent.fill is not None:
-                self._require_material(owner, ccomponent.fill)
-            for placement in ccomponent.placements:
-                self._require_component(owner, placement.ref)
+        for enclosure in self.enclosures.values():
+            owner = f"Enclosure {enclosure.id!r}"
+            self._require_geometry(owner, enclosure.bounds)
+            if enclosure.fill is not None:
+                self._require_material(owner, enclosure.fill)
+            for placement in enclosure.placements:
+                self._require_placeable(owner, placement.ref)
 
         for lattice in self.lattices.values():
             owner = f"Lattice {lattice.id!r}"
             self._require_material(owner, lattice.fill)
-            for element in lattice.elements:
-                self._require_component(owner, element.ref)
+            for occupant in lattice.occupants:
+                self._require_placeable(owner, occupant.ref)
 
-        for lcomponent in self.lcomponents.values():
-            owner = f"LComponent {lcomponent.id!r}"
-            self._require_geometry(owner, lcomponent.geometry)
-            self._require_material(owner, lcomponent.material)
+        for part in self.parts.values():
+            owner = f"Part {part.id!r}"
+            self._require_geometry(owner, part.geometry)
+            self._require_material(owner, part.material)
 
         for geometry in self.geometries.values():
             owner = f"Geometry {geometry.id!r}"
@@ -139,25 +139,22 @@ class ResolvedComponent(PaceObject):
     def to_dict(self) -> dict:
         return {
             "root": self.root.to_dict(),
-            "ccomponents": {k: v.to_dict() for k, v in self.ccomponents.items()},
-            "lcomponents": {k: v.to_dict() for k, v in self.lcomponents.items()},
+            "enclosures": {k: v.to_dict() for k, v in self.enclosures.items()},
+            "parts": {k: v.to_dict() for k, v in self.parts.items()},
             "lattices": {k: v.to_dict() for k, v in self.lattices.items()},
             "geometries": {k: v.to_dict() for k, v in self.geometries.items()},
             "materials": {k: v.to_dict() for k, v in self.materials.items()},
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> ResolvedComponent:
+    def from_dict(cls, data: dict) -> ResolvedPlaceable:
         return cls(
-            root=ComponentRef.from_dict(data["root"]),
-            ccomponents={
-                CComponentID(k): CComponent.from_dict(v)
-                for k, v in data["ccomponents"].items()
+            root=PlaceableRef.from_dict(data["root"]),
+            enclosures={
+                EnclosureID(k): Enclosure.from_dict(v)
+                for k, v in data["enclosures"].items()
             },
-            lcomponents={
-                LComponentID(k): LComponent.from_dict(v)
-                for k, v in data["lcomponents"].items()
-            },
+            parts={PartID(k): Part.from_dict(v) for k, v in data["parts"].items()},
             lattices={
                 LatticeID(k): lattice_from_dict(v) for k, v in data["lattices"].items()
             },
@@ -179,30 +176,30 @@ class ResolvedReactorBlueprint(PaceObject):
     case)."""
 
     reactor_blueprint: ReactorBlueprint
-    resolved_component: ResolvedComponent
+    resolved_placeable: ResolvedPlaceable
 
     def validate(self) -> None:
         owner = f"Reactor {self.reactor_blueprint.id!r}"
-        if self.reactor_blueprint.root.ref != self.resolved_component.root:
+        if self.reactor_blueprint.root.ref != self.resolved_placeable.root:
             raise ValueError(
                 f"{owner} root {self.reactor_blueprint.root.ref.id!r} does not match the "
-                f"model root {self.resolved_component.root.id!r}"
+                f"model root {self.resolved_placeable.root.id!r}"
             )
-        self.resolved_component._require_geometry(owner, self.reactor_blueprint.bounds)
+        self.resolved_placeable._require_geometry(owner, self.reactor_blueprint.bounds)
         if self.reactor_blueprint.fill is not None:
-            self.resolved_component._require_material(
+            self.resolved_placeable._require_material(
                 owner, self.reactor_blueprint.fill
             )
 
     def to_dict(self) -> dict:
         return {
             "reactor_blueprint": self.reactor_blueprint.to_dict(),
-            "resolved_component": self.resolved_component.to_dict(),
+            "resolved_placeable": self.resolved_placeable.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> ResolvedReactorBlueprint:
         return cls(
             reactor_blueprint=ReactorBlueprint.from_dict(data["reactor_blueprint"]),
-            resolved_component=ResolvedComponent.from_dict(data["resolved_component"]),
+            resolved_placeable=ResolvedPlaceable.from_dict(data["resolved_placeable"]),
         )

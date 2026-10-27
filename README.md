@@ -49,7 +49,7 @@ PACE does not solve physics or couple solvers. Transport, heat conduction, fluid
 ```
 python/
   src/pace/
-    core/       domain model: geometry, material, components, lattices, blueprints
+    core/       domain model: geometry, material, parts, enclosures, lattices, blueprints
     db/         persistence: SQLite registry, DAOs, reference index, object store
     services/   registry rules: registration, validation, hydration
     solvers/    solver translators (OpenMC, MOOSE, Cardinal) — in progress

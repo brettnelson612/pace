@@ -2,7 +2,7 @@
 pace/core/versioned.py
 
 Versioned — shared identity + three-state lineage for every versioned
-aggregate (Geometry, Material, LComponent, CComponent, Lattice,
+aggregate (Geometry, Material, Part, Enclosure, Lattice,
 ReactorBlueprint).
 Generic over the concrete NewType each subclass uses for its own id
 (GeometryID, MaterialID, ...) — id/derived_from resolve to the right

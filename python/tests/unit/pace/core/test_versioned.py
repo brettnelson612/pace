@@ -30,8 +30,8 @@ def test_every_versioned_class_is_found():
     assert {
         "GCylinder",
         "MIsotopic",
-        "LComponent",
-        "CComponent",
+        "Part",
+        "Enclosure",
         "RectLattice",
         "HexLattice",
         "ReactorBlueprint",

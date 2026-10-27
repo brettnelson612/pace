@@ -11,7 +11,7 @@ is just a `family_name` string carried on the version itself, not a
 separate row. A version's id is one opaque string built from
 family_name + version_label (e.g. "uranium3.2-1",
 "uranium3.2-6month_depletion" — see Geometry.build_id()), which
-is what every reference elsewhere in the system (LComponent,
+is what every reference elsewhere in the system (Part,
 GAddition.units, etc.) actually points at.
 
 family_name is NOT unique per row — every version in a family shares
@@ -375,7 +375,7 @@ class GPose(PaceObject):
     Deliberately a plain value object, not a PaceModelObject-style
     registered entity — a GPose has no independent identity or
     lifecycle of its own; it only exists as an attribute of whatever
-    ComponentPlacement it describes.
+    Placement it describes.
 
     z_rotation_rad defaults to 0.0 (no rotation) so existing call
     sites that don't need rotation are unaffected. Only z-axis
