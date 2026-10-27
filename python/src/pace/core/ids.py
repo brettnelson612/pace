@@ -38,5 +38,6 @@ ComponentPlacementID = NewType("ComponentPlacementID", str)
 # --- Reactor ---
 ReactorBlueprintID = NewType("ReactorBlueprintID", str)
 
-# --- Simulation provenance ---
+# --- Simulation ---
+SimulationCaseID = NewType("SimulationCaseID", str)
 SimulationJobID = NewType("SimulationJobID", str)
