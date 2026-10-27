@@ -9,8 +9,8 @@ ReferenceDAO.
 
 Every function here is pure — no DB access, no side effects. A row
 represents an edge between two registered aggregates, not a
-per-occurrence count: if a CComponent embeds the same LComponent at
-several different ComponentPlacement positions, that collapses to one edge,
+per-occurrence count: if an Enclosure embeds the same Part at
+several different Placement positions, that collapses to one edge,
 since that's what refcounting/propagation actually need to know —
 "does this object currently depend on that one," not "how many times
 does it appear inside it."
@@ -18,10 +18,10 @@ does it appear inside it."
 
 from __future__ import annotations
 
-from pace.core.component import CComponent, LComponent
 from pace.core.geometry import GAddition, Geometry, GSubtraction
 from pace.core.lattice import Lattice
 from pace.core.material import Material, MMixture
+from pace.core.placeable import Enclosure, Part
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
 from pace.db.relational.reference import Reference
@@ -70,64 +70,64 @@ def extract_material_references(material: Material) -> set[Reference]:
     }
 
 
-def extract_lcomponent_references(component: LComponent) -> set[Reference]:
-    """An LComponent always references exactly one Geometry and one
+def extract_part_references(part: Part) -> set[Reference]:
+    """A Part always references exactly one Geometry and one
     Material — never zero, never more than one of each."""
     return {
         Reference(
-            source_type=ReferenceableType.LCOMPONENT,
-            source_id=component.id,
+            source_type=ReferenceableType.PART,
+            source_id=part.id,
             target_type=ReferenceableType.GEOMETRY,
-            target_id=component.geometry,
+            target_id=part.geometry,
         ),
         Reference(
-            source_type=ReferenceableType.LCOMPONENT,
-            source_id=component.id,
+            source_type=ReferenceableType.PART,
+            source_id=part.id,
             target_type=ReferenceableType.MATERIAL,
-            target_id=component.material,
+            target_id=part.material,
         ),
     }
 
 
-def extract_ccomponent_references(component: CComponent) -> set[Reference]:
-    """A CComponent references its bounds Geometry, its fill Material
-    (if any), and every LComponent/CComponent/Lattice its ComponentPlacement
-    members place. Each member's ComponentRef says which registry its
+def extract_enclosure_references(enclosure: Enclosure) -> set[Reference]:
+    """An Enclosure references its bounds Geometry, its fill Material
+    (if any), and every Part/Enclosure/Lattice its Placement
+    members place. Each member's PlaceableRef says which registry its
     id belongs to — no registry lookup needed here to disambiguate."""
     references = {
         Reference(
-            source_type=ReferenceableType.CCOMPONENT,
-            source_id=component.id,
+            source_type=ReferenceableType.ENCLOSURE,
+            source_id=enclosure.id,
             target_type=ReferenceableType.GEOMETRY,
-            target_id=component.bounds,
+            target_id=enclosure.bounds,
         )
     }
 
-    if component.fill is not None:
+    if enclosure.fill is not None:
         references.add(
             Reference(
-                source_type=ReferenceableType.CCOMPONENT,
-                source_id=component.id,
+                source_type=ReferenceableType.ENCLOSURE,
+                source_id=enclosure.id,
                 target_type=ReferenceableType.MATERIAL,
-                target_id=component.fill,
+                target_id=enclosure.fill,
             )
         )
 
     references.update(
         Reference(
-            source_type=ReferenceableType.CCOMPONENT,
-            source_id=component.id,
+            source_type=ReferenceableType.ENCLOSURE,
+            source_id=enclosure.id,
             target_type=placement.ref.referenceable_type,
             target_id=placement.ref.id,
         )
-        for placement in component.placements
+        for placement in enclosure.placements
     )
     return references
 
 
 def extract_lattice_references(lattice: Lattice) -> set[Reference]:
-    """A Lattice references its fill Material and every component it
-    places — one edge per placed component, however many addresses it
+    """A Lattice references its fill Material and every placeable it
+    places — one edge per occupant, however many addresses it
     occupies."""
     references = {
         Reference(
@@ -141,10 +141,10 @@ def extract_lattice_references(lattice: Lattice) -> set[Reference]:
         Reference(
             source_type=ReferenceableType.LATTICE,
             source_id=lattice.id,
-            target_type=element.ref.referenceable_type,
-            target_id=element.ref.id,
+            target_type=occupant.ref.referenceable_type,
+            target_id=occupant.ref.id,
         )
-        for element in lattice.elements
+        for occupant in lattice.occupants
     )
     return references
 
@@ -153,7 +153,7 @@ def extract_reactor_blueprint_references(
     reactor_blueprint: ReactorBlueprint,
 ) -> set[Reference]:
     """A ReactorBlueprint references its bounds Geometry, its fill
-    Material (if any), and its root component."""
+    Material (if any), and its root placeable."""
     references = {
         Reference(
             source_type=ReferenceableType.REACTOR_BLUEPRINT,

@@ -9,6 +9,7 @@ own field metadata.
 from dataclasses import dataclass, field
 
 import pytest
+
 from pace.core.constraints import Constraint, validate_fields
 
 

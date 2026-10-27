@@ -12,13 +12,13 @@ registry that a DAO can't enforce on its own.
          family_name; a v2+ must derive from an existing version of the
          same type and family;
       3. the object's validate_*() checks (dangling references, plus
-         bounds shape and face coverage for CComponents and
+         bounds shape and face coverage for Enclosures and
          ReactorBlueprints).
 - validate_*(): step 3 on its own, for a check-before-save flow (e.g. a
   draft UI that shouldn't persist on every keystroke).
 - get_*(): fetch one object, unhydrated (embedded refs stay as bare
   ids).
-- get_resolved_component() / get_resolved_reactor_blueprint(): fetch a
+- get_resolved_placeable() / get_resolved_reactor_blueprint(): fetch a
   fully hydrated tree. Walks the reference index (edges only) to find
   everything needed, then does one batched fetch per type. The result
   self-validates on construction, so a mismatch between the index and
@@ -37,31 +37,31 @@ from typing import Any, TypeVar
 from sqlalchemy.exc import IntegrityError
 
 from pace.core.bounds import BOUNDS_GEOMETRY_TYPES, faces_for_geometry_type
-from pace.core.component import CComponent, ComponentRef, LComponent
 from pace.core.geometry import Geometry
 from pace.core.ids import (
-    CComponentID,
+    EnclosureID,
     GeometryID,
     LatticeID,
-    LComponentID,
     MaterialID,
+    PartID,
     ReactorBlueprintID,
 )
 from pace.core.lattice import Lattice
 from pace.core.material import Material
+from pace.core.placeable import Enclosure, Part, PlaceableRef
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
-from pace.core.resolved import ResolvedComponent, ResolvedReactorBlueprint
+from pace.core.resolved import ResolvedPlaceable, ResolvedReactorBlueprint
 from pace.core.versioned import Versioned
 from pace.db.registry_db import RegistryDB
 from pace.db.relational.reference import Reference
 from pace.db.relational.versioned_dao import VersionedDAO
 from pace.services.reference_extraction import (
-    extract_ccomponent_references,
+    extract_enclosure_references,
     extract_geometry_references,
     extract_lattice_references,
-    extract_lcomponent_references,
     extract_material_references,
+    extract_part_references,
     extract_reactor_blueprint_references,
 )
 
@@ -118,20 +118,20 @@ class RegistryService:
             extract_material_references,
         )
 
-    def register_lcomponent(self, lcomponent: LComponent) -> LComponent:
+    def register_part(self, part: Part) -> Part:
         return self._register(
-            lcomponent,
-            ReferenceableType.LCOMPONENT,
-            self.validate_lcomponent,
-            extract_lcomponent_references,
+            part,
+            ReferenceableType.PART,
+            self.validate_part,
+            extract_part_references,
         )
 
-    def register_ccomponent(self, ccomponent: CComponent) -> CComponent:
+    def register_enclosure(self, enclosure: Enclosure) -> Enclosure:
         return self._register(
-            ccomponent,
-            ReferenceableType.CCOMPONENT,
-            self.validate_ccomponent,
-            extract_ccomponent_references,
+            enclosure,
+            ReferenceableType.ENCLOSURE,
+            self.validate_enclosure,
+            extract_enclosure_references,
         )
 
     def register_lattice(self, lattice: Lattice) -> Lattice:
@@ -220,11 +220,11 @@ class RegistryService:
     def get_material(self, material_id: MaterialID) -> Material | None:
         return self._registry.materials.get(material_id)
 
-    def get_lcomponent(self, lcomponent_id: LComponentID) -> LComponent | None:
-        return self._registry.lcomponents.get(lcomponent_id)
+    def get_part(self, part_id: PartID) -> Part | None:
+        return self._registry.parts.get(part_id)
 
-    def get_ccomponent(self, ccomponent_id: CComponentID) -> CComponent | None:
-        return self._registry.ccomponents.get(ccomponent_id)
+    def get_enclosure(self, enclosure_id: EnclosureID) -> Enclosure | None:
+        return self._registry.enclosures.get(enclosure_id)
 
     def get_lattice(self, lattice_id: LatticeID) -> Lattice | None:
         return self._registry.lattices.get(lattice_id)
@@ -238,20 +238,20 @@ class RegistryService:
     # Retrieval — fully hydrated
     # -------------------------------------------------------------
 
-    def get_resolved_component(self, root: ComponentRef) -> ResolvedComponent:
-        """Hydrate the full transitive tree a root component depends on.
+    def get_resolved_placeable(self, root: PlaceableRef) -> ResolvedPlaceable:
+        """Hydrate the full transitive tree a root placeable depends on.
 
         1. Walk the reference index to find every id needed (edges
            only, no object reconstruction).
         2. Batch-fetch the objects, one query per type.
 
-        The ResolvedComponent self-validates on construction: if the
+        The ResolvedPlaceable self-validates on construction: if the
         index and the fetched objects disagree (e.g. something was
         deleted between the walk and the fetch), construction fails
         rather than returning a partial tree.
         """
         needed = self._walk_references(root.referenceable_type, root.id)
-        return self._build_resolved_component(root, needed)
+        return self._build_resolved_placeable(root, needed)
 
     def get_resolved_reactor_blueprint(
         self, reactor_blueprint_id: ReactorBlueprintID
@@ -270,7 +270,9 @@ class RegistryService:
         )
         return ResolvedReactorBlueprint(
             reactor_blueprint=reactor_blueprint,
-            rc=self._build_resolved_component(reactor_blueprint.root.ref, needed),
+            resolved_placeable=self._build_resolved_placeable(
+                reactor_blueprint.root.ref, needed
+            ),
         )
 
     def _walk_references(
@@ -293,17 +295,17 @@ class RegistryService:
                     frontier.append((edge_type, edge_id))
         return needed
 
-    def _build_resolved_component(
-        self, root: ComponentRef, needed: dict[ReferenceableType, set[str]]
-    ) -> ResolvedComponent:
+    def _build_resolved_placeable(
+        self, root: PlaceableRef, needed: dict[ReferenceableType, set[str]]
+    ) -> ResolvedPlaceable:
         def fetch(referenceable_type: ReferenceableType) -> dict:
             dao = self._registry.dao_for(referenceable_type)
             return dao.get_many(needed[referenceable_type])
 
-        return ResolvedComponent(
+        return ResolvedPlaceable(
             root=root,
-            ccomponents=fetch(ReferenceableType.CCOMPONENT),
-            lcomponents=fetch(ReferenceableType.LCOMPONENT),
+            enclosures=fetch(ReferenceableType.ENCLOSURE),
+            parts=fetch(ReferenceableType.PART),
             lattices=fetch(ReferenceableType.LATTICE),
             geometries=fetch(ReferenceableType.GEOMETRY),
             materials=fetch(ReferenceableType.MATERIAL),
@@ -323,21 +325,21 @@ class RegistryService:
         resolves to an existing Material."""
         self.validate_references(extract_material_references(material))
 
-    def validate_lcomponent(self, lcomponent: LComponent) -> None:
-        """Confirm the Geometry and Material an LComponent references
+    def validate_part(self, part: Part) -> None:
+        """Confirm the Geometry and Material a Part references
         both resolve to existing records."""
-        self.validate_references(extract_lcomponent_references(lcomponent))
+        self.validate_references(extract_part_references(part))
 
-    def validate_ccomponent(self, ccomponent: CComponent) -> None:
+    def validate_enclosure(self, enclosure: Enclosure) -> None:
         """Confirm every reference resolves (bounds, fill, members),
         then that the bounds geometry is a shape that can serve as
         bounds. Direct self-reference is rejected earlier, by
-        CComponent's own validate()."""
-        self.validate_references(extract_ccomponent_references(ccomponent))
-        self._require_bounds_shape(ccomponent.bounds)
+        Enclosure's own validate()."""
+        self.validate_references(extract_enclosure_references(enclosure))
+        self._require_bounds_shape(enclosure.bounds)
 
     def validate_lattice(self, lattice: Lattice) -> None:
-        """Confirm the fill and every placed component resolve."""
+        """Confirm the fill and every occupant resolve."""
         self.validate_references(extract_lattice_references(lattice))
 
     def validate_reactor_blueprint(self, reactor_blueprint: ReactorBlueprint) -> None:

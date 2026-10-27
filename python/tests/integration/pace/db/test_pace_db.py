@@ -10,10 +10,11 @@ back as a unit, and SQLite connections enforce foreign keys.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import text
+
 from pace.core.reference_types import ReferenceableType
 from pace.db.pace_db import PaceDB
 from pace.db.relational.sql_db import SqlDB
-from sqlalchemy import text
 
 
 def test_create_all_succeeds(pace_db: PaceDB):
@@ -31,8 +32,8 @@ def test_all_daos_share_one_sql_db(pace_db: PaceDB):
     sql_dbs = {
         registry.geometries._db,
         registry.materials._db,
-        registry.lcomponents._db,
-        registry.ccomponents._db,
+        registry.parts._db,
+        registry.enclosures._db,
         registry.lattices._db,
         registry.reactor_blueprints._db,
         registry.references._db,
@@ -41,12 +42,12 @@ def test_all_daos_share_one_sql_db(pace_db: PaceDB):
 
 
 @pytest.mark.parametrize(
-    "referenceable_type,attribute",
+    ("referenceable_type", "attribute"),
     [
         (ReferenceableType.GEOMETRY, "geometries"),
         (ReferenceableType.MATERIAL, "materials"),
-        (ReferenceableType.LCOMPONENT, "lcomponents"),
-        (ReferenceableType.CCOMPONENT, "ccomponents"),
+        (ReferenceableType.PART, "parts"),
+        (ReferenceableType.ENCLOSURE, "enclosures"),
         (ReferenceableType.LATTICE, "lattices"),
         (ReferenceableType.REACTOR_BLUEPRINT, "reactor_blueprints"),
     ],

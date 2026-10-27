@@ -11,7 +11,7 @@ is just a `family_name` string carried on the version itself, not a
 separate row. A version's id is one opaque string built from
 family_name + version_label (e.g. "uranium3.2-1",
 "uranium3.2-6month_depletion" — see Geometry.build_id()), which
-is what every reference elsewhere in the system (LComponent,
+is what every reference elsewhere in the system (Part,
 GAddition.units, etc.) actually points at.
 
 family_name is NOT unique per row — every version in a family shares
@@ -179,7 +179,7 @@ class GCylinder(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GCylinder:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             radius_m=data["radius_m"],
             height_m=data["height_m"],
         )
@@ -225,7 +225,7 @@ class GAnnulus(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GAnnulus:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             inner_radius_m=data["inner_radius_m"],
             outer_radius_m=data["outer_radius_m"],
             height_m=data["height_m"],
@@ -281,7 +281,7 @@ class GHexPrism(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GHexPrism:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             circumradius_m=data["circumradius_m"],
             height_m=data["height_m"],
         )
@@ -312,7 +312,7 @@ class GSphere(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GSphere:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             radius_m=data["radius_m"],
         )
 
@@ -356,7 +356,7 @@ class GRectanglePrism(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GRectanglePrism:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             length_m=data["length_m"],
             width_m=data["width_m"],
             height_m=data["height_m"],
@@ -375,7 +375,7 @@ class GPose(PaceObject):
     Deliberately a plain value object, not a PaceModelObject-style
     registered entity — a GPose has no independent identity or
     lifecycle of its own; it only exists as an attribute of whatever
-    ComponentPlacement it describes.
+    Placement it describes.
 
     z_rotation_rad defaults to 0.0 (no rotation) so existing call
     sites that don't need rotation are unaffected. Only z-axis
@@ -453,7 +453,7 @@ class GAddition(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GAddition:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             units=[
                 (GeometryID(unit["geometry_id"]), GPose.from_dict(unit["position"]))
                 for unit in data["units"]
@@ -528,7 +528,7 @@ class GSubtraction(Geometry):
     @classmethod
     def from_dict(cls, data: dict) -> GSubtraction:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             base=(
                 GeometryID(data["base"]["geometry_id"]),
                 GPose.from_dict(data["base"]["position"]),

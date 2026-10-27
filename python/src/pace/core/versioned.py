@@ -2,7 +2,7 @@
 pace/core/versioned.py
 
 Versioned — shared identity + three-state lineage for every versioned
-aggregate (Geometry, Material, LComponent, CComponent, Lattice,
+aggregate (Geometry, Material, Part, Enclosure, Lattice,
 ReactorBlueprint).
 Generic over the concrete NewType each subclass uses for its own id
 (GeometryID, MaterialID, ...) — id/derived_from resolve to the right
@@ -37,7 +37,7 @@ replaces this one.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, Self, TypeVar, cast
+from typing import Self, TypeVar, cast
 
 from pace.core.ids import SimulationJobID
 from pace.core.pace_object import PaceObject
@@ -46,7 +46,7 @@ IDType = TypeVar("IDType")
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
-class Versioned(PaceObject, Generic[IDType]):
+class Versioned[IDType](PaceObject):
     id: IDType
     family_name: str
     version_label: str
@@ -132,9 +132,9 @@ class Versioned(PaceObject, Generic[IDType]):
         }
 
     @classmethod
-    def _base_fields_from_dict(cls, data: dict) -> dict:
+    def _base_versioned_fields_from_dict(cls, data: dict) -> dict:
         """Shared identity/lineage parsing — every leaf class's
-        from_dict() splices this in via **cls._base_fields_from_dict(data)
+        from_dict() splices this in via **cls._base_versioned_fields_from_dict(data)
         (or, for Geometry/Material, via a subclass-level extension of
         it — see Material._material_fields_from_dict), then adds only
         its own type-specific fields on top."""

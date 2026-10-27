@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+
 from pace.db.pace_db import PaceDB
 from pace.db.relational.versioned_dao import VersionedDAO
 

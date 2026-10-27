@@ -4,7 +4,7 @@ pace/core/lattice.py
 Lattice — a grid of slots, where a slot's position is implied by
 its address and the pitch rather than stored per member. Exists for
 repeated structures (a fuel assembly's 17x17 pin array) where a
-CComponent's explicit ComponentPlacement-per-member approach doesn't scale.
+Enclosure's explicit Placement-per-member approach doesn't scale.
 
 Two concrete shapes:
     - RectLattice — addresses are (row, col); row 0 is the TOP row and
@@ -29,7 +29,7 @@ lattice fill covers the rest of the slot. Lattices are 2D: axial
 variation comes from stacking in the parent, and every occupant shares
 one height.
 
-Versioned like Geometry/Material/LComponent/CComponent.
+Versioned like Geometry/Material/Part/Enclosure.
 """
 
 from __future__ import annotations
@@ -39,10 +39,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pace.core.component import ComponentType, ComponentRef
 from pace.core.constraints import Constraint, validate_fields
 from pace.core.ids import LatticeID, MaterialID
 from pace.core.pace_object import PaceObject
+from pace.core.placeable import PlaceableRef, PlaceableType
 from pace.core.versioned import Versioned
 
 LatticeAddress = tuple[int, int]
@@ -75,26 +75,25 @@ LATTICE_TYPE_TO_CLASS: dict[str, type[Lattice]] = {}
 
 
 @dataclass(frozen=True, kw_only=True)
-class LatticeElement(PaceObject):
-    """A lattice element is just a single component and a list of every
-    lattice address it occupies.
+class LatticeOccupant(PaceObject):
+    """One placeable in a lattice and every address it occupies.
 
     Example — the same pin cell in three slots of a rect lattice's top
     row:
-        LatticeElement(
-            ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id),
+        LatticeOccupant(
+            ref=PlaceableRef(type=PlaceableType.ENCLOSURE, id=pin_cell.id),
             addresses=((0, 0), (0, 1), (0, 2)),
         )
     """
 
-    ref: ComponentRef
+    ref: PlaceableRef
     addresses: tuple[LatticeAddress, ...]
 
     def validate(self) -> None:
         if len(self.addresses) < 1:
-            raise ValueError(f"element of {self.ref.id!r} lists no addresses")
+            raise ValueError(f"occupant {self.ref.id!r} lists no addresses")
         if len(set(self.addresses)) != len(self.addresses):
-            raise ValueError(f"element of {self.ref.id!r} repeats an address")
+            raise ValueError(f"occupant {self.ref.id!r} repeats an address")
 
     def to_dict(self) -> dict:
         return {
@@ -103,9 +102,9 @@ class LatticeElement(PaceObject):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> LatticeElement:
+    def from_dict(cls, data: dict) -> LatticeOccupant:
         return cls(
-            ref=ComponentRef.from_dict(data["ref"]),
+            ref=PlaceableRef.from_dict(data["ref"]),
             addresses=tuple((a, b) for a, b in data["addresses"]),
         )
 
@@ -125,7 +124,7 @@ class Lattice(Versioned[LatticeID]):
 
     pitch_m: float = field(metadata={"constraint": Constraint.POSITIVE})
     fill: MaterialID
-    elements: list[LatticeElement]
+    occupants: list[LatticeOccupant]
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
@@ -146,45 +145,45 @@ class Lattice(Versioned[LatticeID]):
 
     def validate(self) -> None:
         """Field constraints, then identity/lineage (via Versioned),
-        then shape, then elements."""
+        then shape, then occupants."""
         validate_fields(self)
         super().validate()
         self._validate_shape()
-        self._validate_elements()
+        self._validate_occupants()
 
-    def _validate_elements(self) -> None:
+    def _validate_occupants(self) -> None:
         """Rules enforced:
-        - at least one element — a lattice of nothing but fill is
+        - at least one occupant — a lattice of nothing but fill is
               just a fill.
-        - each ref appears in at most one element — one entry per
-              placed component, holding all of its addresses.
+        - each ref appears in at most one occupant — one entry per
+              placed placeable, holding all of its addresses.
         - every address is valid for this lattice's shape.
         - no address is occupied twice.
         - no direct self-reference.
         """
-        if len(self.elements) < 1:
-            raise ValueError(f"Lattice {self.id!r} has no elements")
+        if len(self.occupants) < 1:
+            raise ValueError(f"Lattice {self.id!r} has no occupants")
 
         valid = set(self.addresses())
-        seen_refs: set[ComponentRef] = set()
+        seen_refs: set[PlaceableRef] = set()
         occupied: set[LatticeAddress] = set()
 
-        for element in self.elements:
-            ref = element.ref
+        for occupant in self.occupants:
+            ref = occupant.ref
 
             # check that ref isn't listed more than once
             if ref in seen_refs:
                 raise ValueError(
-                    f"{ref.id!r} appears in more than one element of {self.id!r}"
+                    f"{ref.id!r} appears in more than one occupant of {self.id!r}"
                 )
             seen_refs.add(ref)
 
             # shallow check that there is no circular dependency
-            if ref.type == ComponentType.LATTICE and ref.id == self.id:
+            if ref.type == PlaceableType.LATTICE and ref.id == self.id:
                 raise ValueError(f"Lattice {self.id!r} cannot reference itself")
 
             # check that all addresses are valid for given shape
-            for address in element.addresses:
+            for address in occupant.addresses:
                 if address not in valid:
                     raise ValueError(
                         f"address {address} is outside lattice {self.id!r}"
@@ -195,19 +194,19 @@ class Lattice(Versioned[LatticeID]):
                     )
                 occupied.add(address)
 
-    def occupant_at(self, address: LatticeAddress) -> ComponentRef | None:
-        """The component placed at `address`, or None for an empty slot
+    def occupant_at(self, address: LatticeAddress) -> PlaceableRef | None:
+        """The placeable at `address`, or None for an empty slot
         (fill only)."""
         if address not in set(self.addresses()):
             raise ValueError(f"address {address} is outside lattice {self.id!r}")
-        for element in self.elements:
-            if address in element.addresses:
-                return element.ref
+        for occupant in self.occupants:
+            if address in occupant.addresses:
+                return occupant.ref
         return None
 
     def empty_addresses(self) -> list[LatticeAddress]:
         """Addresses holding only the lattice fill, in address order."""
-        occupied = {a for p in self.elements for a in p.addresses}
+        occupied = {a for p in self.occupants for a in p.addresses}
         return [a for a in self.addresses() if a not in occupied]
 
     def to_dict(self) -> dict:
@@ -216,7 +215,7 @@ class Lattice(Versioned[LatticeID]):
             **super().to_dict(),
             "pitch_m": self.pitch_m,
             "fill": self.fill,
-            "elements": [element.to_dict() for element in self.elements],
+            "occupants": [occupant.to_dict() for occupant in self.occupants],
         }
 
     @classmethod
@@ -224,10 +223,10 @@ class Lattice(Versioned[LatticeID]):
         """Shared parsing for every field Lattice adds on top of
         Versioned."""
         return {
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             "pitch_m": data["pitch_m"],
             "fill": MaterialID(data["fill"]),
-            "elements": [LatticeElement.from_dict(p) for p in data["elements"]],
+            "occupants": [LatticeOccupant.from_dict(p) for p in data["occupants"]],
         }
 
 
@@ -240,8 +239,8 @@ class RectLattice(Lattice):
 
     Example — a 3x3 of fuel pin cells around a central guide-tube cell,
     authored as a grid:
-        fuel = ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id)
-        guide = ComponentRef(type=ComponentType.CCOMPONENT, id=guide_cell.id)
+        fuel = PlaceableRef(type=PlaceableType.ENCLOSURE, id=pin_cell.id)
+        guide = PlaceableRef(type=PlaceableType.ENCLOSURE, id=guide_cell.id)
         RectLattice.from_grid(
             family_name="mini_lattice_3x3",
             version_label="1",
@@ -275,11 +274,11 @@ class RectLattice(Lattice):
         version_label: str,
         pitch_m: float,
         fill: MaterialID,
-        grid: list[list[ComponentRef | None]],
+        grid: list[list[PlaceableRef | None]],
         **kwargs,
     ) -> RectLattice:
         """Build a RectLattice from a top-row-first grid of refs.
-        ComponentPlacements are ordered by each ref's first appearance,
+        Occupants are ordered by each ref's first appearance,
         reading row by row. None = empty slot."""
 
         # verify at least one row/col present
@@ -291,7 +290,7 @@ class RectLattice(Lattice):
         if any(len(row) != n_cols for row in grid):
             raise ValueError("every grid row must have the same length")
 
-        addresses_by_ref: dict[ComponentRef, list[LatticeAddress]] = {}
+        addresses_by_ref: dict[PlaceableRef, list[LatticeAddress]] = {}
         for row_index, row in enumerate(grid):
             for col_index, ref in enumerate(row):
                 if ref is not None:
@@ -303,20 +302,20 @@ class RectLattice(Lattice):
             pitch_m=pitch_m,
             fill=fill,
             shape=(len(grid), n_cols),
-            elements=[
-                LatticeElement(ref=ref, addresses=tuple(addresses))
+            occupants=[
+                LatticeOccupant(ref=ref, addresses=tuple(addresses))
                 for ref, addresses in addresses_by_ref.items()
             ],
             **kwargs,
         )
 
-    def to_grid(self) -> list[list[ComponentRef | None]]:
+    def to_grid(self) -> list[list[PlaceableRef | None]]:
         """The top-row-first grid form (None = empty slot)."""
         n_rows, n_cols = self.shape
-        grid: list[list[ComponentRef | None]] = [[None] * n_cols for _ in range(n_rows)]
-        for element in self.elements:
-            for row, col in element.addresses:
-                grid[row][col] = element.ref
+        grid: list[list[PlaceableRef | None]] = [[None] * n_cols for _ in range(n_rows)]
+        for occupant in self.occupants:
+            for row, col in occupant.addresses:
+                grid[row][col] = occupant.ref
         return grid
 
     def to_dict(self) -> dict:
@@ -345,9 +344,9 @@ class HexLattice(Lattice):
             orientation=HexOrientation.FLAT_TOP,
             pitch_m=0.009,
             fill=sodium.id,
-            elements=[
-                LatticeElement(
-                    ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin.id),
+            occupants=[
+                LatticeOccupant(
+                    ref=PlaceableRef(type=PlaceableType.ENCLOSURE, id=pin.id),
                     addresses=((0, 0),) + tuple((1, i) for i in range(6)),
                 ),
             ],

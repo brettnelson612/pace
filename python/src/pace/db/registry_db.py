@@ -16,11 +16,11 @@ from sqlalchemy.orm import Session
 
 from pace.core.reference_types import ReferenceableType
 from pace.db.relational import (
-    CComponentDAO,
+    EnclosureDAO,
     GeometryDAO,
     LatticeDAO,
-    LComponentDAO,
     MaterialDAO,
+    PartDAO,
     ReactorBlueprintDAO,
     ReferenceDAO,
     VersionedDAO,
@@ -33,8 +33,8 @@ class RegistryDB:
         self._sql_db = sql_db
         self.geometries = GeometryDAO(sql_db)
         self.materials = MaterialDAO(sql_db)
-        self.lcomponents = LComponentDAO(sql_db)
-        self.ccomponents = CComponentDAO(sql_db)
+        self.parts = PartDAO(sql_db)
+        self.enclosures = EnclosureDAO(sql_db)
         self.lattices = LatticeDAO(sql_db)
         self.reactor_blueprints = ReactorBlueprintDAO(sql_db)
         self.references = ReferenceDAO(sql_db)
@@ -42,8 +42,8 @@ class RegistryDB:
         self._dao_by_type: dict[ReferenceableType, VersionedDAO[Any, Any, Any]] = {
             ReferenceableType.GEOMETRY: self.geometries,
             ReferenceableType.MATERIAL: self.materials,
-            ReferenceableType.LCOMPONENT: self.lcomponents,
-            ReferenceableType.CCOMPONENT: self.ccomponents,
+            ReferenceableType.PART: self.parts,
+            ReferenceableType.ENCLOSURE: self.enclosures,
             ReferenceableType.LATTICE: self.lattices,
             ReferenceableType.REACTOR_BLUEPRINT: self.reactor_blueprints,
         }

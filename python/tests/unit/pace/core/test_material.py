@@ -17,6 +17,7 @@ import dataclasses
 from typing import ClassVar
 
 import pytest
+
 from pace.core.ids import MaterialID, SimulationJobID
 from pace.core.material import (
     DensityUnit,
@@ -310,7 +311,8 @@ class TestMaterialBase:
     ]
 
     @pytest.mark.parametrize(
-        "derived_from,simulation_job_id,user_edit,should_raise", LINEAGE_CASES
+        ("derived_from", "simulation_job_id", "user_edit", "should_raise"),
+        LINEAGE_CASES,
     )
     def test_lineage_rule(
         self, derived_from, simulation_job_id, user_edit, should_raise
@@ -485,7 +487,7 @@ class TestMIsotopic:
             make_isotopic(density_unit="g/cm3")
 
     @pytest.mark.parametrize(
-        "key,bad_value", [("percent_type", "vo"), ("density_unit", "lb/ft3")]
+        ("key", "bad_value"), [("percent_type", "vo"), ("density_unit", "lb/ft3")]
     )
     def test_from_dict_rejects_unknown_enum_value(self, key, bad_value):
         data = make_isotopic().to_dict()

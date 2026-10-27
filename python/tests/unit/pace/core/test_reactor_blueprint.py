@@ -10,26 +10,27 @@ integration tests.
 """
 
 import pytest
+
 from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.component import ComponentPlacement, ComponentRef, ComponentType
 from pace.core.geometry import GeometryType, GPose
 from pace.core.ids import (
-    CComponentID,
-    ComponentPlacementID,
+    EnclosureID,
     GeometryID,
     MaterialID,
+    PlacementID,
     ReactorBlueprintID,
     SimulationJobID,
 )
+from pace.core.placeable import PlaceableRef, PlaceableType, Placement
 from pace.core.reactor_blueprint import ReactorBlueprint
 
 BOX_FACES = faces_for_geometry_type(GeometryType.RECT_PRISM)
 WATER = MaterialID("borated_water-1")
-ROOT = ComponentPlacement(
-    id=ComponentPlacementID("pin_cell"),
+ROOT = Placement(
+    id=PlacementID("pin_cell"),
     pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-    ref=ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("pin_cell-1")),
+    ref=PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID("pin_cell-1")),
 )
 
 

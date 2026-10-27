@@ -8,6 +8,7 @@ omitting eq=False from its @dataclass decorator.
 """
 
 import pytest
+
 from pace.core.geometry import GCylinder
 from pace.core.material import MVoid
 from pace.core.versioned import Versioned
@@ -29,8 +30,8 @@ def test_every_versioned_class_is_found():
     assert {
         "GCylinder",
         "MIsotopic",
-        "LComponent",
-        "CComponent",
+        "Part",
+        "Enclosure",
         "RectLattice",
         "HexLattice",
         "ReactorBlueprint",

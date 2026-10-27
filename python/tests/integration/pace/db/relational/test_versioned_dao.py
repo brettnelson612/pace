@@ -12,27 +12,28 @@ its own type.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+
 from pace.core.boundary_conditions import NeutronBC
 from pace.core.bounds import faces_for_geometry_type
-from pace.core.component import (
-    CComponent,
-    ComponentPlacement,
-    ComponentRef,
-    ComponentType,
-    LComponent,
-)
 from pace.core.geometry import GCylinder, GeometryType, GPose
-from pace.core.ids import CComponentID, ComponentPlacementID, GeometryID
-from pace.core.lattice import LatticeElement, RectLattice
+from pace.core.ids import EnclosureID, GeometryID, PlacementID
+from pace.core.lattice import LatticeOccupant, RectLattice
 from pace.core.material import (
     DensityUnit,
     MaterialComponentEntry,
     MIsotopic,
     PercentType,
 )
+from pace.core.placeable import (
+    Enclosure,
+    Part,
+    PlaceableRef,
+    PlaceableType,
+    Placement,
+)
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.db.pace_db import PaceDB
-from sqlalchemy.exc import IntegrityError
 
 
 def _cylinder(
@@ -78,6 +79,7 @@ def test_insert_never_overwrites_an_existing_id(pace_db: PaceDB, insert):
         insert(pace_db.registry.geometries, _cylinder(radius_m=0.009))
     fetched = pace_db.registry.geometries.get(original.id)
     assert fetched is not None
+    assert isinstance(fetched, GCylinder)
     assert fetched.radius_m == 0.005
 
 
@@ -99,10 +101,9 @@ def test_insert_revalidates_the_object(pace_db: PaceDB, insert):
 
 def test_failed_transaction_writes_nothing(pace_db: PaceDB):
     geometry = _cylinder()
-    with pytest.raises(RuntimeError):
-        with pace_db.registry.transaction() as session:
-            pace_db.registry.geometries.insert(session, geometry)
-            raise RuntimeError("abort")
+    with pytest.raises(RuntimeError), pace_db.registry.transaction() as session:
+        pace_db.registry.geometries.insert(session, geometry)
+        raise RuntimeError("abort")
     assert not pace_db.registry.geometries.exists(geometry.id)
 
 
@@ -237,9 +238,8 @@ def test_delete_of_a_predecessor_violates_foreign_key(pace_db: PaceDB, insert):
     v1 = _cylinder()
     insert(pace_db.registry.geometries, v1)
     insert(pace_db.registry.geometries, _v2(v1))
-    with pytest.raises(IntegrityError):
-        with pace_db.registry.transaction() as session:
-            pace_db.registry.geometries.delete(session, v1.id)
+    with pytest.raises(IntegrityError), pace_db.registry.transaction() as session:
+        pace_db.registry.geometries.delete(session, v1.id)
     assert pace_db.registry.geometries.exists(v1.id)
 
 
@@ -259,39 +259,39 @@ def test_every_dao_round_trips(pace_db: PaceDB, insert):
         density_value=10.257,
         density_unit=DensityUnit.G_PER_CM3,
     )
-    pellet = LComponent.create(
+    pellet = Part.create(
         family_name="pellet",
         version_label="1",
         geometry=cylinder.id,
         material=fuel.id,
     )
-    pin_cell = CComponent.create(
+    pin_cell = Enclosure.create(
         family_name="pin_cell",
         version_label="1",
         bounds=cylinder.id,
         placements=[
-            ComponentPlacement(
-                id=ComponentPlacementID("pellet"),
+            Placement(
+                id=PlacementID("pellet"),
                 pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-                ref=ComponentRef(type=ComponentType.LCOMPONENT, id=pellet.id),
+                ref=PlaceableRef(type=PlaceableType.PART, id=pellet.id),
             )
         ],
     )
-    pin_ref = ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID(pin_cell.id))
+    pin_ref = PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID(pin_cell.id))
     lattice = RectLattice.create(
         family_name="grid",
         version_label="1",
         pitch_m=0.0126,
         fill=fuel.id,
         shape=(1, 1),
-        elements=[LatticeElement(ref=pin_ref, addresses=((0, 0),))],
+        occupants=[LatticeOccupant(ref=pin_ref, addresses=((0, 0),))],
     )
     blueprint = ReactorBlueprint.create(
         family_name="core",
         version_label="1",
         bounds=cylinder.id,
-        root=ComponentPlacement(
-            id=ComponentPlacementID("root"),
+        root=Placement(
+            id=PlacementID("root"),
             pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
             ref=pin_ref,
         ),
@@ -302,8 +302,8 @@ def test_every_dao_round_trips(pace_db: PaceDB, insert):
     pairs = [
         (registry.geometries, cylinder),
         (registry.materials, fuel),
-        (registry.lcomponents, pellet),
-        (registry.ccomponents, pin_cell),
+        (registry.parts, pellet),
+        (registry.enclosures, pin_cell),
         (registry.lattices, lattice),
         (registry.reactor_blueprints, blueprint),
     ]

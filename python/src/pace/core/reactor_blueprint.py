@@ -2,8 +2,8 @@
 pace/core/reactor_blueprint.py
 
 ReactorBlueprint — the top-level model: the region of space being
-modeled (`bounds`), what fills any space the root component leaves
-(`fill`), the root component placed inside it, and the boundary
+modeled (`bounds`), what fills any space the root placeable leaves
+(`fill`), the root placeable placed inside it, and the boundary
 conditions on the faces of the bounds. Operating conditions (power,
 pressure, temperatures, inlet flow) are not part of the blueprint.
 
@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import PERIODIC_PARTNER, BoundsFace
-from pace.core.component import ComponentPlacement
 from pace.core.ids import GeometryID, MaterialID, ReactorBlueprintID
+from pace.core.placeable import Placement
 from pace.core.versioned import Versioned
-from pace.core.boundary_conditions import NeutronBC, ThermalBC, FlowBC
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
@@ -37,8 +37,8 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
           doesn't. Usually None (e.g. VERA problem 2, whose assembly
           bounds equal the Reactor's); needed for things like bypass
           flow around a core. It never reaches coolant inside the
-          root's nested composites — each composite owns its own fill.
-    - root: the root ComponentPlacement (placement is relative to bounds).
+          root's nested Enclosures — each Enclosure owns its own fill.
+    - root: the root Placement (placement is relative to bounds).
     - neutron_bcs: one condition per face of the bounds. RegistryService
           checks the keys are exactly the faces of the bounds shape.
     - thermal_bcs: optional; any face not listed is adiabatic.
@@ -51,11 +51,11 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
             version_label="1",
             bounds=pin_cell_box.id,
             fill=None,
-            root=ComponentPlacement(
-                id=ComponentPlacementID("pin_cell"),
+            root=Placement(
+                id=PlacementID("pin_cell"),
                 pose=GPose(x_m=0.0, y_m=0.0, z_m=0.0),
-                ref=ComponentRef(
-                    type=ComponentType.CCOMPONENT, id=fuel_pin_cell.id
+                ref=PlaceableRef(
+                    type=PlaceableType.ENCLOSURE, id=fuel_pin_cell.id
                 ),
             ),
             neutron_bcs=dict.fromkeys(
@@ -68,7 +68,7 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
     description: str = ""
     bounds: GeometryID
     fill: MaterialID | None = None
-    root: ComponentPlacement
+    root: Placement
     neutron_bcs: dict[BoundsFace, NeutronBC]
     thermal_bcs: dict[BoundsFace, ThermalBC] = field(default_factory=dict)
     flow_bcs: dict[BoundsFace, FlowBC] = field(default_factory=dict)
@@ -144,11 +144,11 @@ class ReactorBlueprint(Versioned[ReactorBlueprintID]):
     @classmethod
     def from_dict(cls, data: dict) -> ReactorBlueprint:
         return cls(
-            **cls._base_fields_from_dict(data),
+            **cls._base_versioned_fields_from_dict(data),
             description=data["description"],
             bounds=GeometryID(data["bounds"]),
             fill=MaterialID(data["fill"]) if data["fill"] is not None else None,
-            root=ComponentPlacement.from_dict(data["root"]),
+            root=Placement.from_dict(data["root"]),
             neutron_bcs={
                 BoundsFace(face): NeutronBC(condition)
                 for face, condition in data["neutron_bcs"].items()

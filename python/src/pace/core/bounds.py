@@ -3,7 +3,7 @@ pace/core/bounds.py
 
 What may serve as bounds, and the named faces of each bounds shape.
 
-Bounds — the region of space a CComponent or Reactor owns (a lattice's
+Bounds — the region of space an Enclosure or Reactor owns (a lattice's
 slots are implicitly bounded by its pitch) — are limited to the three
 shapes every translator can turn into a clipping region and the MOOSE
 Reactor module can mesh: a rectangular prism, a hexagonal prism, or a
@@ -67,7 +67,7 @@ _FACES_BY_GEOMETRY_TYPE: dict[GeometryType, tuple[BoundsFace, ...]] = {
     GeometryType.CYLINDER: (BoundsFace.RADIAL, *_AXIAL_FACES),
 }
 
-# The geometry types allowed as bounds — of a Reactor, a CComponent, or
+# The geometry types allowed as bounds — of a Reactor, an Enclosure, or
 # (implicitly, via its slot shape) a Lattice occupant.
 BOUNDS_GEOMETRY_TYPES = frozenset(_FACES_BY_GEOMETRY_TYPE)
 

@@ -9,6 +9,7 @@ rejecting keys that resolve outside the store root.
 from __future__ import annotations
 
 import pytest
+
 from pace.db.object_store.object_store import ObjectStore
 
 

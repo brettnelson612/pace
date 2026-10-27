@@ -2,7 +2,7 @@
 pace/core/pace_object.py
 
 PaceObject: the shared ABC for PACE's modeling-domain objects
-(geometries, materials, versions, components, blueprints) — to_dict()
+(geometries, materials, versions, placeables, blueprints) — to_dict()
 and from_dict() only. Deliberately minimal: no display/rendering logic
 (that's the registry's job, not the data's), and no solver-translation
 methods anywhere in the domain model — translation to OpenMC/MOOSE/
@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 
 class PaceObject(ABC):
     """Shared interface for PACE's modeling-domain objects — geometries,
-    materials, versions, components, and blueprints."""
+    materials, versions, placeables, and blueprints."""
 
     def __post_init__(self):
         self.validate()
@@ -35,5 +35,5 @@ class PaceObject(ABC):
         Raises on missing or malformed fields — no partial/best-effort
         reconstruction."""
 
-    def validate(self):
+    def validate(self):  # noqa: B027
         """Override this class to add class-specific validation logic."""

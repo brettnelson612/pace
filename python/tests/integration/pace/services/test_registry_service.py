@@ -7,7 +7,7 @@ index work together. Covers register_*()/get_*() for every type
 (including the bounds-shape and boundary-condition face checks),
 version immutability, lineage checks, atomic registration,
 reference-index bookkeeping, batched dangling-reference reporting, and
-full hydration via get_resolved_component() /
+full hydration via get_resolved_placeable() /
 get_resolved_reactor_blueprint().
 """
 
@@ -16,31 +16,33 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+
 from pace.core.boundary_conditions import FlowBC, NeutronBC, ThermalBC
 from pace.core.bounds import BoundsFace, faces_for_geometry_type
-from pace.core.component import (
-    CComponent,
-    ComponentPlacement,
-    ComponentRef,
-    ComponentType,
-    LComponent,
-)
 from pace.core.geometry import GAnnulus, GCylinder, GeometryType, GPose, GRectanglePrism
 from pace.core.ids import (
-    CComponentID,
-    ComponentPlacementID,
+    EnclosureID,
     GeometryID,
-    LComponentID,
     MaterialID,
+    PartID,
+    PlacementID,
     ReactorBlueprintID,
 )
-from pace.core.lattice import LatticeElement, RectLattice
+from pace.core.lattice import LatticeOccupant, RectLattice
 from pace.core.material import (
     DensityUnit,
     MaterialComponentEntry,
     MIsotopic,
     MVoid,
     PercentType,
+)
+from pace.core.placeable import (
+    Enclosure,
+    Part,
+    PlaceableRef,
+    PlaceableType,
+    Placement,
 )
 from pace.core.reactor_blueprint import ReactorBlueprint
 from pace.core.reference_types import ReferenceableType
@@ -53,7 +55,6 @@ from pace.services.registry_service import (
     RegistryService,
     VersionAlreadyExistsError,
 )
-from sqlalchemy.exc import IntegrityError
 
 ORIGIN = GPose(x_m=0.0, y_m=0.0, z_m=0.0)
 BOX_FACES = faces_for_geometry_type(GeometryType.RECT_PRISM)
@@ -98,12 +99,12 @@ def _make_isotopic(
 
 
 def _place(
-    placement_id: str, component_type: ComponentType, target_id: str
-) -> ComponentPlacement:
-    return ComponentPlacement(
-        id=ComponentPlacementID(placement_id),
+    placement_id: str, placeable_type: PlaceableType, target_id: str
+) -> Placement:
+    return Placement(
+        id=PlacementID(placement_id),
         pose=ORIGIN,
-        ref=ComponentRef(type=component_type, id=target_id),
+        ref=PlaceableRef(type=placeable_type, id=target_id),
     )
 
 
@@ -116,10 +117,10 @@ class MiniAssembly:
     assembly_box: GRectanglePrism
     uo2: MIsotopic
     water: MIsotopic
-    pellet: LComponent
-    pin_cell: CComponent
+    pellet: Part
+    pin_cell: Enclosure
     lattice: RectLattice
-    assembly: CComponent
+    assembly: Enclosure
 
 
 def _register_mini_assembly(service: RegistryService) -> MiniAssembly:
@@ -130,21 +131,21 @@ def _register_mini_assembly(service: RegistryService) -> MiniAssembly:
     assembly_box = service.register_geometry(_make_box("assembly_box", 0.026))
     uo2 = service.register_material(_make_isotopic("uo2"))
     water = service.register_material(_make_isotopic("water"))
-    pellet = service.register_lcomponent(
-        LComponent.create(
+    pellet = service.register_part(
+        Part.create(
             family_name="pellet",
             version_label="1",
             geometry=pellet_cyl.id,
             material=uo2.id,
         )
     )
-    pin_cell = service.register_ccomponent(
-        CComponent.create(
+    pin_cell = service.register_enclosure(
+        Enclosure.create(
             family_name="pin_cell",
             version_label="1",
             bounds=pin_box.id,
             fill=water.id,
-            placements=[_place("pellet", ComponentType.LCOMPONENT, pellet.id)],
+            placements=[_place("pellet", PlaceableType.PART, pellet.id)],
         )
     )
     lattice = service.register_lattice(
@@ -154,21 +155,21 @@ def _register_mini_assembly(service: RegistryService) -> MiniAssembly:
             pitch_m=0.0126,
             fill=water.id,
             shape=(2, 2),
-            elements=[
-                LatticeElement(
-                    ref=ComponentRef(type=ComponentType.CCOMPONENT, id=pin_cell.id),
+            occupants=[
+                LatticeOccupant(
+                    ref=PlaceableRef(type=PlaceableType.ENCLOSURE, id=pin_cell.id),
                     addresses=((0, 0), (0, 1), (1, 0)),
                 )
             ],
         )
     )
-    assembly = service.register_ccomponent(
-        CComponent.create(
+    assembly = service.register_enclosure(
+        Enclosure.create(
             family_name="assembly",
             version_label="1",
             bounds=assembly_box.id,
             fill=water.id,
-            placements=[_place("lattice", ComponentType.LATTICE, lattice.id)],
+            placements=[_place("lattice", PlaceableType.LATTICE, lattice.id)],
         )
     )
     return MiniAssembly(
@@ -189,7 +190,7 @@ def _make_blueprint(mini: MiniAssembly, **overrides) -> ReactorBlueprint:
         "family_name": "mini_assembly_2d",
         "version_label": "1",
         "bounds": mini.assembly_box.id,
-        "root": _place("assembly", ComponentType.CCOMPONENT, mini.assembly.id),
+        "root": _place("assembly", PlaceableType.ENCLOSURE, mini.assembly.id),
         "neutron_bcs": dict.fromkeys(BOX_FACES, NeutronBC.REFLECTIVE),
     }
     kwargs.update(overrides)
@@ -336,16 +337,16 @@ def test_failed_reference_write_leaves_nothing_behind(
 
 def test_rejected_registration_writes_no_edges(pace_db, registry_service):
     mini = _register_mini_assembly(registry_service)
-    bad = CComponent.create(
+    bad = Enclosure.create(
         family_name="bad_pin",
         version_label="1",
         bounds=mini.pin_box.id,
-        placements=[_place("x", ComponentType.LCOMPONENT, LComponentID("nope-1"))],
+        placements=[_place("x", PlaceableType.PART, PartID("nope-1"))],
     )
     with pytest.raises(DanglingReferenceError):
-        registry_service.register_ccomponent(bad)
+        registry_service.register_enclosure(bad)
     assert (
-        pace_db.registry.references.outgoing(ReferenceableType.CCOMPONENT, bad.id) == []
+        pace_db.registry.references.outgoing(ReferenceableType.ENCLOSURE, bad.id) == []
     )
 
 
@@ -353,62 +354,62 @@ def test_database_integrity_errors_other_than_a_duplicate_id_propagate(
     pace_db, registry_service, monkeypatch
 ):
     """With the service's own reference check bypassed, SQLite's foreign
-    key still rejects an LComponent pointing at a missing Geometry —
+    key still rejects a Part pointing at a missing Geometry —
     and that error is not misreported as a duplicate version."""
     material = registry_service.register_material(_make_isotopic())
-    monkeypatch.setattr(registry_service, "validate_lcomponent", lambda model: None)
-    lcomponent = LComponent.create(
+    monkeypatch.setattr(registry_service, "validate_part", lambda model: None)
+    part = Part.create(
         family_name="test_pellet",
         version_label="1",
         geometry=GeometryID("missing_cyl-1"),
         material=material.id,
     )
     with pytest.raises(IntegrityError):
-        registry_service.register_lcomponent(lcomponent)
-    assert not pace_db.registry.lcomponents.exists(lcomponent.id)
+        registry_service.register_part(part)
+    assert not pace_db.registry.parts.exists(part.id)
 
 
 # =============================================================================
-# register_lcomponent — creation + dangling-reference validation
+# register_part — creation + dangling-reference validation
 # =============================================================================
 
 
-def test_register_lcomponent_round_trips(pace_db, registry_service):
+def test_register_part_round_trips(pace_db, registry_service):
     geometry = registry_service.register_geometry(_make_cylinder())
     material = registry_service.register_material(_make_isotopic())
-    lcomponent = LComponent.create(
+    part = Part.create(
         family_name="test_pellet",
         version_label="1",
         geometry=geometry.id,
         material=material.id,
     )
-    registry_service.register_lcomponent(lcomponent)
-    fetched = pace_db.registry.lcomponents.get(lcomponent.id)
-    assert fetched.to_dict() == lcomponent.to_dict()
+    registry_service.register_part(part)
+    fetched = pace_db.registry.parts.get(part.id)
+    assert fetched.to_dict() == part.to_dict()
 
 
-def test_register_lcomponent_rejects_dangling_geometry(pace_db, registry_service):
+def test_register_part_rejects_dangling_geometry(pace_db, registry_service):
     material = registry_service.register_material(_make_isotopic())
-    lcomponent = LComponent.create(
+    part = Part.create(
         family_name="test_pellet",
         version_label="1",
         geometry=GeometryID("nonexistent-1"),
         material=material.id,
     )
     with pytest.raises(DanglingReferenceError):
-        registry_service.register_lcomponent(lcomponent)
-    assert pace_db.registry.lcomponents.get(lcomponent.id) is None
+        registry_service.register_part(part)
+    assert pace_db.registry.parts.get(part.id) is None
 
 
 def test_dangling_reference_error_names_every_missing_target(registry_service):
-    lcomponent = LComponent.create(
+    part = Part.create(
         family_name="test_pellet",
         version_label="1",
         geometry=GeometryID("missing_cyl-1"),
         material=MaterialID("missing_uo2-1"),
     )
     with pytest.raises(DanglingReferenceError) as error:
-        registry_service.register_lcomponent(lcomponent)
+        registry_service.register_part(part)
     assert "missing_cyl-1" in str(error.value)
     assert "missing_uo2-1" in str(error.value)
 
@@ -418,7 +419,7 @@ def test_validate_references_queries_once_per_target_type(
 ):
     mini = _register_mini_assembly(registry_service)
     calls: list[str] = []
-    for attribute in ("geometries", "materials", "lcomponents", "ccomponents"):
+    for attribute in ("geometries", "materials", "parts", "enclosures"):
         dao = getattr(pace_db.registry, attribute)
         original = dao.existing_ids
 
@@ -428,92 +429,90 @@ def test_validate_references_queries_once_per_target_type(
 
         monkeypatch.setattr(dao, "existing_ids", counting)
 
-    two_pellets = CComponent.create(
+    two_pellets = Enclosure.create(
         family_name="two_pellets",
         version_label="1",
         bounds=mini.pin_box.id,
         fill=mini.water.id,
         placements=[
-            _place("a", ComponentType.LCOMPONENT, mini.pellet.id),
-            _place("b", ComponentType.CCOMPONENT, mini.pin_cell.id),
+            _place("a", PlaceableType.PART, mini.pellet.id),
+            _place("b", PlaceableType.ENCLOSURE, mini.pin_cell.id),
         ],
     )
-    registry_service.validate_ccomponent(two_pellets)
-    assert sorted(calls) == ["ccomponents", "geometries", "lcomponents", "materials"]
+    registry_service.validate_enclosure(two_pellets)
+    assert sorted(calls) == ["enclosures", "geometries", "materials", "parts"]
 
 
 # =============================================================================
-# register_ccomponent — references, bounds shape, dedupe
+# register_enclosure — references, bounds shape, dedupe
 # =============================================================================
 
 
-def test_register_ccomponent_records_bounds_fill_and_member_edges(
+def test_register_enclosure_records_bounds_fill_and_member_edges(
     pace_db, registry_service
 ):
     mini = _register_mini_assembly(registry_service)
     outgoing = set(
         pace_db.registry.references.outgoing(
-            ReferenceableType.CCOMPONENT, mini.pin_cell.id
+            ReferenceableType.ENCLOSURE, mini.pin_cell.id
         )
     )
     assert outgoing == {
         (ReferenceableType.GEOMETRY, mini.pin_box.id),
         (ReferenceableType.MATERIAL, mini.water.id),
-        (ReferenceableType.LCOMPONENT, mini.pellet.id),
+        (ReferenceableType.PART, mini.pellet.id),
     }
 
 
-def test_register_ccomponent_dedupes_repeated_placements(pace_db, registry_service):
+def test_register_enclosure_dedupes_repeated_placements(pace_db, registry_service):
     mini = _register_mini_assembly(registry_service)
-    doubled = CComponent.create(
+    doubled = Enclosure.create(
         family_name="two_pellets",
         version_label="1",
         bounds=mini.pin_box.id,
         fill=mini.water.id,
         placements=[
-            _place("a", ComponentType.LCOMPONENT, mini.pellet.id),
-            ComponentPlacement(
-                id=ComponentPlacementID("b"),
+            _place("a", PlaceableType.PART, mini.pellet.id),
+            Placement(
+                id=PlacementID("b"),
                 pose=GPose(x_m=0.0, y_m=0.0, z_m=0.005),
-                ref=ComponentRef(type=ComponentType.LCOMPONENT, id=mini.pellet.id),
+                ref=PlaceableRef(type=PlaceableType.PART, id=mini.pellet.id),
             ),
         ],
     )
-    registry_service.register_ccomponent(doubled)
+    registry_service.register_enclosure(doubled)
     outgoing = pace_db.registry.references.outgoing(
-        ReferenceableType.CCOMPONENT, doubled.id
+        ReferenceableType.ENCLOSURE, doubled.id
     )
-    assert outgoing.count((ReferenceableType.LCOMPONENT, mini.pellet.id)) == 1
+    assert outgoing.count((ReferenceableType.PART, mini.pellet.id)) == 1
 
 
-def test_register_ccomponent_rejects_dangling_member(pace_db, registry_service):
+def test_register_enclosure_rejects_dangling_member(pace_db, registry_service):
     mini = _register_mini_assembly(registry_service)
-    ccomponent = CComponent.create(
+    enclosure = Enclosure.create(
         family_name="bad_pin",
         version_label="1",
         bounds=mini.pin_box.id,
-        placements=[
-            _place("x", ComponentType.LCOMPONENT, LComponentID("nonexistent-1"))
-        ],
+        placements=[_place("x", PlaceableType.PART, PartID("nonexistent-1"))],
     )
     with pytest.raises(DanglingReferenceError):
-        registry_service.register_ccomponent(ccomponent)
-    assert pace_db.registry.ccomponents.get(ccomponent.id) is None
+        registry_service.register_enclosure(enclosure)
+    assert pace_db.registry.enclosures.get(enclosure.id) is None
 
 
-def test_register_ccomponent_rejects_dangling_bounds(registry_service):
+def test_register_enclosure_rejects_dangling_bounds(registry_service):
     mini = _register_mini_assembly(registry_service)
-    ccomponent = CComponent.create(
+    enclosure = Enclosure.create(
         family_name="bad_pin",
         version_label="1",
         bounds=GeometryID("nonexistent-1"),
-        placements=[_place("p", ComponentType.LCOMPONENT, mini.pellet.id)],
+        placements=[_place("p", PlaceableType.PART, mini.pellet.id)],
     )
     with pytest.raises(DanglingReferenceError):
-        registry_service.register_ccomponent(ccomponent)
+        registry_service.register_enclosure(enclosure)
 
 
-def test_register_ccomponent_rejects_non_bounds_shape(pace_db, registry_service):
+def test_register_enclosure_rejects_non_bounds_shape(pace_db, registry_service):
     mini = _register_mini_assembly(registry_service)
     ring = registry_service.register_geometry(
         GAnnulus.create(
@@ -524,27 +523,27 @@ def test_register_ccomponent_rejects_non_bounds_shape(pace_db, registry_service)
             height_m=0.01,
         )
     )
-    ccomponent = CComponent.create(
+    enclosure = Enclosure.create(
         family_name="ring_bounded",
         version_label="1",
         bounds=ring.id,
-        placements=[_place("p", ComponentType.LCOMPONENT, mini.pellet.id)],
+        placements=[_place("p", PlaceableType.PART, mini.pellet.id)],
     )
     with pytest.raises(InvalidBoundsError):
-        registry_service.register_ccomponent(ccomponent)
-    assert pace_db.registry.ccomponents.get(ccomponent.id) is None
+        registry_service.register_enclosure(enclosure)
+    assert pace_db.registry.enclosures.get(enclosure.id) is None
 
 
-def test_validate_ccomponent_does_not_persist(pace_db, registry_service):
+def test_validate_enclosure_does_not_persist(pace_db, registry_service):
     mini = _register_mini_assembly(registry_service)
-    draft = CComponent.create(
+    draft = Enclosure.create(
         family_name="draft_pin",
         version_label="1",
         bounds=mini.pin_box.id,
-        placements=[_place("p", ComponentType.LCOMPONENT, mini.pellet.id)],
+        placements=[_place("p", PlaceableType.PART, mini.pellet.id)],
     )
-    registry_service.validate_ccomponent(draft)
-    assert not pace_db.registry.ccomponents.exists(draft.id)
+    registry_service.validate_enclosure(draft)
+    assert not pace_db.registry.enclosures.exists(draft.id)
 
 
 # =============================================================================
@@ -562,7 +561,7 @@ def test_register_lattice_round_trips_with_one_edge_per_ref(pace_db, registry_se
     # three slots of the same pin cell collapse to one edge
     assert outgoing == {
         (ReferenceableType.MATERIAL, mini.water.id),
-        (ReferenceableType.CCOMPONENT, mini.pin_cell.id),
+        (ReferenceableType.ENCLOSURE, mini.pin_cell.id),
     }
 
 
@@ -574,10 +573,10 @@ def test_register_lattice_rejects_dangling_element(pace_db, registry_service):
         pitch_m=0.0126,
         fill=mini.water.id,
         shape=(1, 1),
-        elements=[
-            LatticeElement(
-                ref=ComponentRef(
-                    type=ComponentType.CCOMPONENT, id=CComponentID("nope-1")
+        occupants=[
+            LatticeOccupant(
+                ref=PlaceableRef(
+                    type=PlaceableType.ENCLOSURE, id=EnclosureID("nope-1")
                 ),
                 addresses=((0, 0),),
             )
@@ -613,7 +612,7 @@ def test_register_reactor_blueprint_round_trips(pace_db, registry_service):
     )
     assert outgoing == {
         (ReferenceableType.GEOMETRY, mini.assembly_box.id),
-        (ReferenceableType.CCOMPONENT, mini.assembly.id),
+        (ReferenceableType.ENCLOSURE, mini.assembly.id),
         (ReferenceableType.MATERIAL, mini.water.id),
     }
 
@@ -693,7 +692,7 @@ def test_register_reactor_blueprint_rejects_non_bounds_shape(registry_service):
 def test_register_reactor_blueprint_rejects_dangling_root(registry_service):
     mini = _register_mini_assembly(registry_service)
     blueprint = _make_blueprint(
-        mini, root=_place("x", ComponentType.CCOMPONENT, CComponentID("nope-1"))
+        mini, root=_place("x", PlaceableType.ENCLOSURE, EnclosureID("nope-1"))
     )
     with pytest.raises(DanglingReferenceError):
         registry_service.register_reactor_blueprint(blueprint)
@@ -715,17 +714,17 @@ def test_get_reactor_blueprint_returns_none_when_absent(registry_service):
     )
 
 
-def test_get_material_and_lcomponent_return_persisted_rows(registry_service):
+def test_get_material_and_part_return_persisted_rows(registry_service):
     mini = _register_mini_assembly(registry_service)
     assert registry_service.get_material(mini.uo2.id).to_dict() == mini.uo2.to_dict()
-    fetched = registry_service.get_lcomponent(mini.pellet.id)
+    fetched = registry_service.get_part(mini.pellet.id)
     assert fetched.to_dict() == mini.pellet.to_dict()
 
 
-def test_get_ccomponent_returns_unhydrated_row(registry_service):
-    """get_ccomponent() returns the bare row — refs stay as ids."""
+def test_get_enclosure_returns_unhydrated_row(registry_service):
+    """get_enclosure() returns the bare row — refs stay as ids."""
     mini = _register_mini_assembly(registry_service)
-    fetched = registry_service.get_ccomponent(mini.pin_cell.id)
+    fetched = registry_service.get_enclosure(mini.pin_cell.id)
     assert fetched.to_dict() == mini.pin_cell.to_dict()
     assert fetched.placements[0].ref.id == mini.pellet.id
 
@@ -741,17 +740,17 @@ def test_get_lattice_returns_persisted_row(registry_service):
 # =============================================================================
 
 
-def test_get_resolved_component_hydrates_full_tree_once_per_object(registry_service):
+def test_get_resolved_placeable_hydrates_full_tree_once_per_object(registry_service):
     """assembly -> lattice -> pin cell (3 slots) -> pellet: every
     distinct object appears exactly once, however often it's placed."""
     mini = _register_mini_assembly(registry_service)
-    root = ComponentRef(type=ComponentType.CCOMPONENT, id=mini.assembly.id)
-    resolved = registry_service.get_resolved_component(root)
+    root = PlaceableRef(type=PlaceableType.ENCLOSURE, id=mini.assembly.id)
+    resolved = registry_service.get_resolved_placeable(root)
 
     assert resolved.root == root
-    assert resolved.ccomponents.keys() == {mini.assembly.id, mini.pin_cell.id}
+    assert resolved.enclosures.keys() == {mini.assembly.id, mini.pin_cell.id}
     assert resolved.lattices.keys() == {mini.lattice.id}
-    assert resolved.lcomponents.keys() == {mini.pellet.id}
+    assert resolved.parts.keys() == {mini.pellet.id}
     assert resolved.geometries.keys() == {
         mini.pellet_cyl.id,
         mini.pin_box.id,
@@ -760,28 +759,28 @@ def test_get_resolved_component_hydrates_full_tree_once_per_object(registry_serv
     assert resolved.materials.keys() == {mini.uo2.id, mini.water.id}
 
 
-def test_get_resolved_component_with_lattice_root(registry_service):
+def test_get_resolved_placeable_with_lattice_root(registry_service):
     mini = _register_mini_assembly(registry_service)
-    root = ComponentRef(type=ComponentType.LATTICE, id=mini.lattice.id)
-    resolved = registry_service.get_resolved_component(root)
-    assert resolved.ccomponents.keys() == {mini.pin_cell.id}
-    assert resolved.lcomponents.keys() == {mini.pellet.id}
+    root = PlaceableRef(type=PlaceableType.LATTICE, id=mini.lattice.id)
+    resolved = registry_service.get_resolved_placeable(root)
+    assert resolved.enclosures.keys() == {mini.pin_cell.id}
+    assert resolved.parts.keys() == {mini.pellet.id}
     assert mini.assembly_box.id not in resolved.geometries
 
 
-def test_get_resolved_component_with_lcomponent_root(registry_service):
+def test_get_resolved_placeable_with_part_root(registry_service):
     mini = _register_mini_assembly(registry_service)
-    root = ComponentRef(type=ComponentType.LCOMPONENT, id=mini.pellet.id)
-    resolved = registry_service.get_resolved_component(root)
-    assert resolved.ccomponents == {}
+    root = PlaceableRef(type=PlaceableType.PART, id=mini.pellet.id)
+    resolved = registry_service.get_resolved_placeable(root)
+    assert resolved.enclosures == {}
     assert resolved.geometries.keys() == {mini.pellet_cyl.id}
     assert resolved.materials.keys() == {mini.uo2.id}
 
 
-def test_get_resolved_component_raises_for_nonexistent_root(registry_service):
+def test_get_resolved_placeable_raises_for_nonexistent_root(registry_service):
     with pytest.raises(ValueError):
-        registry_service.get_resolved_component(
-            ComponentRef(type=ComponentType.CCOMPONENT, id=CComponentID("nope-1"))
+        registry_service.get_resolved_placeable(
+            PlaceableRef(type=PlaceableType.ENCLOSURE, id=EnclosureID("nope-1"))
         )
 
 
@@ -798,9 +797,9 @@ def test_get_resolved_reactor_blueprint_includes_blueprint_only_references(
     resolved = registry_service.get_resolved_reactor_blueprint(blueprint.id)
 
     assert resolved.reactor_blueprint.to_dict() == blueprint.to_dict()
-    assert reactor_box.id in resolved.rc.geometries
-    assert resolved.rc.root == blueprint.root.ref
-    assert resolved.rc.lattices.keys() == {mini.lattice.id}
+    assert reactor_box.id in resolved.resolved_placeable.geometries
+    assert resolved.resolved_placeable.root == blueprint.root.ref
+    assert resolved.resolved_placeable.lattices.keys() == {mini.lattice.id}
 
 
 def test_get_resolved_reactor_blueprint_raises_for_nonexistent_blueprint(
